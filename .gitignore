@@ -8,6 +8,7 @@
 .pnp.*
 
 /cache
+/debug
 /deps
 /dist
 /tmp
