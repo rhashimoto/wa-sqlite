@@ -32,7 +32,7 @@ static int xTruncate(sqlite3_file* file, sqlite3_int64 size) {
   return vfsTruncate(file, &size);
 }
 
-static int xOpen(sqlite3_vfs* vfs, const char *zName, sqlite3_file* file, int flags, int *pOutFlags) {
+static int xOpen(sqlite3_vfs* vfs, const char* zName, sqlite3_file* file, int flags, int* pOutFlags) {
   static sqlite3_io_methods io_methods = {
     1,
     vfsClose,
@@ -53,7 +53,7 @@ static int xOpen(sqlite3_vfs* vfs, const char *zName, sqlite3_file* file, int fl
   return vfsOpen(vfs, zName, file, flags, pOutFlags);
 }
 
-static int xFullPathname(sqlite3_vfs* vfs, const char *zName, int nOut, char *zOut) {
+static int xFullPathname(sqlite3_vfs* vfs, const char* zName, int nOut, char* zOut) {
   strncpy(zOut, zName, nOut);
   return SQLITE_OK;
 }
@@ -72,7 +72,7 @@ const sqlite3_vfs* EMSCRIPTEN_KEEPALIVE register_vfs(const char* zName, int mxPa
   vfs->xFullPathname = xFullPathname;
 
   // Get remaining functionality from the default VFS.
-  sqlite3_vfs *defer = sqlite3_vfs_find(0);
+  sqlite3_vfs* defer = sqlite3_vfs_find(0);
 #define COPY_FIELD(NAME) vfs->NAME = defer->NAME
   COPY_FIELD(xDlOpen);
   COPY_FIELD(xDlError);

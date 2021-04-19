@@ -4,7 +4,12 @@ const methods = {
     const mapIdToVFS = new Map();
     const mapFileToVFS = new Map();
 
-    Module['_registerVFS'] = function(name, vfs) {
+    Module['registerVFS'] = function(name, vfs) {
+      const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'], [vfs]);
+      if (vfsAlreadyRegistered) {
+        throw Error(`VFS '${vfs}' already registered`);
+      }
+
       const mxPathName = vfs.mxPathName ?? 64;
       const id = ccall('register_vfs', 'number', ['string', 'number'], [name, mxPathName]);
       mapIdToVFS.set(id, vfs);
@@ -12,18 +17,18 @@ const methods = {
 
 #if ASYNCIFY
     const closedFiles = new Set();
-    Module['_handleAsync'] = function(f) {
+    Module['handleAsync'] = function(f) {
       return Asyncify.handleAsync(f);
     }
 
-    Module['_purgeClosed'] = function() {
+    Module['purgeClosedFiles'] = function() {
       for (const file of closedFiles) {
         mapFileToVFS.delete(file);
       }
     }
 #endif
 
-    // int vfsClose(sqlite3_file* file);
+    // int xClose(sqlite3_file* file);
     _vfsClose = function(file) {
       const vfs = mapFileToVFS.get(file);
 

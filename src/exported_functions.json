@@ -6,7 +6,7 @@
 "_sqlite3_bind_text",
 "_sqlite3_changes",
 "_sqlite3_clear_bindings",
-"_sqlite3_close_v2",
+"_sqlite3_close",
 "_sqlite3_column_blob",
 "_sqlite3_column_bytes",
 "_sqlite3_column_count",
@@ -22,7 +22,7 @@
 "_sqlite3_free",
 "_sqlite3_malloc",
 "_sqlite3_normalized_sql",
-"_sqlite3_open",
+"_sqlite3_open_v2",
 "_sqlite3_prepare_v2",
 "_sqlite3_result_blob",
 "_sqlite3_result_double",
@@ -38,5 +38,6 @@
 "_sqlite3_value_double",
 "_sqlite3_value_int",
 "_sqlite3_value_text",
-"_sqlite3_value_type"
+"_sqlite3_value_type",
+"_sqlite3_vfs_find"
 ]
