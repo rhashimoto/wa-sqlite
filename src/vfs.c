@@ -87,3 +87,8 @@ const sqlite3_vfs* EMSCRIPTEN_KEEPALIVE register_vfs(const char* zName, int mxPa
   sqlite3_vfs_register(vfs, 0);
   return vfs;
 }
+
+int main() {
+  sqlite3_initialize();
+  return 0;
+}
