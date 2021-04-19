@@ -1,0 +1,9 @@
+[
+  "ccall",
+  "cwrap",
+  "getValue",
+  "setValue",
+  "UTF8ToString",
+  "stringToUTF8",
+  "lengthBytesUTF8"
+]
