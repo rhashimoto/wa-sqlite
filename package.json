@@ -1,8 +1,14 @@
 {
   "name": "wa-sqlite",
   "version": "0.1.0",
-  "files": ["dist/*"],
+  "files": [
+    "dist/*"
+  ],
   "scripts": {
-    "prepare": "make"
+    "prepare": "make",
+    "start": "web-dev-server"
+  },
+  "devDependencies": {
+    "@web/dev-server": "^0.1.13"
   }
 }
