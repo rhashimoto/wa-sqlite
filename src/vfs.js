@@ -1,3 +1,4 @@
+// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 const methods = {
   $method_support__postset: 'method_support();',
   $method_support: function() {

@@ -1,3 +1,4 @@
+// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 let Module;
 
 const SQLITE_OK = 0;

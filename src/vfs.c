@@ -1,3 +1,4 @@
+// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 #include <emscripten.h>
 #include <sqlite3.h>
 #include <string.h>
