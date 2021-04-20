@@ -16,6 +16,8 @@ CREATE TABLE tbl (x PRIMARY KEY, y);
 REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
 SELECT y * y FROM tbl WHERE x = 'bar';
 `.trim();
+
+const DB_NAME = "myDB";
 const VFS_NAME = "myVFS";
 
 (async function() {
@@ -24,19 +26,25 @@ const VFS_NAME = "myVFS";
 
   // Execute SQL on button click.
   document.getElementById('execute').addEventListener('click', async function() {
+    // Get SQL from editor.
     const selection = editor.getSelection();
     const sql = selection.isEmpty() ?
       editor.getValue() :
       editor.getModel().getValueInRange(selection);
 
     // Open and close the database on every execution to test data persistence.
-    const db = new Database('foo', VFS_NAME);
+    const db = new Database(DB_NAME, VFS_NAME);
+    const output = document.getElementById('output');
+    while (output.firstChild) output.removeChild(output.lastChild);
     try {
-      const results = await db.sql`${sql}`
-        .then(results => JSON.stringify(results, null, 2))
-        .catch(e => e.stack);
-      document.getElementById('results').textContent = results;
+      // Execute the query.
+      const results = await db.sql`${sql}`;
+
+      results.map(formatTable).forEach(table => output.append(table));
+    } catch (e) {
+      output.innerHTML = `<pre>${e.stack}</pre>`;
     } finally {
+      // Make sure to close to avoid leaking resources.
       db.close();
     }
   });
@@ -94,4 +102,27 @@ async function createEditor() {
     minimap: { enabled: false },
     automaticLayout: true
   });
+}
+
+function formatTable({ columns, rows }) {
+  const table = document.createElement('table');
+
+  const thead = table.appendChild(document.createElement('thead'));
+  thead.appendChild(formatRow(columns, 'th'));
+
+  const tbody = table.appendChild(document.createElement('tbody'));
+  for (const row of rows) {
+    tbody.appendChild(formatRow(row));
+  }
+
+  return table;
+}
+
+function formatRow(data, tag = 'td') {
+  const row = document.createElement('tr');
+  for (const value of data) {
+    const cell = row.appendChild(document.createElement(tag));
+    cell.textContent = value.toString();
+  }
+  return row;
 }
