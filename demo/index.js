@@ -11,18 +11,26 @@ import { Database } from '../test/Database.js';
 const MONACO_VS = '/.yarn/unplugged/monaco-editor-npm-0.23.0-f10184dc03/node_modules/monaco-editor/dev/vs';
 
 const DEFAULT_SQL = 'SELECT 6 * 7;';
+const VFS_NAME = "myVFS";
 
 (async function() {
-  // Create database and editor in parallel because both are slow.
-  const [db, editor] = await Promise.all([createDatabase(), createEditor()]);
+  // Initialize SQLite and Monaco in parallel because both are slow.
+  const [_, editor] = await Promise.all([initSQLite(), createEditor()]);
 
   // Execute SQL on button click.
   document.getElementById('execute').addEventListener('click', async function() {
     const sql = editor.getValue();
-    const results = await db.sql`${sql}`
-      .then(results => JSON.stringify(results, null, 2))
-      .catch(e => e.stack);
-    document.getElementById('results').textContent = results;
+
+    // Open and close the database on every execution to test data persistence.
+    const db = new Database('foo', VFS_NAME);
+    try {
+      const results = await db.sql`${sql}`
+        .then(results => JSON.stringify(results, null, 2))
+        .catch(e => e.stack);
+      document.getElementById('results').textContent = results;
+    } finally {
+      db.close();
+    }
   });
 
   // Persist SQL across page loads.
@@ -37,17 +45,15 @@ const DEFAULT_SQL = 'SELECT 6 * 7;';
   editor.setValue(localStorage.getItem('wa-sqlite demo') ?? DEFAULT_SQL);
 })();
 
-async function createDatabase() {
+async function initSQLite() {
   const SQLite = await SQLiteFactory();
 
   // Create and register a VFS.
   const vfs = new MemoryVFS(SQLite);
-  SQLite.registerVFS("my_vfs", vfs);
+  SQLite.registerVFS(VFS_NAME, vfs);
 
-  // Create a database. This class was developed for testing and is not
-  // considered ready for use in production code.
+  // Attach SQLite to the Database class.
   Database.initialize(SQLite);
-  return new Database("foo", "my_vfs");
 }
 
 async function createEditor() {
