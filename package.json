@@ -9,6 +9,12 @@
     "start": "web-dev-server"
   },
   "devDependencies": {
-    "@web/dev-server": "^0.1.13"
+    "@web/dev-server": "^0.1.13",
+    "monaco-editor": "^0.23.0"
+  },
+  "dependenciesMeta": {
+    "monaco-editor@0.23.0": {
+      "unplugged": true
+    }
   }
 }

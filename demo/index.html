@@ -1,9 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <script type="module" src="./index.js"></script>
+    <meta charset="UTF-8">
+    <title>wa-sqlite demo</title>
+    <style>
+      #editor-container {
+        width: 100%;
+        height: 50vh;
+      }
+    </style>
   </head>
   <body>
-    Open browser Dev Tools.
+    <div id="editor-container"></div>
+    <div><button id="execute">Execute</button></div>
+    <pre id="results"></pre>
+
+    <script type="module" src="index.js"></script>
   </body>
 </html>
