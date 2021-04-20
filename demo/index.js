@@ -1,7 +1,7 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 // @ts-ignore
-import SQLiteFactory from '../dist/wa-sqlite.mjs';
-import { MemoryVFS } from '../test/MemoryVFS.js';
+import SQLiteFactory from '../dist/wa-sqlite-async.mjs';
+import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
 import { Database } from '../test/Database.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
@@ -33,7 +33,7 @@ const VFS_NAME = "myVFS";
     }
   });
 
-  // Persist SQL across page loads.
+  // Persist editor content across page loads.
   let change = 0;
   editor.onDidChangeModelContent(function() {
     clearTimeout(change);
@@ -49,7 +49,7 @@ async function initSQLite() {
   const SQLite = await SQLiteFactory();
 
   // Create and register a VFS.
-  const vfs = new MemoryVFS(SQLite);
+  const vfs = new MemoryAsyncVFS(SQLite);
   SQLite.registerVFS(VFS_NAME, vfs);
 
   // Attach SQLite to the Database class.

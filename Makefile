@@ -35,6 +35,7 @@ EMFLAGS = \
 
 EMFLAGS_DEBUG = \
 	-s INLINING_LIMIT=10 \
+	-s ASSERTIONS=1 \
 	-O1
 
 EMFLAGS_DIST = \
@@ -51,7 +52,7 @@ EMFLAGS_LIBRARIES = \
 
 EMFLAGS_ASYNCIFY = \
 	-s ASYNCIFY \
-	-s ASYNCIFY_STACK_SIZE=8192 \
+	-s ASYNCIFY_STACK_SIZE=12288 \
 	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json
 
 # https://www.sqlite.org/compile.html

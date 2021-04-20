@@ -31,7 +31,7 @@ function initialize(module) {
   fn('column_double', ['number', 'number']);
   fn('column_type', ['number', 'number']);
   fn('data_count', ['number']);
-  fn('finalize', ['number']);
+  fn('finalize', ['number'], isAsync);
   fn('open_v2', ['string', 'number', 'number', 'string'], isAsync);
   fn('prepare_v2', ['number', 'number', 'number', 'number', 'number'], isAsync);
   fn('reset', ['number']);
@@ -199,7 +199,7 @@ export class Database {
         }
       } finally {
         if (prepared?.statement) {
-          this._call('sqlite3_finalize', prepared.statement);
+          await this._call('sqlite3_finalize', prepared.statement);
           prepared.statement = null;
         }
       }

@@ -1,2 +1,18 @@
 [
+  "vfsClose",
+  "vfsRead",
+  "vfsWrite",
+  "vfsTruncate",
+  "vfsSync",
+  "vfsFileSize",
+  "vfsLock",
+  "vfsUnlock",
+  "vfsCheckReservedLock",
+  "vfsFileControl",
+  "vfsSectorSize",
+  "vfsDeviceCharacteristics",
+  
+  "vfsOpen",
+  "vfsDelete",
+  "vfsAccess"
 ]
