@@ -82,8 +82,8 @@ function checkResult(database, name, result) {
     default:
       if (result !== SQLITE_OK) {
         // Get detailed error if the database is open.
-        if (typeof database.ready === 'number') {
-          throw new Error(database.sqlite3_errmsg(database.ready));
+        if (typeof database._ready === 'number') {
+          throw new Error(api.sqlite3_errmsg(database._ready));
         }
         throw new Error(`${name} ${result}`);
       }

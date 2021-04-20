@@ -14,8 +14,9 @@ const DEFAULT_SQL = 'SELECT 6 * 7;';
   document.getElementById('execute').addEventListener('click', async () => {
     const sql = editor.getValue();
     const results = await db.sql`${sql}`
-      .catch(e => e.message);
-    document.getElementById('results').textContent = JSON.stringify(results, null, 2);
+      .then(results => JSON.stringify(results, null, 2))
+      .catch(e => e.stack);
+    document.getElementById('results').textContent = results;
   });
 
   // Persist SQL across page loads.
