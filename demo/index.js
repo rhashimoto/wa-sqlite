@@ -13,5 +13,9 @@ ModuleFactory().then(async Module => {
   Module.registerVFS(MY_VFS_NAME, vfs);
 
   const db = new Database("foo", MY_VFS_NAME);
-  console.log(await db.sql`SELECT 1 + 1`);
+  try {
+    console.log(await db.sql`SELECT 1 + 1`);
+  } finally {
+    db.close();
+  }
 });
