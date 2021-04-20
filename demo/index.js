@@ -12,6 +12,7 @@ ModuleFactory().then(async Module => {
   const vfs = new MemoryVFS(Module);
   Module.registerVFS(MY_VFS_NAME, vfs);
 
+  // Create a database.
   const db = new Database("foo", MY_VFS_NAME);
   try {
     console.log(await db.sql`SELECT 1 + 1`);

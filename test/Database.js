@@ -9,8 +9,6 @@ const SQLITE_TEXT = 3;
 const SQLITE_BLOB = 4;
 const SQLITE_OPEN_READWRITE = 0x0002;
 const SQLITE_OPEN_CREATE = 0x0004;
-const SQLITE_STATIC = 0;
-const SQLITE_TRANSIENT = -1;
 
 // Create SQLite API wrappers.
 const api = {};
@@ -107,279 +105,179 @@ export class Database {
    * This is a Promise until the db is open, afterwards the db pointer.
    * @type {Promise<void>|number}
    */
-   _ready;
+  _ready;
 
-   // Scratch space in WASM memory for SQLite API output.
-   /** @type {Array<number>} */ _tmpPtr = [];
-   _tmp = new Proxy([], {
-     get: (_, index) => {
-       return Module.getValue(this._tmpPtr[index], '*');
-     }
-   });
- 
-   /**
-    * @param {string} name 
-    * @param {string} [vfs] 
-    */
-   constructor(name, vfs) {
-     if (!Module) {
-       throw new Error('Database.initialize() not called with Module');
-     }
-     this._ready = this._createDB(name, vfs);
-   }
- 
-   async sql(strings, ...keys) {
-     if (typeof this._ready !== 'number') {
-       await this._ready;
-     }
-
-     if (Array.isArray(strings)) {
-       // Tagged template usage.
-       let interleaved = [];
-       strings.forEach((s, i) => {
-         interleaved.push(s, keys[i]);
-       });
-       const source = interleaved.join('');
-       return this._run(source);
-     } else {
-       // Repeated statement with native bindings usage.
-       return this._runRepeated(strings, keys[0] ?? [[]]);
-     }
-   }
- 
-   async close() {
-     const db = typeof this._ready === 'number' ? this._ready : await this._ready;
-     await this._call('sqlite3_close', db);
-     Module._sqlite3_free(this._tmpPtr[0]);
-   }
-   
-   /**
-    * Invoke SQLite API function.
-    * @param {string} fname function name
-    * @param  {...any} args 
-    * @returns 
-    */
-   _call(fname, ...args) {
-     return api[fname].call(this, ...args);
-   }
-
-   async _createDB(name, vfs = 'unix') {
-     // Allocate space for C output variables.
-     const tmpBuffer = Module._malloc(8);
-     this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
-   
-     const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
-     await this._call('sqlite3_open_v2', name, this._tmpPtr[0], flags, vfs);
-
-     const db = this._tmp[0];
-     Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-     this._ready = db;
-   }
+  // Scratch space in WASM memory for SQLite API output.
+  /** @type {Array<number>} */ _tmpPtr = [];
+  _tmp = new Proxy([], {
+    get: (_, index) => {
+      return Module.getValue(this._tmpPtr[index], '*');
+    }
+  });
   
-   // Execute all SQL statements in the provided string.
-   async _run(sql) {
-     // Convert query to C string.
-     const sqlAddress = createArrayFromString(sql);
-     let sqlOffset = 0;
- 
-     // Loop over the statements in the string.
-     let results = [];
-     let prepared;
-     do {
-       try {
-         // Parse the next statement.
-         prepared = await this._prepare(sqlAddress + sqlOffset);
-         if (prepared) {
-           // Execute statement.
-           const rows = await this._processRows(prepared.statement);
-           this._call('sqlite3_reset', prepared.statement);
-           if (prepared.columns?.length) {
-             results.push({ rows, columns: prepared.columns });
-           }
-           sqlOffset += prepared.consumed;
-         }
-       } finally {
-         if (prepared?.statement) {
-           this._call('sqlite3_finalize', prepared.statement);
-           prepared.statement = null;
-         }
-       }
-     } while (prepared);
-     destroyArray(sqlAddress);
-     return results;
-   }
- 
-   /**
-    * Execute a single SQL statement with multiple parameter bindings.
-    * @param {string} sql 
-    * @param {Array<object|Array>} params 
-    * @returns 
-    */
-   async _runRepeated(sql, params) {
-     // Copy the SQL to WASM memory.
-     const sqlAddress = createArrayFromString(sql);
+  /**
+   * @param {string} name filename
+   * @param {string} [vfs] optional filesystem name
+   */
+  constructor(name, vfs) {
+    if (!Module) {
+      throw new Error('Database.initialize() not called with Module');
+    }
+    this._ready = this._createDB(name, vfs);
+  }
+  
+  /**
+   * Template literal tag for SQL query.
+   * @param {TemplateStringsArray} strings 
+   * @param  {...any} keys 
+   * @returns Promise<Array> array of statement results
+   */
+  async sql(strings, ...keys) {
+    if (typeof this._ready !== 'number') {
+      await this._ready;
+    }
+
+    // Tagged template usage.
+    let interleaved = [];
+    strings.forEach((s, i) => {
+      interleaved.push(s, keys[i]);
+    });
+    const source = interleaved.join('');
+    return this._run(source);
+  }
+  
+  /**
+   * Close database. Subsequent method calls produce undefined results.
+   */
+  async close() {
+    const db = typeof this._ready === 'number' ? this._ready : await this._ready;
+    await this._call('sqlite3_close', db);
+    Module._sqlite3_free(this._tmpPtr[0]);
+  }
    
-     let results = [];
-     let prepared;
-     try {
-       // Parse a single statement.
-       prepared = await this._prepare(sqlAddress);
-       if (prepared) {
-         // Execute statement with each set of parameters.
-         for (const bindings of params) {
-           // Save malloc-ed binding pointers to be freed at completion.
-           const allocations = [];
-           try {
-             this._bind(prepared.statement, bindings, allocations);
-       
-             const rows = await this._processRows(prepared.statement);
-             this._call('sqlite3_reset', prepared.statement);
-             if (prepared.columns?.length) {
-               results.push({ rows, columns: prepared.columns });
-             }
-           } finally {
-             // Free malloc-ed binding pointers.
-             for (const ptr of allocations) {
-               Module._sqlite3_free(ptr);
-             }
-           }
-         }
-       }
-     } finally {
-       if (prepared?.statement) {
-         this._call('sqlite3_finalize', prepared.statement);
-         prepared.statement = null;
-       }
-       destroyArray(sqlAddress);
-     }
-     return results;
-   }
+  // Invoke SQLite API function.
+  _call(fname, ...args) {
+    return api[fname].call(this, ...args);
+  }
+
+  // Helper for constructor. 
+  async _createDB(name, vfs = 'unix') {
+    // Allocate space for C output variables.
+    const tmpBuffer = Module._malloc(8);
+    this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
    
-   /**
-    * @param {number} address 
-    * @returns 
-    */
-   async _prepare(address) {
-     // Prepare one statement at the WASM address. The wrapper throws an
-     // exception on any error (e.g. invalid SQL). Input that is only
-     // whitespace or comments is not an error and returns a null statement.
-     const db = this._ready;
-     await this._call('sqlite3_prepare_v2', db, address, -1, this._tmpPtr[0], this._tmpPtr[1]);
+    const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
+    await this._call('sqlite3_open_v2', name, this._tmpPtr[0], flags, vfs);
+
+    const db = this._tmp[0];
+    Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
+    this._ready = db;
+  }
+  
+  // Execute all SQL statements in the provided string.
+  async _run(sql) {
+    // Convert query to C string.
+    const sqlAddress = createArrayFromString(sql);
+    let sqlOffset = 0;
+    
+    // Loop over the statements in the string.
+    let results = [];
+    let prepared;
+    do {
+      try {
+        // Parse the next statement.
+        prepared = await this._prepare(sqlAddress + sqlOffset);
+        if (prepared) {
+          // Execute statement.
+          const rows = await this._processRows(prepared.statement);
+          this._call('sqlite3_reset', prepared.statement);
+          if (prepared.columns?.length) {
+            results.push({ rows, columns: prepared.columns });
+          }
+          sqlOffset += prepared.consumed;
+        }
+      } finally {
+        if (prepared?.statement) {
+          this._call('sqlite3_finalize', prepared.statement);
+          prepared.statement = null;
+        }
+      }
+    } while (prepared);
+    destroyArray(sqlAddress);
+    return results;
+  }
+  
+  async _prepare(address) {
+    // Prepare one statement at the WASM address. The wrapper throws an
+    // exception on any error (e.g. invalid SQL). Input that is only
+    // whitespace or comments is not an error and returns a null statement.
+    const db = this._ready;
+    await this._call('sqlite3_prepare_v2', db, address, -1, this._tmpPtr[0], this._tmpPtr[1]);
+    
+    const statement = this._tmp[0];
+    if (statement) {
+      // Get column names.
+      const columns = [];
+      const nColumns = this._call('sqlite3_column_count', statement);
+      for (let i = 0; i < nColumns; ++i) {
+        const name = this._call('sqlite3_column_name', statement, i);
+        columns.push(name);
+      }
+      
+      return {
+        statement,
+        columns,
+        consumed: this._tmp[1] - address // SQL bytes parsed
+      };
+    }
+    return null;
+  }
+
+  async _processRows(statement) {
+    let row;
+    const rows = [];
+    while (row = await this._processRow(statement)) {
+      rows.push(row);
+    }
+    return rows;
+  }
+  
+  async _processRow(statement) {
+    const status = await this._call('sqlite3_step', statement);
+    if (status !== SQLITE_ROW) return null;
+    
+    const row = [];
+    const nColumns = this._call('sqlite3_data_count', statement);
+    for (let i = 0; i < nColumns; ++i) {
+      const type = this._call('sqlite3_column_type', statement, i);
+      switch (type) {
+      case SQLITE_INTEGER:
+      case SQLITE_FLOAT:
+        row.push(this._call('sqlite3_column_double', statement, i));
+        break;
+      case SQLITE_TEXT:
+        row.push(this._call('sqlite3_column_text', statement, i));
+        break;
+      case SQLITE_BLOB:
+        const blobSize = this._call('sqlite3_column_bytes', statement, i);
+        const buffer = new ArrayBuffer(blobSize);
+        if (blobSize) {
+          const blobData = this._call('sqlite3_column_blob', statement, i);
+          new Int8Array(buffer).set(Module.HEAP8.subarray(blobData, blobData + blobSize));
+        }
+        row.push(buffer);
+        break;
+      default:
+        row.push(null);
+        break;
+      }
+    }
+    return row;
+  }
+}
+Database.initialize = initialize;
  
-     const statement = this._tmp[0];
-     if (statement) {
-       // Get column names.
-       const columns = [];
-       const nColumns = this._call('sqlite3_column_count', statement);
-       for (let i = 0; i < nColumns; ++i) {
-         const name = this._call('sqlite3_column_name', statement, i);
-         columns.push(name);
-       }
- 
-       return {
-         statement,
-         columns,
-         consumed: this._tmp[1] - address // SQL bytes parsed
-       };
-     }
-     return null;
-   }
-   
-   /**
-    * Bind parameters to statement. Bindings can be provided with an object
-    * or an array. See https://www.sqlite.org/lang_expr.html#varparam for
-    * details on binding by index or name.
-    * @param {number} statement 
-    * @param {object|Array} bindings 
-    * @param {Array<number>} allocations array for malloc-ed addresses
-    */
-   _bind(statement, bindings, allocations) {
-     // Note that the SQLite API uses 1-based indexing for bindings.
-     const isArray = Array.isArray(bindings);
-     const nBindings = this._call('sqlite3_bind_parameter_count', statement);
-     for (let i = 1; i <= nBindings; ++i) {
-       const key = isArray ? i - 1 : this._call('sqlite3_bind_parameter_name', statement, i);
-       const value = bindings[key];
-       switch (typeof value) {
-         case 'number':
-           // @ts-ignore
-           if (value === value | 0) {
-             this._call('sqlite3_bind_int', statement, i, value);
-           } else {
-             this._call('sqlite3_bind_double', statement, i, value);
-           }
-           break;
-         case 'string':
-           const len = Module.lengthBytesUTF8(value);
-           const ptr = Module._sqlite3_malloc(len + 1);
-           allocations.push(ptr);
-           Module.stringToUTF8(value, ptr, len + 1);
-           this._call('sqlite3_bind_text', statement, i, ptr, len, SQLITE_STATIC);
-           break;
-         case 'object':
-           if (typeof value.byteLength === 'number') {
-             // Assumed to be ArrayBuffer.
-             const ptr = Module._sqlite3_malloc(value.byteLength);
-             allocations.push(ptr);
-             Module.HEAP8.subarray(ptr).set(new Int8Array(value));
-             this._call('sqlite3_bind_blob', statement, i, ptr, value.byteLength, SQLITE_STATIC);
-           } else {
-             console.warn('unrecognized binding type converted to null', value);
-             this._call('sqlite3_bind_null', statement, i);
-           }
-           break;
-         default:
-           this._call('sqlite3_bind_null', statement, i);
-           break;
-       }
-     }
-   }
- 
-   async _processRows(statement) {
-     let row;
-     const rows = [];
-     while (row = await this._processRow(statement)) {
-       rows.push(row);
-     }
-     return rows;
-   }
- 
-   async _processRow(statement) {
-     const status = await this._call('sqlite3_step', statement);
-     if (status !== SQLITE_ROW) return null;
- 
-     const row = [];
-     const nColumns = this._call('sqlite3_data_count', statement);
-     for (let i = 0; i < nColumns; ++i) {
-       const type = this._call('sqlite3_column_type', statement, i);
-       switch (type) {
-         case SQLITE_INTEGER:
-         case SQLITE_FLOAT:
-           row.push(this._call('sqlite3_column_double', statement, i));
-           break;
-         case SQLITE_TEXT:
-           row.push(this._call('sqlite3_column_text', statement, i));
-           break;
-         case SQLITE_BLOB:
-           const blobSize = this._call('sqlite3_column_bytes', statement, i);
-           const buffer = new ArrayBuffer(blobSize);
-           if (blobSize) {
-             const blobData = this._call('sqlite3_column_blob', statement, i);
-             new Int8Array(buffer).set(Module.HEAP8.subarray(blobData, blobData + blobSize));
-           }
-           row.push(buffer);
-           break;
-         default:
-           row.push(null);
-           break;
-       }
-     }
-     return row;
-   }
- }
- Database.initialize = initialize;
- 
- function createArrayFromString(s) {
+function createArrayFromString(s) {
   const length = Module.lengthBytesUTF8(s);
   const address = Module._sqlite3_malloc(length + 1);
   Module.stringToUTF8(s, address, length + 1);
