@@ -93,12 +93,12 @@ function checkResult(database, name, result) {
 }
 
 function trace(...args) {
-  const date = new Date();
-  const t = date.getHours().toString().padStart(2, '0') + ':' +
-            date.getMinutes().toString().padStart(2, '0') + ':' +
-            date.getSeconds().toString().padStart(2, '0') + '.' +
-            date.getMilliseconds().toString().padStart(3, '0');
-  console.debug(t, ...args);
+  // const date = new Date();
+  // const t = date.getHours().toString().padStart(2, '0') + ':' +
+  //           date.getMinutes().toString().padStart(2, '0') + ':' +
+  //           date.getSeconds().toString().padStart(2, '0') + '.' +
+  //           date.getMilliseconds().toString().padStart(3, '0');
+  // console.debug(t, ...args);
 }
 
 export class Database {
@@ -153,7 +153,7 @@ export class Database {
   async close() {
     const db = typeof this._ready === 'number' ? this._ready : await this._ready;
     await this._call('sqlite3_close', db);
-    Module._sqlite3_free(this._tmpPtr[0]);
+    Module._free(this._tmpPtr[0]);
   }
    
   // Invoke SQLite API function.
@@ -164,7 +164,7 @@ export class Database {
   // Helper for constructor. 
   async _createDB(name, vfs = 'unix') {
     // Allocate space for C output variables.
-    const tmpBuffer = Module._sqlite3_malloc(8);
+    const tmpBuffer = Module._malloc(8);
     this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
    
     const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
