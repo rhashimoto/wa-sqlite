@@ -164,7 +164,7 @@ export class Database {
   // Helper for constructor. 
   async _createDB(name, vfs = 'unix') {
     // Allocate space for C output variables.
-    const tmpBuffer = Module._malloc(8);
+    const tmpBuffer = Module._sqlite3_malloc(8);
     this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
    
     const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
