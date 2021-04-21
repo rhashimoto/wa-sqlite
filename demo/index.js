@@ -90,9 +90,10 @@ async function createEditor() {
   });
 
   // Load monaco itself.
-  globalThis.require.config({ paths: { vs: MONACO_VS } });
+  /** @type {any} */ const require = globalThis.require;
+  require.config({ paths: { vs: MONACO_VS } });
   const monaco = await new Promise(resolve => {
-    globalThis.require(['vs/editor/editor.main'], resolve);
+    require(['vs/editor/editor.main'], resolve);
   });
 
   // Create editor.

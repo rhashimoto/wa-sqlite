@@ -1,21 +1,14 @@
 // @ts-ignore
-import SQLiteFactory from '../dist/wa-sqlite.mjs';
-import { Database } from './Database.js';
-
-const SQLiteReady = SQLiteFactory().then(SQLite => {
-  Database.initialize(SQLite);
-  return SQLite;
-});
-
-async function createDatabase(name = "foo") {
-  const SQLite = await SQLiteReady;
-  return new Database(name);
-}
+import { SQLiteReady, Database } from './SQLite.js';
 
 describe('Database', function() {
+  beforeAll(async function() {
+    const SQLite = await SQLiteReady;
+  });
+
   let db;
   beforeEach(async function() {
-    db = await createDatabase();
+    db = new Database('foo');
   });
 
   afterEach(async function() {
