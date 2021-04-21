@@ -25,6 +25,7 @@ EMCC ?= emcc
 
 CFLAGS = \
 	-O3 \
+	-flto \
 	-I'deps/$(SQLITE_AMALGAMATION)'
 
 EMFLAGS = \
@@ -41,6 +42,7 @@ EMFLAGS_DEBUG = \
 EMFLAGS_DIST = \
 	-s INLINING_LIMIT=50 \
 	-O3 \
+	-flto \
 	--closure 1
 
 EMFLAGS_INTERFACES = \
