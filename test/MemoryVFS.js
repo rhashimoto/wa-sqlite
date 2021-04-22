@@ -16,7 +16,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {number} pOutFlags 
+   * @param {object} pOutFlags 
    * @returns 
    */
   xOpen(name, fileId, flags, pOutFlags) {
@@ -41,7 +41,7 @@ export class MemoryVFS extends VFS.Base {
 
     // Put the file in the opened files map.
     this.mapIdToFile.set(fileId, file);
-    this.setValue(pOutFlags, flags, 'i32');
+    pOutFlags.set(flags);
     return VFS.SQLITE_OK;
   }
 
@@ -60,43 +60,41 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {number} pData 
-   * @param {number} iSize
+   * @param {object} pData 
    * @param {number} iOffset
    */
-  xRead(fileId, pData, iSize, iOffset) {
+  xRead(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
 
     // Clip the requested read to the file boundary.
     const bgn = Math.min(iOffset, file.size);
-    const end = Math.min(iOffset + iSize, file.size);
+    const end = Math.min(iOffset + pData.size, file.size);
     const nBytes = end - bgn;
 
     if (nBytes) {
-      this.getArray(pData, nBytes).set(new Int8Array(file.data, bgn, nBytes));
+      pData.value.set(new Int8Array(file.data, bgn, nBytes));
     }
-    return nBytes === iSize ? VFS.SQLITE_OK : VFS.SQLITE_IOERR_SHORT_READ;
+    return nBytes === pData.size ? VFS.SQLITE_OK : VFS.SQLITE_IOERR_SHORT_READ;
   }
 
   /**
    * @param {number} fileId 
-   * @param {number} pData Wasm memory offset
-   * @param {number} iSize
+   * @param {object} pData 
    * @param {number} iOffset
    */
-  xWrite(fileId, pData, iSize, iOffset) {
+  xWrite(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
-    if (iOffset + iSize > file.data.byteLength) {
+    if (iOffset + pData.size > file.data.byteLength) {
       // Resize the ArrayBuffer to hold more data.
-      const newSize = Math.max(iOffset + iSize, 2 * file.data.byteLength);
+      const newSize = Math.max(iOffset + pData.size, 2 * file.data.byteLength);
       const data = new ArrayBuffer(newSize);
       new Int8Array(data).set(new Int8Array(file.data, 0, file.size));
       file.data = data;
     }
 
     // Copy data.
-    new Int8Array(file.data, iOffset, iSize).set(this.getArray(pData, iSize));
-    file.size = Math.max(file.size, iOffset + iSize);
+    new Int8Array(file.data, iOffset, pData.size).set(pData.value);
+    file.size = Math.max(file.size, iOffset + pData.size);
     return VFS.SQLITE_OK;
   }
 
@@ -115,14 +113,13 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {number} pSize64 pointer to 64-bit integer output
+   * @param {object} pSize64 
    * @returns 
    */
   xFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
 
-    // Note that this is a 64-bit value, so type is 'i64'.
-    this.setValue(pSize64, file.size, 'i64');
+    pSize64.set(file.size);
     return VFS.SQLITE_OK;
   }
 
@@ -140,12 +137,12 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {number} pResOut pointer to 32-bit integer output
+   * @param {object} pResOut 
    * @returns 
    */
   xAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);
-    this.setValue(pResOut, file ? 1 : 0, 'i32');
+    pResOut.set(file ? 1 : 0);
     return VFS.SQLITE_OK;
   }
 }

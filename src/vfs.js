@@ -21,13 +21,29 @@ const methods = {
     Module['handleAsync'] = function(f) {
       return Asyncify.handleAsync(f);
     }
+#endif
 
-    Module['purgeClosedFiles'] = function() {
-      for (const file of closedFiles) {
-        mapFileToVFS.delete(file);
+    class Value {
+      constructor(ptr, type) {
+        this.ptr = ptr;
+        this.type = type;
+      }
+
+      set(v) {
+        setValue(this.ptr, v, this.type);
       }
     }
-#endif
+
+    class Array {
+      constructor(ptr, size) {
+        this.ptr = ptr;
+        this.size = size;
+      }
+
+      get value() {
+        return new Int8Array(HEAP8.buffer, this.ptr, this.size);
+      }
+    }
 
     // int xClose(sqlite3_file* file);
     _vfsClose = function(file) {
@@ -49,13 +65,13 @@ const methods = {
     // int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsRead = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xRead'](file, pData, iAmt, getValue(iOffset, 'i64'));
+      return vfs['xRead'](file, new Array(pData, iAmt), getValue(iOffset, 'i64'));
     }
 
     // int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsWrite = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xWrite'](file, pData, iAmt, getValue(iOffset, 'i64'));
+      return vfs['xWrite'](file, new Array(pData, iAmt), getValue(iOffset, 'i64'));
     }
 
     // int xTruncate(sqlite3_file* file, sqlite3_int64 size);
@@ -73,7 +89,7 @@ const methods = {
     // int xFileSize(sqlite3_file* file, sqlite3_int64* pSize);
     _vfsFileSize = function(file, pSize) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xFileSize'](file, pSize);
+      return vfs['xFileSize'](file, new Value(pSize, 'i64'));
     }
 
     // int xLock(sqlite3_file* file, int flags);
@@ -91,13 +107,13 @@ const methods = {
     // int xCheckReservedLock(sqlite3_file* file, int* pResOut);
     _vfsCheckReservedLock = function(file, pResOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xCheckReservedLock'](file, pResOut);
+      return vfs['xCheckReservedLock'](file, new Value(pResOut, 'i32'));
     }
 
     // int xFileControl(sqlite3_file* file, int flags, void* pOut);
     _vfsFileControl = function(file, flags, pOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xFileControl'](file, flags, pOut);
+      return vfs['xFileControl'](file, flags, new Array(pOut));
     }
 
     // int xSectorSize(sqlite3_file* file);
@@ -118,8 +134,15 @@ const methods = {
       mapFileToVFS.set(file, vfs);
 #if ASYNCIFY
       closedFiles.delete(file);
+      for (const file of closedFiles) {
+        mapFileToVFS.delete(file);
+      }
 #endif
-      return vfs['xOpen'](zName ? UTF8ToString(zName) : null, file, flags, pOutFlags);
+      return vfs['xOpen'](
+        zName ? UTF8ToString(zName) : null,
+        file,
+        flags,
+        new Value(pOutFlags, 'i32'));
     }
 
     // int xDelete(sqlite3_vfs* vfs, const char *zName, int syncDir);
@@ -131,7 +154,7 @@ const methods = {
     // int xAccess(sqlite3_vfs* vfs, const char *zName, int flags, int *pResOut);
     _vfsAccess = function(vfsId, zName, flags, pResOut) {
       const vfs = mapIdToVFS.get(vfsId);
-      return vfs['xAccess'](UTF8ToString(zName), flags, pResOut);
+      return vfs['xAccess'](UTF8ToString(zName), flags, new Value(pResOut, 'i32'));
     }
   }
 };

@@ -60,11 +60,6 @@ export class Base {
 
   constructor(Module) {
     this.Module = Module;
-    this.getValue = Module.getValue;
-    this.setValue = Module.setValue;
-    this.getArray = function(ptr, size) {
-      return new Int8Array(Module.HEAP8.buffer, ptr, size);
-    };
     this.handleAsync = Module.handleAsync;
   }
 
@@ -77,21 +72,19 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {number} pData 
-   * @param {number} iSize
+   * @param {object} pData 
    * @param {number} iOffset
    */
-  xRead(fileId, pData, iSize, iOffset) {
+  xRead(fileId, pData, iOffset) {
     return SQLITE_IOERR;
   }
 
   /**
    * @param {number} fileId 
-   * @param {number} pData Wasm memory offset
-   * @param {number} iSize
+   * @param {object} pData
    * @param {number} iOffset
    */
-  xWrite(fileId, pData, iSize, iOffset) {
+  xWrite(fileId, pData, iOffset) {
     return SQLITE_IOERR;
   }
 
@@ -115,7 +108,7 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {number} pSize64 pointer to 64-bit integer output
+   * @param {object} pSize64 
    * @returns 
    */
   xFileSize(fileId, pSize64) {
@@ -142,17 +135,17 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {number} pResOut pointer to 32-bit integer output
+   * @param {object} pResOut 
    */
   xCheckReservedLock(fileId, pResOut) {
-    this.setValue(pResOut, 0, 'i32');
+    pResOut.set(0);
     return SQLITE_OK;
   }
 
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {number} pOut pointer to 32-bit integer output
+   * @param {object} pOut 
    * @returns 
    */
   xFileControl(fileId, flags, pOut) {
@@ -179,7 +172,7 @@ export class Base {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {number} pOutFlags 
+   * @param {object} pOutFlags 
    * @returns 
    */
   xOpen(name, fileId, flags, pOutFlags) {
@@ -199,7 +192,7 @@ export class Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {number} pResOut 
+   * @param {object} pResOut 
    * @returns 
    */
   xAccess(name, flags, pResOut) {
