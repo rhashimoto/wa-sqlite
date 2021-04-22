@@ -43,73 +43,73 @@ const methods = {
 #else
       mapFileToVFS.delete(file);
 #endif
-      return vfs['close'](file);
+      return vfs['xClose'](file);
     }
     
     // int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsRead = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['read'](file, pData, iAmt, getValue(iOffset, 'i64'));
+      return vfs['xRead'](file, pData, iAmt, getValue(iOffset, 'i64'));
     }
 
     // int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsWrite = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['write'](file, pData, iAmt, getValue(iOffset, 'i64'));
+      return vfs['xWrite'](file, pData, iAmt, getValue(iOffset, 'i64'));
     }
 
     // int xTruncate(sqlite3_file* file, sqlite3_int64 size);
     _vfsTruncate = function(file, iSize) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['truncate'](file, getValue(iSize, 'i64'));
+      return vfs['xTruncate'](file, getValue(iSize, 'i64'));
     }
 
     // int xSync(sqlite3_file* file, int flags);
     _vfsSync = function(file, flags) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['sync'](file, flags);
+      return vfs['xSync'](file, flags);
     }
 
     // int xFileSize(sqlite3_file* file, sqlite3_int64* pSize);
     _vfsFileSize = function(file, pSize) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['fileSize'](file, pSize);
+      return vfs['xFileSize'](file, pSize);
     }
 
     // int xLock(sqlite3_file* file, int flags);
     _vfsLock = function(file, flags) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['lock'](file, flags);
+      return vfs['xLock'](file, flags);
     }
 
     // int xUnlock(sqlite3_file* file, int flags);
     _vfsUnlock = function(file, flags) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['unlock'](file, flags);
+      return vfs['xUnlock'](file, flags);
     }
 
     // int xCheckReservedLock(sqlite3_file* file, int* pResOut);
     _vfsCheckReservedLock = function(file, pResOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['checkReservedLock'](file, pResOut);
+      return vfs['xCheckReservedLock'](file, pResOut);
     }
 
     // int xFileControl(sqlite3_file* file, int flags, void* pOut);
     _vfsFileControl = function(file, flags, pOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['fileControl'](file, flags, pOut);
+      return vfs['xFileControl'](file, flags, pOut);
     }
 
     // int xSectorSize(sqlite3_file* file);
     _vfsSectorSize = function(file) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['sectorSize'](file);
+      return vfs['xSectorSize'](file);
     }
 
     // int xDeviceCharacteristics(sqlite3_file* file);
     _vfsDeviceCharacteristics = function(file) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['deviceCharacteristics'](file);
+      return vfs['xDeviceCharacteristics'](file);
     }
     
     // int xOpen(sqlite3_vfs* vfs, const char *zName, sqlite3_file* file, int flags, int *pOutFlags);
@@ -119,19 +119,19 @@ const methods = {
 #if ASYNCIFY
       closedFiles.delete(file);
 #endif
-      return vfs['open'](zName ? UTF8ToString(zName) : null, file, flags, pOutFlags);
+      return vfs['xOpen'](zName ? UTF8ToString(zName) : null, file, flags, pOutFlags);
     }
 
     // int xDelete(sqlite3_vfs* vfs, const char *zName, int syncDir);
     _vfsDelete = function(vfsId, zName, syncDir) {
       const vfs = mapIdToVFS.get(vfsId);
-      return vfs['delete'](UTF8ToString(zName), syncDir);
+      return vfs['xDelete'](UTF8ToString(zName), syncDir);
     }
 
     // int xAccess(sqlite3_vfs* vfs, const char *zName, int flags, int *pResOut);
     _vfsAccess = function(vfsId, zName, flags, pResOut) {
       const vfs = mapIdToVFS.get(vfsId);
-      return vfs['access'](UTF8ToString(zName), flags, pResOut);
+      return vfs['xAccess'](UTF8ToString(zName), flags, pResOut);
     }
   }
 };

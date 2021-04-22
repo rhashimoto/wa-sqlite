@@ -19,7 +19,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} pOutFlags 
    * @returns 
    */
-  open(name, fileId, flags, pOutFlags) {
+  xOpen(name, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
     name = name || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
 
@@ -48,7 +48,7 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {number} fileId 
    */
-  close(fileId) {
+  xClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
     this.mapIdToFile.delete(fileId);
 
@@ -64,7 +64,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  read(fileId, pData, iSize, iOffset) {
+  xRead(fileId, pData, iSize, iOffset) {
     const file = this.mapIdToFile.get(fileId);
 
     // Clip the requested read to the file boundary.
@@ -84,7 +84,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  write(fileId, pData, iSize, iOffset) {
+  xWrite(fileId, pData, iSize, iOffset) {
     const file = this.mapIdToFile.get(fileId);
     if (iOffset + iSize > file.data.byteLength) {
       // Resize the ArrayBuffer to hold more data.
@@ -105,7 +105,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iSize 
    * @returns 
    */
-  truncate(fileId, iSize) {
+  xTruncate(fileId, iSize) {
     const file = this.mapIdToFile.get(fileId);
 
     // For simplicity we don't make the ArrayBuffer smaller.
@@ -118,7 +118,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} pSize64 pointer to 64-bit integer output
    * @returns 
    */
-  fileSize(fileId, pSize64) {
+  xFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
 
     // Note that this is a 64-bit value, so type is 'i64'.
@@ -132,7 +132,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} syncDir 
    * @returns 
    */
-  delete(name, syncDir) {
+  xDelete(name, syncDir) {
     this.mapNameToFile.delete(name);
     return VFS.SQLITE_OK;
   }
@@ -143,7 +143,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} pResOut pointer to 32-bit integer output
    * @returns 
    */
-  access(name, flags, pResOut) {
+  xAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);
     this.setValue(pResOut, file ? 1 : 0, 'i32');
     return VFS.SQLITE_OK;

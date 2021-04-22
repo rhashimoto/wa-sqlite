@@ -71,7 +71,7 @@ export class Base {
   /**
    * @param {number} fileId 
    */
-  close(fileId) {
+  xClose(fileId) {
     return SQLITE_IOERR;
   }
 
@@ -81,7 +81,7 @@ export class Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  read(fileId, pData, iSize, iOffset) {
+  xRead(fileId, pData, iSize, iOffset) {
     return SQLITE_IOERR;
   }
 
@@ -91,7 +91,7 @@ export class Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  write(fileId, pData, iSize, iOffset) {
+  xWrite(fileId, pData, iSize, iOffset) {
     return SQLITE_IOERR;
   }
 
@@ -100,7 +100,7 @@ export class Base {
    * @param {number} iSize 
    * @returns 
    */
-  truncate(fileId, iSize) {
+  xTruncate(fileId, iSize) {
     return SQLITE_IOERR;
   }
 
@@ -109,7 +109,7 @@ export class Base {
    * @param {*} flags 
    * @returns 
    */
-  sync(fileId, flags) {
+  xSync(fileId, flags) {
     return SQLITE_OK;
   }
 
@@ -118,7 +118,7 @@ export class Base {
    * @param {number} pSize64 pointer to 64-bit integer output
    * @returns 
    */
-  fileSize(fileId, pSize64) {
+  xFileSize(fileId, pSize64) {
     return SQLITE_IOERR;
   }
 
@@ -127,7 +127,7 @@ export class Base {
    * @param {number} flags 
    * @returns 
    */
-  lock(fileId, flags) {
+  xLock(fileId, flags) {
     return SQLITE_OK;
   }
 
@@ -136,7 +136,7 @@ export class Base {
    * @param {number} flags 
    * @returns 
    */
-  unlock(fileId, flags) {
+  xUnlock(fileId, flags) {
     return SQLITE_OK;
   }
 
@@ -144,7 +144,7 @@ export class Base {
    * @param {number} fileId 
    * @param {number} pResOut pointer to 32-bit integer output
    */
-  checkReservedLock(fileId, pResOut) {
+  xCheckReservedLock(fileId, pResOut) {
     this.setValue(pResOut, 0, 'i32');
     return SQLITE_OK;
   }
@@ -155,7 +155,7 @@ export class Base {
    * @param {number} pOut pointer to 32-bit integer output
    * @returns 
    */
-  fileControl(fileId, flags, pOut) {
+  xFileControl(fileId, flags, pOut) {
     return SQLITE_NOTFOUND;
   }
 
@@ -163,7 +163,7 @@ export class Base {
    * @param {number} fileId 
    * @returns 
    */
-  sectorSize(fileId) {
+  xSectorSize(fileId) {
     return 0;
   }
 
@@ -171,7 +171,7 @@ export class Base {
    * @param {number} fileId 
    * @returns 
    */
-  deviceCharacteristics(fileId) {
+  xDeviceCharacteristics(fileId) {
     return 0;
   }
 
@@ -182,7 +182,7 @@ export class Base {
    * @param {number} pOutFlags 
    * @returns 
    */
-  open(name, fileId, flags, pOutFlags) {
+  xOpen(name, fileId, flags, pOutFlags) {
     return SQLITE_CANTOPEN;
   }
 
@@ -192,7 +192,7 @@ export class Base {
    * @param {number} syncDir 
    * @returns 
    */
-  delete(name, syncDir) {
+  xDelete(name, syncDir) {
     return SQLITE_IOERR;
   }
 
@@ -202,7 +202,7 @@ export class Base {
    * @param {number} pResOut 
    * @returns 
    */
-  access(name, flags, pResOut) {
+  xAccess(name, flags, pResOut) {
     return SQLITE_IOERR;
   }
 }

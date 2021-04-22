@@ -19,7 +19,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} pOutFlags 
    * @returns 
    */
-  open(name, fileId, flags, pOutFlags) {
+  xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       // Generate a random name if requested.
       name = name || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
@@ -50,7 +50,7 @@ export class MemoryAsyncVFS extends VFS.Base {
   /**
    * @param {number} fileId 
    */
-  close(fileId) {
+  xClose(fileId) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
@@ -68,7 +68,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  read(fileId, pData, iSize, iOffset) {
+  xRead(fileId, pData, iSize, iOffset) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
 
@@ -90,7 +90,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} iSize
    * @param {number} iOffset
    */
-  write(fileId, pData, iSize, iOffset) {
+  xWrite(fileId, pData, iSize, iOffset) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
       if (iOffset + iSize > file.data.byteLength) {
@@ -113,7 +113,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} iSize 
    * @returns 
    */
-  truncate(fileId, iSize) {
+  xTruncate(fileId, iSize) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
 
@@ -128,7 +128,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} pSize64 pointer to 64-bit integer output
    * @returns 
    */
-  fileSize(fileId, pSize64) {
+  xFileSize(fileId, pSize64) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
 
@@ -144,7 +144,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} syncDir 
    * @returns 
    */
-  delete(name, syncDir) {
+  xDelete(name, syncDir) {
     return this.handleAsync(async () => {
       this.mapNameToFile.delete(name);
       return VFS.SQLITE_OK;
@@ -157,7 +157,7 @@ export class MemoryAsyncVFS extends VFS.Base {
    * @param {number} pResOut pointer to 32-bit integer output
    * @returns 
    */
-  access(name, flags, pResOut) {
+  xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
       const file = this.mapNameToFile.get(name);
       this.setValue(pResOut, file ? 1 : 0, 'i32');
