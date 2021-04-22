@@ -72,7 +72,7 @@ async function initSQLite() {
   const SQLite = await SQLiteFactory();
 
   // Create and register a VFS.
-  const vfs = new MemoryAsyncVFS(SQLite);
+  const vfs = new MemoryAsyncVFS();
   SQLite.registerVFS(VFS_NAME, vfs);
 
   // Attach SQLite to the Database class.

@@ -8,15 +8,15 @@ export class MemoryVFS extends VFS.Base {
   // Map of open files, keyed by id (sqlite3_file pointer).
   mapIdToFile = new Map();
 
-  constructor(Module) {
-    super(Module);
+  constructor() {
+    super();
   }
 
   /**
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {object} pOutFlags 
+   * @param {{ set: function(number): void }} pOutFlags 
    * @returns 
    */
   xOpen(name, fileId, flags, pOutFlags) {
@@ -60,7 +60,7 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pData 
+   * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
    */
   xRead(fileId, pData, iOffset) {
@@ -79,7 +79,7 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pData 
+   * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
    */
   xWrite(fileId, pData, iOffset) {
@@ -113,7 +113,7 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pSize64 
+   * @param {{ set: function(number): void }} pSize64 
    * @returns 
    */
   xFileSize(fileId, pSize64) {
@@ -137,7 +137,7 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {object} pResOut 
+   * @param {{ set: function(number): void }} pResOut 
    * @returns 
    */
   xAccess(name, flags, pResOut) {

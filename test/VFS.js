@@ -58,13 +58,9 @@ export const SQLITE_IOCAP_BATCH_ATOMIC = 0x00004000;
 export class Base {
   mxPathName = 64;
 
-  constructor(Module) {
-    this.Module = Module;
-    this.handleAsync = Module.handleAsync;
-  }
-
   /**
    * @param {number} fileId 
+   * @returns {number|Promise<number>}
    */
   xClose(fileId) {
     return SQLITE_IOERR;
@@ -72,8 +68,9 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pData 
+   * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
   xRead(fileId, pData, iOffset) {
     return SQLITE_IOERR;
@@ -81,8 +78,9 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pData
+   * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
   xWrite(fileId, pData, iOffset) {
     return SQLITE_IOERR;
@@ -91,7 +89,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xTruncate(fileId, iSize) {
     return SQLITE_IOERR;
@@ -100,7 +98,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {*} flags 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xSync(fileId, flags) {
     return SQLITE_OK;
@@ -108,8 +106,8 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pSize64 
-   * @returns 
+   * @param {{ set: function(number): void }} pSize64 
+   * @returns {number|Promise<number>}
    */
   xFileSize(fileId, pSize64) {
     return SQLITE_IOERR;
@@ -118,7 +116,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xLock(fileId, flags) {
     return SQLITE_OK;
@@ -127,7 +125,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xUnlock(fileId, flags) {
     return SQLITE_OK;
@@ -135,7 +133,8 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {object} pResOut 
+   * @param {{ set: function(number): void }} pResOut 
+   * @returns {number|Promise<number>}
    */
   xCheckReservedLock(fileId, pResOut) {
     pResOut.set(0);
@@ -145,8 +144,8 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {object} pOut 
-   * @returns 
+   * @param {{ set: function(number): void }} pOut 
+   * @returns {number|Promise<number>}
    */
   xFileControl(fileId, flags, pOut) {
     return SQLITE_NOTFOUND;
@@ -154,7 +153,7 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xSectorSize(fileId) {
     return 0;
@@ -162,7 +161,7 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xDeviceCharacteristics(fileId) {
     return 0;
@@ -172,8 +171,8 @@ export class Base {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {object} pOutFlags 
-   * @returns 
+   * @param {{ set: function(number): void }} pOutFlags 
+   * @returns {number|Promise<number>}
    */
   xOpen(name, fileId, flags, pOutFlags) {
     return SQLITE_CANTOPEN;
@@ -183,7 +182,7 @@ export class Base {
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xDelete(name, syncDir) {
     return SQLITE_IOERR;
@@ -192,10 +191,20 @@ export class Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {object} pResOut 
-   * @returns 
+   * @param {{ set: function(number): void }} pResOut 
+   * @returns {number|Promise<number>}
    */
   xAccess(name, flags, pResOut) {
     return SQLITE_IOERR;
+  }
+
+  /**
+   * Handle asynchronous operation. This implementation will be overriden on
+   * registration by an Asyncify build.
+   * @param {function(): Promise<number>} f 
+   * @returns {Promise<number>}
+   */
+  handleAsync(f) {
+    throw new Error('No Asyncify runtime');
   }
 }

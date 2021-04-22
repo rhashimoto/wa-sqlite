@@ -21,7 +21,7 @@ describe('VFS', function() {
   beforeAll(async function() {
     const SQLite = await SQLiteReady;
 
-    vfs = new MemoryAsyncVFS(SQLite);
+    vfs = new MemoryAsyncVFS();
     SQLite.registerVFS('mem', vfs);
   });
 

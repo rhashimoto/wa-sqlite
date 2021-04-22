@@ -1,4 +1,33 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
+
+// Suppress some IDE warnings.
+#if 0
+const Module = {};
+const HEAP8 = new Int8Array();
+const LibraryManager = {};
+const Asyncify = {};
+function mergeInto(library, methods) {}
+function ccall(fname, type, argTypes, args) { return args }
+function getValue(ptr, type) { return 0; }
+function setValue(ptr, value, type) {}
+function UTF8ToString(ptr) { return ''; }
+let _vfsAccess;
+let _vfsCheckReservedLock;
+let _vfsClose;
+let _vfsDelete;
+let _vfsDeviceCharacteristics;
+let _vfsFileControl;
+let _vfsFileSize;
+let _vfsLock;
+let _vfsOpen;
+let _vfsRead;
+let _vfsSectorSize;
+let _vfsSync;
+let _vfsTruncate;
+let _vfsUnlock;
+let _vfsWrite;
+#endif
+
 const methods = {
   $method_support__postset: 'method_support();',
   $method_support: function() {
@@ -11,6 +40,10 @@ const methods = {
         throw Error(`VFS '${vfs}' already registered`);
       }
 
+#if ASYNCIFY
+      // Inject Asyncify method.
+      vfs['handleAsync'] = Asyncify.handleAsync;
+#endif
       const mxPathName = vfs.mxPathName ?? 64;
       const id = ccall('register_vfs', 'number', ['string', 'number'], [name, mxPathName]);
       mapIdToVFS.set(id, vfs);
@@ -18,9 +51,6 @@ const methods = {
 
 #if ASYNCIFY
     const closedFiles = new Set();
-    Module['handleAsync'] = function(f) {
-      return Asyncify.handleAsync(f);
-    }
 #endif
 
     class Value {
