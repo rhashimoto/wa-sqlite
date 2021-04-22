@@ -83,8 +83,8 @@ function checkResult(database, name, result) {
     default:
       if (result !== SQLITE_OK) {
         // Get detailed error if the database is open.
-        if (typeof database._ready === 'number') {
-          throw new Error(api.sqlite3_errmsg(database._ready));
+        if (typeof database._db === 'number') {
+          throw new Error(api.sqlite3_errmsg(database._db));
         }
         throw new Error(`${name} ${result}`);
       }
@@ -102,29 +102,8 @@ function trace(...args) {
 }
 
 export class Database {
-  /**
-   * This is a Promise until the db is open, afterwards the db pointer.
-   * @type {Promise<void>|number}
-   */
-  _ready;
-
-  // Scratch space in WASM memory for SQLite API output.
-  /** @type {Array<number>} */ _tmpPtr = [];
-  _tmp = new Proxy([], {
-    get: (_, index) => {
-      return Module.getValue(this._tmpPtr[index], '*');
-    }
-  });
-  
-  /**
-   * @param {string} name filename
-   * @param {string} [vfs] optional filesystem name
-   */
-  constructor(name, vfs) {
-    if (!Module) {
-      throw new Error('Database.initialize() not called with Module');
-    }
-    this._ready = this._createDB(name, vfs);
+  constructor() {
+    throw new Error('Use Database.open(name, vfs)');
   }
   
   /**
@@ -134,10 +113,6 @@ export class Database {
    * @returns Promise<Array> array of statement results
    */
   async sql(strings, ...keys) {
-    if (typeof this._ready !== 'number') {
-      await this._ready;
-    }
-
     // Tagged template usage.
     let interleaved = [];
     strings.forEach((s, i) => {
@@ -151,30 +126,38 @@ export class Database {
    * Close database. Subsequent method calls produce undefined results.
    */
   async close() {
-    const db = typeof this._ready === 'number' ? this._ready : await this._ready;
+    const db = this._db;
     await this._call('sqlite3_close', db);
     Module._free(this._tmpPtr[0]);
   }
    
+  /**
+   * @param {string} name filename
+   * @param {string} [vfs] optional filesystem name
+   */
+   async _open(name, vfs) {
+    // Allocate space for C output variables.
+    const tmpBuffer = Module._malloc(8);
+    this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
+    this._tmp = new Proxy([], {
+      get: (_, index) => {
+        return Module.getValue(this._tmpPtr[index], '*');
+      }
+    });
+
+    const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
+    await this._call('sqlite3_open_v2', name, this._tmpPtr[0], flags, vfs);
+
+    this._db = this._tmp[0];
+    Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [this._db]);
+    return this;
+  }
+
   // Invoke SQLite API function.
   _call(fname, ...args) {
     return api[fname].call(this, ...args);
   }
 
-  // Helper for constructor. 
-  async _createDB(name, vfs = 'unix') {
-    // Allocate space for C output variables.
-    const tmpBuffer = Module._malloc(8);
-    this._tmpPtr = [tmpBuffer, tmpBuffer + 4];
-   
-    const flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
-    await this._call('sqlite3_open_v2', name, this._tmpPtr[0], flags, vfs);
-
-    const db = this._tmp[0];
-    Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-    this._ready = db;
-  }
-  
   // Execute all SQL statements in the provided string.
   async _run(sql) {
     // Convert query to C string.
@@ -212,7 +195,7 @@ export class Database {
     // Prepare one statement at the WASM address. The wrapper throws an
     // exception on any error (e.g. invalid SQL). Input that is only
     // whitespace or comments is not an error and returns a null statement.
-    const db = this._ready;
+    const db = this._db;
     await this._call('sqlite3_prepare_v2', db, address, -1, this._tmpPtr[0], this._tmpPtr[1]);
     
     const statement = this._tmp[0];
@@ -277,7 +260,20 @@ export class Database {
   }
 }
 Database.initialize = initialize;
- 
+
+/**
+ * @param {string} name filename
+ * @param {string} [vfs] optional filesystem name
+ */
+Database.open = async function(name, vfs) {
+  if (!Module) {
+    throw new Error('Database.initialize() not called with Module');
+  }
+
+  const database = Object.create(Database.prototype);
+  return database._open(name, vfs);
+}
+
 function createArrayFromString(s) {
   const length = Module.lengthBytesUTF8(s);
   const address = Module._sqlite3_malloc(length + 1);

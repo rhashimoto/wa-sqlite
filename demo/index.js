@@ -33,7 +33,7 @@ const VFS_NAME = "myVFS";
       editor.getModel().getValueInRange(selection);
 
     // Open and close the database on every execution to test data persistence.
-    const db = new Database(DB_NAME, VFS_NAME);
+    const db = await Database.open(DB_NAME, VFS_NAME);
     const output = document.getElementById('output');
     while (output.firstChild) output.removeChild(output.lastChild);
     try {

@@ -27,7 +27,7 @@ describe('VFS', function() {
 
   let db;
   beforeEach(async function() {
-    db = new Database('foo', 'mem');
+    db = await Database.open('foo', 'mem');
   });
 
   afterEach(async function() {
@@ -42,32 +42,32 @@ describe('VFS', function() {
 
     // Close and reopen the database.
     await db.close();
-    db = new Database('foo', 'mem');
+    db = await Database.open('foo', 'mem');
 
     const resultB = await db.sql`SELECT COUNT(*) FROM goog`;
     expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
   });
 
-  // it('timing', async function() {
-  //   const VFS_NAME = 'mem';
-  //   const N = 100;
+  xit('timing', async function() {
+    const VFS_NAME = 'mem';
+    const N = 10;
 
-  //   const timestamp = Date.now();
-  //   for (let i = 0; i < N; ++i) {
-  //     let db = new Database('foobar', VFS_NAME);
-  //     await loadSampleTable(db);
-  //     const resultA = await db.sql`SELECT SUM(Volume) FROM goog`;
-  //     expect(resultA[0].rows[0][0]).toBeGreaterThan(0);
+    const timestamp = Date.now();
+    for (let i = 0; i < N; ++i) {
+      let db = await Database.open('foobar', VFS_NAME);
+      await loadSampleTable(db);
+      const resultA = await db.sql`SELECT SUM(Volume) FROM goog`;
+      expect(resultA[0].rows[0][0]).toBeGreaterThan(0);
 
-  //     await db.close();
-  //     db = new Database('foobar', VFS_NAME);
+      await db.close();
+      db = await Database.open('foobar', VFS_NAME);
 
-  //     const resultB = await db.sql`SELECT SUM(Volume) FROM goog`;
-  //     expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
+      const resultB = await db.sql`SELECT SUM(Volume) FROM goog`;
+      expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
 
-  //     await db.sql`VACUUM`;
-  //     await db.close();
-  //   }
-  //   console.log('elapsed', (Date.now() - timestamp) / N);
-  // });
+      await db.sql`VACUUM`;
+      await db.close();
+    }
+    console.log('elapsed', (Date.now() - timestamp) / N);
+  });
 });

@@ -8,7 +8,7 @@ describe('Database', function() {
 
   let db;
   beforeEach(async function() {
-    db = new Database('foo');
+    db = await Database.open('foo');
   });
 
   afterEach(async function() {
