@@ -1,5 +1,5 @@
 // @ts-ignore
-import SQLiteFactory from '../dist/wa-sqlite.mjs';
+import SQLiteFactory from '../dist/wa-sqlite-async.mjs';
 import { Database } from './Database.js';
 
 // This is so we only have one SQLite instance across all test files.

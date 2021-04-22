@@ -7,6 +7,7 @@ import GOOG from './GOOG.js';
 
 async function loadSampleTable(db) {
   await db.sql`
+    PRAGMA journal_mode = MEMORY;
     DROP TABLE IF EXISTS goog;
     CREATE TABLE goog (${GOOG.columns.join(',')});
   `;
@@ -20,7 +21,7 @@ describe('VFS', function() {
   beforeAll(async function() {
     const SQLite = await SQLiteReady;
 
-    vfs = new MemoryVFS(SQLite);
+    vfs = new MemoryAsyncVFS(SQLite);
     SQLite.registerVFS('mem', vfs);
   });
 
@@ -46,4 +47,27 @@ describe('VFS', function() {
     const resultB = await db.sql`SELECT COUNT(*) FROM goog`;
     expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
   });
+
+  // it('timing', async function() {
+  //   const VFS_NAME = 'mem';
+  //   const N = 100;
+
+  //   const timestamp = Date.now();
+  //   for (let i = 0; i < N; ++i) {
+  //     let db = new Database('foobar', VFS_NAME);
+  //     await loadSampleTable(db);
+  //     const resultA = await db.sql`SELECT SUM(Volume) FROM goog`;
+  //     expect(resultA[0].rows[0][0]).toBeGreaterThan(0);
+
+  //     await db.close();
+  //     db = new Database('foobar', VFS_NAME);
+
+  //     const resultB = await db.sql`SELECT SUM(Volume) FROM goog`;
+  //     expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
+
+  //     await db.sql`VACUUM`;
+  //     await db.close();
+  //   }
+  //   console.log('elapsed', (Date.now() - timestamp) / N);
+  // });
 });
