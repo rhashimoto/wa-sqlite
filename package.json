@@ -5,7 +5,7 @@
     "dist/*"
   ],
   "scripts": {
-    "prepare": "make",
+    "prepack": "make",
     "start": "web-dev-server",
     "test-watch": "karma start"
   },
