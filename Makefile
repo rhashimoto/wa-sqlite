@@ -115,9 +115,9 @@ deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 clean-tmp:
 	rm -rf tmp
 
-tmp/bc/sqlite3.bc: deps/$(SQLITE_AMALGAMATION)/sqlite3.c
+tmp/bc/sqlite3.bc: deps/$(SQLITE_AMALGAMATION)
 	mkdir -p tmp/bc
-	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^/sqlite3.c -c -o $@
 
 tmp/bc/extension-functions.bc: deps/$(EXTENSION_FUNCTIONS)
 	mkdir -p tmp/bc
