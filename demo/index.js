@@ -1,8 +1,8 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 // @ts-ignore
-import SQLiteFactory from '../dist/wa-sqlite-async.mjs';
+import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
-import { Database } from '../test/Database.js';
+import * as SQLite from '../src/sqlite-api.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
 // This will need to be changed if using a package manager other than Yarn 2.
@@ -22,30 +22,37 @@ const VFS_NAME = "myVFS";
 
 (async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
-  const [_, editor] = await Promise.all([initSQLite(), createEditor()]);
+  const [SQLiteModule, editor] = await Promise.all([SQLiteModuleFactory(), createEditor()]);
+  const sqlite3 = SQLite.Factory(SQLiteModule);
+
+  // Create and register a VFS.
+  const vfs = new MemoryAsyncVFS();
+  SQLiteModule.registerVFS(VFS_NAME, vfs);
 
   // Execute SQL on button click.
   document.getElementById('execute').addEventListener('click', async function() {
     // Get SQL from editor.
     const selection = editor.getSelection();
-    const sql = selection.isEmpty() ?
+    const queries = selection.isEmpty() ?
       editor.getValue() :
       editor.getModel().getValueInRange(selection);
 
     // Open and close the database on every execution to test data persistence.
-    const db = await Database.open(DB_NAME, VFS_NAME);
+    const db = await sqlite3.open_v2(DB_NAME);
+    const sql = SQLite.tag(sqlite3, db);
+
     const output = document.getElementById('output');
     while (output.firstChild) output.removeChild(output.lastChild);
     try {
-      // Execute the query.
-      const results = await db.sql`${sql}`;
+      // Execute the SQL.
+      const results = await sql`${queries}`;
 
       results.map(formatTable).forEach(table => output.append(table));
     } catch (e) {
       output.innerHTML = `<pre>${e.stack}</pre>`;
     } finally {
       // Make sure to close to avoid leaking resources.
-      db.close();
+      sqlite3.close(db);
     }
   });
 
@@ -57,7 +64,7 @@ const VFS_NAME = "myVFS";
   });
 
   // Persist editor content across page loads.
-  let change = 0;
+  /** @type {*} */ let change = 0;
   editor.onDidChangeModelContent(function() {
     clearTimeout(change);
     change = setTimeout(function() {
@@ -67,17 +74,6 @@ const VFS_NAME = "myVFS";
   });
   editor.setValue(localStorage.getItem('wa-sqlite demo') ?? DEFAULT_SQL);
 })();
-
-async function initSQLite() {
-  const SQLite = await SQLiteFactory();
-
-  // Create and register a VFS.
-  const vfs = new MemoryAsyncVFS();
-  SQLite.registerVFS(VFS_NAME, vfs);
-
-  // Attach SQLite to the Database class.
-  Database.initialize(SQLite);
-}
 
 async function createEditor() {
   // Insert a script element to bootstrap the monaco loader.
