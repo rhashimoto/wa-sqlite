@@ -84,58 +84,91 @@ function trace(fname, result) {
  * 
  * @property {(
  *  db: number) => Promise<number>} close
+ *  See https://www.sqlite.org/c3ref/close.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => Int8Array} column_blob
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => number} column_bytes
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number) => number} column_count
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => number} column_double
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => number} column_int
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => string} column_name
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => string} column_text
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
  *  iCol: number) => number} column_type
+ *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
- *  stmt: number) => number} data_count
+ *  stmt: number) => number} data_count Number of columns in a result set.
+ *  See https://www.sqlite.org/c3ref/data_count.html
  * 
  * @property {(
- *  stmt: number) => Promise<number>} finalize
+ *  stmt: number) => Promise<number>} finalize Destroy a prepared statement
+ *  object. See https://www.sqlite.org/c3ref/finalize.html
  * 
  * @property {(
  *  zFilename: string,
  *  iFlags?: number,
- *  zVfs?: string) => Promise<number>} open_v2
+ *  zVfs?: string) => Promise<number>} open_v2 Opening a new database
+ *  connection. SQLite open flags can optionally be provided or omitted
+ *  for the default (CREATE + READWRITE). A VFS name can optionally be
+ *  provided.
  * 
  * @property {(
  *  db: number,
  *  sql: string|number) => Promise<{ stmt: number, sql: number }?>} prepare_v2
+ *  Compiling an SQL statement. SQL is provided either as a string or a
+ *  pointer in WASM memory. The returned object provides both the prepared
+ *  statement and a pointer to the still uncompiled SQL that can be used
+ *  with the next call to this function. A null value is returned when
+ *  no statement remains.
+ *  See https://www.sqlite.org/c3ref/prepare.html
  * 
  * @property {(
  *  stmt: number) => number} reset Reset a prepared statement object.
+ *  See https://www.sqlite.org/c3ref/reset.html
  * 
  * @property {(
  *  stmt: number) => Promise<number>} step Evaluate an SQL statement.
+ *  See https://www.sqlite.org/c3ref/step.html
+ * 
+ * @property {(db: number) => number} str_new Create a new dynamic string
+ * object.
+ * 
+ * @property {(str: number, s: string) => void} str_appendall Add content
+ * to a dynamic string.
+ * 
+ * @property {(str: number) => number} str_value Get pointer to dynamic
+ * string content.
+ * 
+ * @property {(str: number) => void} str_finish Finalize a dynamic string.
  */
 
 /**
@@ -297,10 +330,7 @@ export function Factory(Module) {
 
       const statement = statements.get(stmt);
       statements.delete(stmt)
-      if (statement.allocated) {
-        destroyUTF8(statement.allocated);
-      }
-      return check(fname, result, statement.db);
+      return check(fname, result, statement);
     };
   })();
 
@@ -336,7 +366,7 @@ export function Factory(Module) {
       const stmt = Module.getValue(tmpPtr[0], 'i32');
       sql = Module.getValue(tmpPtr[1], 'i32');
 
-      statements.set(stmt, { db, allocated });
+      statements.set(stmt, db);
 
       check(fname, result, db);
       return stmt ? { stmt, sql } : null;
@@ -349,7 +379,7 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      return check(fname, result, statements.get(stmt).db);
+      return check(fname, result, statements.get(stmt));
     };
   })();
 
@@ -359,9 +389,62 @@ export function Factory(Module) {
     return async function(stmt) {
       verifyStatement(stmt);
       const result = await f(stmt);
-      return check(fname, result, statements.get(stmt).db, [SQLITE_ROW, SQLITE_DONE]);
+      return check(fname, result, statements.get(stmt), [SQLITE_ROW, SQLITE_DONE]);
     };
   })();
+
+  // Duplicate some of the SQLite dynamic string API but without
+  // calling SQLite (except for memory allocation). We need some way
+  // to transfer Javascript strings and might as well use an API
+  // that mimics the SQLite API.
+  const strings = new Map();
+
+  api.str_new = function(db) {
+    const str = Math.random();
+    const data = {
+      offset: Module._malloc(1),
+      bytes: 0
+    };
+    strings.set(str, data);
+    Module.setValue(data.offset, 0, 'i8');
+    return str;
+  };
+
+  api.str_appendall = function(str, s) {
+    if (!strings.has(str)) {
+      throw new SQLiteError('not a string', SQLITE_MISUSE);
+    }
+    const data = strings.get(str);
+
+    const sBytes = Module.lengthBytesUTF8(s);
+    const newBytes = data.bytes + sBytes + 1;
+    const newOffset = Module._malloc(newBytes);
+    const newArray = new Int8Array(Module.HEAP8, newOffset, newBytes);
+    newArray.set(new Int8Array(Module.HEAP8, data.offset, data.bytes));
+    Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
+
+    data.offset = newOffset;
+    data.bytes = newBytes;
+    strings.set(str, data);
+  };
+
+  api.str_value = function(str) {
+    if (!strings.has(str)) {
+      throw new SQLiteError('not a string', SQLITE_MISUSE);
+    }
+    return strings.get(str).offset;
+  }
+
+  api.str_finish = function(str) {
+    if (!strings.has(str)) {
+      throw new SQLiteError('not a string', SQLITE_MISUSE);
+    }
+    const data = strings.get(str);
+    strings.delete(str);
+    if (data.offset) {
+      Module._free(data.offset);
+    }
+  };
 
   function check(fname, result, db = null, allowed = [SQLITE_OK]) {
     trace(fname, result);
@@ -388,50 +471,56 @@ export function tag(sqlite3, db) {
       interleaved.push(s, values[i]);
     });
 
-    /** @type {*} */ let prepared = { sql: interleaved.join('') };
     let results = [];
-    while (true) {
-      if (!(prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
-        break;
-      }
-      try {
-        const columns = [];
-        const nColumns = sqlite3.column_count(prepared.stmt);
-        for (let i = 0; i < nColumns; ++i) {
-          columns.push(sqlite3.column_name(prepared.stmt, i));
+    const str = sqlite3.str_new(db);
+    try {
+      sqlite3.str_appendall(str, interleaved.join(''));
+      /** @type {*} */ let prepared = { sql: sqlite3.str_value(str) };
+      while (true) {
+        if (!(prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
+          break;
         }
-
-        const rows = [];
-        while (await sqlite3.step(prepared.stmt) === SQLITE_ROW) {
-          const row = [];
+        try {
+          const columns = [];
+          const nColumns = sqlite3.column_count(prepared.stmt);
           for (let i = 0; i < nColumns; ++i) {
-            const type = sqlite3.column_type(prepared.stmt, i);
-            switch (type) {
-            case SQLITE_INTEGER:
-              row.push(sqlite3.column_int(prepared.stmt, i));
-              break;
-            case SQLITE_FLOAT:
-              row.push(sqlite3.column_double(prepared.stmt, i));
-              break;
-            case SQLITE_TEXT:
-              row.push(sqlite3.column_text(prepared.stmt, i));
-              break;
-            case SQLITE_BLOB:
-              row.push(sqlite3.column_blob(prepared.stmt, i));
-              break;
-            default:
-              row.push(null);
-              break;
-            }      
+            columns.push(sqlite3.column_name(prepared.stmt, i));
           }
-          rows.push(row);
+
+          const rows = [];
+          while (await sqlite3.step(prepared.stmt) === SQLITE_ROW) {
+            const row = [];
+            for (let i = 0; i < nColumns; ++i) {
+              const type = sqlite3.column_type(prepared.stmt, i);
+              switch (type) {
+              case SQLITE_INTEGER:
+                row.push(sqlite3.column_int(prepared.stmt, i));
+                break;
+              case SQLITE_FLOAT:
+                row.push(sqlite3.column_double(prepared.stmt, i));
+                break;
+              case SQLITE_TEXT:
+                row.push(sqlite3.column_text(prepared.stmt, i));
+                break;
+              case SQLITE_BLOB:
+                row.push(sqlite3.column_blob(prepared.stmt, i));
+                break;
+              default:
+                row.push(null);
+                break;
+              }      
+            }
+            rows.push(row);
+          }
+          if (nColumns) {
+            results.push({ columns, rows });
+          }
+        } finally {
+          sqlite3.finalize(prepared.stmt);
         }
-        if (nColumns) {
-          results.push({ columns, rows });
-        }
-      } finally {
-        sqlite3.finalize(prepared.stmt);
       }
+    } finally {
+      sqlite3.str_finish(str);
     }
     return results;
   }
