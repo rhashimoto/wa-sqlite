@@ -13,6 +13,7 @@
   "_sqlite3_column_bytes",
   "_sqlite3_column_count",
   "_sqlite3_column_double",
+  "_sqlite3_column_int",
   "_sqlite3_column_name",
   "_sqlite3_column_text",
   "_sqlite3_column_type",
