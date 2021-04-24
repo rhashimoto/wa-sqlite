@@ -143,7 +143,7 @@ function trace(fname, result) {
  * 
  * @property {(
  *  db: number,
- *  sql: string|number) => Promise<{ stmt: number, sql: number }?>} prepare_v2
+ *  sql: number) => Promise<{ stmt: number, sql: number }?>} prepare_v2
  *  Compiling an SQL statement. SQL is provided either as a string or a
  *  pointer in WASM memory. The returned object provides both the prepared
  *  statement and a pointer to the still uncompiled SQL that can be used
@@ -228,7 +228,7 @@ export function Factory(Module) {
       const nBytes = api.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
       const result = new Int8Array(Module.HEAP8, address, nBytes);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     }
   })();
@@ -239,7 +239,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     }
   })();
@@ -250,7 +250,7 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     };
   })();
@@ -261,7 +261,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     }
   })();
@@ -272,7 +272,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     }
   })();
@@ -283,7 +283,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     };
   })();
@@ -294,7 +294,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     }
   })();
@@ -305,7 +305,7 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     };
   })();
@@ -316,7 +316,7 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      trace(fname, result);
+      // trace(fname, result);
       return result;
     };
   })();
@@ -356,20 +356,16 @@ export function Factory(Module) {
     const fname = 'sqlite3_prepare_v2';
     const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
     return async function(db, sql) {
-      let allocated;
-      if (typeof sql === 'string') {
-        allocated = createUTF8(sql);
-        sql = allocated;
-      }
-
       const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
-      const stmt = Module.getValue(tmpPtr[0], 'i32');
-      sql = Module.getValue(tmpPtr[1], 'i32');
-
-      statements.set(stmt, db);
-
       check(fname, result, db);
-      return stmt ? { stmt, sql } : null;
+
+      const stmt = Module.getValue(tmpPtr[0], 'i32');
+      if (stmt) {
+        sql = Module.getValue(tmpPtr[1], 'i32');
+        statements.set(stmt, db);
+        return { stmt, sql: Module.getValue(tmpPtr[1], 'i32') };
+      }
+      return null;
     };
   })();
 
@@ -397,10 +393,11 @@ export function Factory(Module) {
   // calling SQLite (except for memory allocation). We need some way
   // to transfer Javascript strings and might as well use an API
   // that mimics the SQLite API.
+  let stringId = 0;
   const strings = new Map();
 
   api.str_new = function(db) {
-    const str = Math.random();
+    const str = stringId++ & 0xffffffff;
     const data = {
       offset: Module._malloc(1),
       bytes: 0
@@ -417,12 +414,13 @@ export function Factory(Module) {
     const data = strings.get(str);
 
     const sBytes = Module.lengthBytesUTF8(s);
-    const newBytes = data.bytes + sBytes + 1;
-    const newOffset = Module._malloc(newBytes);
-    const newArray = new Int8Array(Module.HEAP8, newOffset, newBytes);
+    const newBytes = data.bytes + sBytes;
+    const newOffset = Module._malloc(newBytes + 1);
+    const newArray = new Int8Array(Module.HEAP8, newOffset, newBytes + 1);
     newArray.set(new Int8Array(Module.HEAP8, data.offset, data.bytes));
     Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
 
+    Module._free(data.offset);
     data.offset = newOffset;
     data.bytes = newBytes;
     strings.set(str, data);
@@ -441,9 +439,7 @@ export function Factory(Module) {
     }
     const data = strings.get(str);
     strings.delete(str);
-    if (data.offset) {
-      Module._free(data.offset);
-    }
+    Module._free(data.offset);
   };
 
   function check(fname, result, db = null, allowed = [SQLITE_OK]) {
