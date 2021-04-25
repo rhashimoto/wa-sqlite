@@ -18,7 +18,6 @@ SELECT y * y FROM tbl WHERE x = 'bar';
 `.trim();
 
 const DB_NAME = "myDB";
-const VFS_NAME = "myVFS";
 
 (async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
@@ -27,7 +26,7 @@ const VFS_NAME = "myVFS";
 
   // Create and register a VFS.
   const vfs = new MemoryAsyncVFS();
-  SQLiteModule.registerVFS(VFS_NAME, vfs);
+  sqlite3.vfs_register(vfs, false);
 
   // Execute SQL on button click.
   document.getElementById('execute').addEventListener('click', async function() {
@@ -38,7 +37,7 @@ const VFS_NAME = "myVFS";
       editor.getModel().getValueInRange(selection);
 
     // Open and close the database on every execution to test data persistence.
-    const db = await sqlite3.open_v2(DB_NAME);
+    const db = await sqlite3.open_v2(DB_NAME, undefined, vfs.name);
     const sql = SQLite.tag(sqlite3, db);
 
     const output = document.getElementById('output');

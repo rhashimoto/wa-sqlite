@@ -2,6 +2,8 @@
 import * as VFS from './VFS.js';
 
 export class MemoryAsyncVFS extends VFS.Base {
+  name = 'memory-async';
+  
   // Map of existing files, keyed by filename.
   mapNameToFile = new Map();
 

@@ -2,6 +2,8 @@
 import * as VFS from './VFS.js';
 
 export class MemoryVFS extends VFS.Base {
+  name = 'memory';
+  
   // Map of existing files, keyed by filename.
   mapNameToFile = new Map();
 

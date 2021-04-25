@@ -165,12 +165,16 @@ function trace(fname, result) {
  *  been added for convenience.
  * 
  * @property {(str: number, s: string) => void} str_appendall Add content
- *  to a dynamic string.
+ *  to a dynamic string. Not recommended for building strings; prefer
+ *  using Javascript and `str_new` with initialization.
  * 
  * @property {(str: number) => number} str_value Get pointer to dynamic
  *  string content.
  * 
  * @property {(str: number) => void} str_finish Finalize a dynamic string.
+ * 
+ * @property {(vfs: any, makeDefault?: boolean) => number} vfs_register
+ *  Register a new Virtual File System.
  */
 
 /**
@@ -421,9 +425,7 @@ export function Factory(Module) {
     const newBytes = data.bytes + sBytes;
     const newOffset = Module._malloc(newBytes + 1);
     const newArray = Module.HEAP8.subarray(newOffset, newOffset + newBytes + 1);
-    if (data.bytes) {
-      newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
-    }
+    newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
     Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
 
     Module._free(data.offset);
@@ -448,6 +450,11 @@ export function Factory(Module) {
     Module._free(data.offset);
   };
 
+  api.vfs_register = function(vfs, makeDefault) {
+    Module.registerVFS(vfs, makeDefault);
+    return SQLITE_OK;
+  };
+
   function check(fname, result, db = null, allowed = [SQLITE_OK]) {
     trace(fname, result);
     if (allowed.includes(result)) return result;
@@ -461,7 +468,14 @@ export function Factory(Module) {
 }
 
 /**
- * Template tag builder.
+ * Template tag builder. This function creates a tag with an API and
+ * database from the same module, then the tag can be used like this:
+ * ```
+ * const sql = SQLiteAPI.tag(sqlite3, db);
+ * const results = await sql`SELECT 1 + 1; SELECT 6 * 7;`;
+ * ```
+ * The returned Promise value contains an array of results for each
+ * SQL statement that produces output.
  * @param {SQLiteAPI} sqlite3 
  * @param {number} db
  * @returns {function(TemplateStringsArray, ...any): Promise<object>}

@@ -34,7 +34,7 @@ const methods = {
     const mapIdToVFS = new Map();
     const mapFileToVFS = new Map();
 
-    Module['registerVFS'] = function(name, vfs) {
+    Module['registerVFS'] = function(vfs, makeDefault) {
       const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'], [vfs]);
       if (vfsAlreadyRegistered) {
         throw Error(`VFS '${vfs}' already registered`);
@@ -45,7 +45,8 @@ const methods = {
       vfs['handleAsync'] = Asyncify.handleAsync;
 #endif
       const mxPathName = vfs.mxPathName ?? 64;
-      const id = ccall('register_vfs', 'number', ['string', 'number'], [name, mxPathName]);
+      const id = ccall('register_vfs', 'number', ['string', 'number', 'number'],
+        [vfs.name, mxPathName, makeDefault ? 1 : 0]);
       mapIdToVFS.set(id, vfs);
     };
 

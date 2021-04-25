@@ -19,18 +19,19 @@ async function loadSampleTable(sql) {
 
 describe('VFS', function() {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;
+  let vfs;
   beforeAll(async function() {
     const SQLiteModule = await SQLiteModuleFactory();
 
-    const vfs = new MemoryAsyncVFS();
-    SQLiteModule.registerVFS('mem', vfs);
-
     sqlite3 = SQLite.Factory(SQLiteModule);
+
+    vfs = new MemoryAsyncVFS();
+    sqlite3.vfs_register(vfs, false);
   });
 
   let db, sql;
   beforeEach(async function() {
-    db = await sqlite3.open_v2('foo', 0x06, 'unix');
+    db = await sqlite3.open_v2('foo', 0x06, vfs.name);
     sql = SQLite.tag(sqlite3, db);
   });
 
@@ -46,7 +47,7 @@ describe('VFS', function() {
 
     // Close and reopen the database.
     await sqlite3.close(db);
-    db = await sqlite3.open_v2('foo', 0x06, 'unix');
+    db = await sqlite3.open_v2('foo', 0x06, vfs.name);
     sql = SQLite.tag(sqlite3, db);
 
     const resultB = await sql`SELECT COUNT(*) FROM goog`;
