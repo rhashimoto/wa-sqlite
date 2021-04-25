@@ -139,16 +139,17 @@ function trace(fname, result) {
  *  zVfs?: string) => Promise<number>} open_v2 Opening a new database
  *  connection. SQLite open flags can optionally be provided or omitted
  *  for the default (CREATE + READWRITE). A VFS name can optionally be
- *  provided.
+ *  provided. The opaque database id is returned.
  * 
  * @property {(
  *  db: number,
  *  sql: number) => Promise<{ stmt: number, sql: number }?>} prepare_v2
- *  Compiling an SQL statement. SQL is provided either as a string or a
- *  pointer in WASM memory. The returned object provides both the prepared
- *  statement and a pointer to the still uncompiled SQL that can be used
- *  with the next call to this function. A null value is returned when
- *  no statement remains.
+ *  Compiling an SQL statement. SQL is provided as a pointer in WASM
+ *  memory, so the utility functions `str_new()` and `str_value()` may
+ *  be helpful. The returned object provides both the prepared statement
+ *  and a pointer to the still uncompiled SQL that can be used with the
+ *  next call to this function. A null value is returned when no
+ *  statement remains.
  *  See https://www.sqlite.org/c3ref/prepare.html
  * 
  * @property {(
@@ -159,20 +160,23 @@ function trace(fname, result) {
  *  stmt: number) => Promise<number>} step Evaluate an SQL statement.
  *  See https://www.sqlite.org/c3ref/step.html
  * 
- * @property {(db: number) => number} str_new Create a new dynamic string
- * object.
+ * @property {(db: number, s?: string) => number} str_new Create a new
+ *  dynamic string object. An optional initialization argument has
+ *  been added for convenience.
  * 
  * @property {(str: number, s: string) => void} str_appendall Add content
- * to a dynamic string.
+ *  to a dynamic string.
  * 
  * @property {(str: number) => number} str_value Get pointer to dynamic
- * string content.
+ *  string content.
  * 
  * @property {(str: number) => void} str_finish Finalize a dynamic string.
  */
 
 /**
- * 
+ * Builds a Javascript API from the Emscripten module. This API is still
+ * low-level and closely corresponds to the C API exported by the module,
+ * but differs in some specifics like throwing exceptions on errors.
  * @param {*} Module SQLite module
  * @returns {SQLiteAPI}
  */
@@ -227,7 +231,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const nBytes = api.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
-      const result = new Int8Array(Module.HEAP8, address, nBytes);
+      const result = Module.HEAP8.subarray(address, address + nBytes);
       // trace(fname, result);
       return result;
     }
@@ -361,7 +365,6 @@ export function Factory(Module) {
 
       const stmt = Module.getValue(tmpPtr[0], 'i32');
       if (stmt) {
-        sql = Module.getValue(tmpPtr[1], 'i32');
         statements.set(stmt, db);
         return { stmt, sql: Module.getValue(tmpPtr[1], 'i32') };
       }
@@ -396,14 +399,15 @@ export function Factory(Module) {
   let stringId = 0;
   const strings = new Map();
 
-  api.str_new = function(db) {
+  api.str_new = function(db, s = '') {
+    const sBytes = Module.lengthBytesUTF8(s);
     const str = stringId++ & 0xffffffff;
     const data = {
-      offset: Module._malloc(1),
-      bytes: 0
+      offset: Module._malloc(sBytes + 1),
+      bytes: sBytes
     };
     strings.set(str, data);
-    Module.setValue(data.offset, 0, 'i8');
+    Module.stringToUTF8(s, data.offset, data.bytes + 1);
     return str;
   };
 
@@ -416,8 +420,10 @@ export function Factory(Module) {
     const sBytes = Module.lengthBytesUTF8(s);
     const newBytes = data.bytes + sBytes;
     const newOffset = Module._malloc(newBytes + 1);
-    const newArray = new Int8Array(Module.HEAP8, newOffset, newBytes + 1);
-    newArray.set(new Int8Array(Module.HEAP8, data.offset, data.bytes));
+    const newArray = Module.HEAP8.subarray(newOffset, newOffset + newBytes + 1);
+    if (data.bytes) {
+      newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
+    }
     Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
 
     Module._free(data.offset);
@@ -467,24 +473,32 @@ export function tag(sqlite3, db) {
       interleaved.push(s, values[i]);
     });
 
+    // Transfer the SQL to WASM memory. We set up a try-finally block
+    // to ensure that the memory is always freed.
     let results = [];
-    const str = sqlite3.str_new(db);
+    const str = sqlite3.str_new(db, interleaved.join(''));
     try {
-      sqlite3.str_appendall(str, interleaved.join(''));
+      // Initialize the prepared statement state that will evolve
+      // as we progress through the SQL.
       /** @type {*} */ let prepared = { sql: sqlite3.str_value(str) };
       while (true) {
+        // Prepare the next statement. Another try-finally goes here
+        // to ensure that each prepared statement is finalized.
         if (!(prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
           break;
         }
         try {
+          // Extract the column names.
           const columns = [];
           const nColumns = sqlite3.column_count(prepared.stmt);
           for (let i = 0; i < nColumns; ++i) {
             columns.push(sqlite3.column_name(prepared.stmt, i));
           }
 
+          // Step through the rows.
           const rows = [];
           while (await sqlite3.step(prepared.stmt) === SQLITE_ROW) {
+            // Collect row elements.
             const row = [];
             for (let i = 0; i < nColumns; ++i) {
               const type = sqlite3.column_type(prepared.stmt, i);

@@ -22,7 +22,7 @@ describe('VFS', function() {
   beforeAll(async function() {
     const SQLiteModule = await SQLiteModuleFactory();
 
-    const vfs = new MemoryVFS();
+    const vfs = new MemoryAsyncVFS();
     SQLiteModule.registerVFS('mem', vfs);
 
     sqlite3 = SQLite.Factory(SQLiteModule);
