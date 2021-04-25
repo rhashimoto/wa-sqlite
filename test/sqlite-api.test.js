@@ -21,10 +21,13 @@ describe('sqlite-api', function() {
   });
 
   it('prepare', async function() {
-    const prepared = await sqlite3.prepare_v2(db, 'SELECT 1 + 1');
+    const str = sqlite3.str_new(db);
+    sqlite3.str_appendall(str, 'SELECT 1 + 1');
+    const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
     expect(typeof prepared.stmt).toBe('number');
     expect(sqlite3.column_name(prepared.stmt, 0)).toBe('1 + 1');
     await sqlite3.finalize(prepared.stmt);
+    sqlite3.str_finish(str);
   });
 
   it('tag', async function() {
