@@ -118,7 +118,7 @@ function formatRow(data, tag = 'td') {
   const row = document.createElement('tr');
   for (const value of data) {
     const cell = row.appendChild(document.createElement(tag));
-    cell.textContent = value.toString();
+    cell.textContent = value !== null ? value.toString() : 'null';
   }
   return row;
 }

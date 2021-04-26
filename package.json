@@ -10,7 +10,7 @@
   "scripts": {
     "prepack": "make",
     "start": "web-dev-server",
-    "test-watch": "karma start"
+    "test-watch": "karma start karma.conf.cjs"
   },
   "devDependencies": {
     "@web/dev-server": "^0.1.13",

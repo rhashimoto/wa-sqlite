@@ -116,6 +116,11 @@ function trace(fname, result) {
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
+ *  stmt: number) => string[]} column_names Returns an array of column
+ *  names for the prepared statement. This is a convenience function
+ *  for Javascript.
+ * 
+ * @property {(
  *  stmt: number,
  *  iCol: number) => string} column_text
  *  See https://www.sqlite.org/c3ref/column_blob.html
@@ -128,6 +133,12 @@ function trace(fname, result) {
  * @property {(
  *  stmt: number) => number} data_count Number of columns in a result set.
  *  See https://www.sqlite.org/c3ref/data_count.html
+ * 
+ * @property {(
+ *  db: number,
+ *  sql: string,
+ *  callback: function(*, number, *[], string[]): any,
+ *  userData?: any) => Promise<number>} exec One-step query execution interface.
  * 
  * @property {(
  *  stmt: number) => Promise<number>} finalize Destroy a prepared statement
@@ -155,6 +166,10 @@ function trace(fname, result) {
  * @property {(
  *  stmt: number) => number} reset Reset a prepared statement object.
  *  See https://www.sqlite.org/c3ref/reset.html
+ * 
+ * @property {(
+ *  stmt: number) => Array<any>} row Returns row data for a prepared
+ *  statement. This is a convenience function for Javascript.
  * 
  * @property {(
  *  stmt: number) => Promise<number>} step Evaluate an SQL statement.
@@ -238,7 +253,7 @@ export function Factory(Module) {
       const result = Module.HEAP8.subarray(address, address + nBytes);
       // trace(fname, result);
       return result;
-    }
+    };
   })();
 
   api.column_bytes = (function() {
@@ -249,7 +264,7 @@ export function Factory(Module) {
       const result = f(stmt, iCol);
       // trace(fname, result);
       return result;
-    }
+    };
   })();
 
   api.column_count = (function() {
@@ -271,7 +286,7 @@ export function Factory(Module) {
       const result = f(stmt, iCol);
       // trace(fname, result);
       return result;
-    }
+    };
   })();
 
   api.column_int = (function() {
@@ -282,7 +297,7 @@ export function Factory(Module) {
       const result = f(stmt, iCol);
       // trace(fname, result);
       return result;
-    }
+    };
   })();
 
   api.column_name = (function() {
@@ -296,6 +311,15 @@ export function Factory(Module) {
     };
   })();
 
+  api.column_names = function(stmt) {
+    const columns = [];
+    const nColumns = api.column_count(stmt);
+    for (let i = 0; i < nColumns; ++i) {
+      columns.push(api.column_name(stmt, i));
+    }
+    return columns;
+  }
+
   api.column_text = (function() {
     const fname = 'sqlite3_column_text';
     const f = Module.cwrap(fname, ...decl('nn:s'));
@@ -304,7 +328,7 @@ export function Factory(Module) {
       const result = f(stmt, iCol);
       // trace(fname, result);
       return result;
-    }
+    };
   })();
 
   api.column_type = (function() {
@@ -328,6 +352,35 @@ export function Factory(Module) {
       return result;
     };
   })();
+
+  api.exec = async function(db, sql, callback, userData) {
+    const str = api.str_new(db, sql);
+    try {
+      // Initialize the prepared statement state that will evolve
+      // as we progress through the SQL.
+      /** @type {*} */ let prepared = { sql: api.str_value(str) };
+      while (true) {
+        // Prepare the next statement. Another try-finally goes here
+        // to ensure that each prepared statement is finalized.
+        if (!(prepared = await api.prepare_v2(db, prepared.sql))) {
+          break;
+        }
+        try {
+          // Step through the rows.
+          const columns = api.column_names(prepared.stmt);
+          while (await api.step(prepared.stmt) === SQLITE_ROW) {
+            const row = api.row(prepared.stmt);
+            await callback(userData, row.length, row, columns)
+          }
+        } finally {
+          api.finalize(prepared.stmt);
+        }
+      }
+    } finally {
+      api.str_finish(str);
+    }
+    return SQLITE_OK;
+  };
 
   api.finalize = (function() {
     const fname = 'sqlite3_finalize';
@@ -386,6 +439,32 @@ export function Factory(Module) {
     };
   })();
 
+  api.row = function(stmt) {
+    const row = [];
+    const nColumns = api.data_count(stmt);
+    for (let i = 0; i < nColumns; ++i) {
+      const type = api.column_type(stmt, i);
+      switch (type) {
+      case SQLITE_INTEGER:
+        row.push(api.column_int(stmt, i));
+        break;
+      case SQLITE_FLOAT:
+        row.push(api.column_double(stmt, i));
+        break;
+      case SQLITE_TEXT:
+        row.push(api.column_text(stmt, i));
+        break;
+      case SQLITE_BLOB:
+        row.push(api.column_blob(stmt, i));
+        break;
+      default:
+        row.push(null);
+        break;
+      }      
+    }
+    return row;
+  }
+
   api.step = (function() {
     const fname = 'sqlite3_step';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
@@ -439,7 +518,7 @@ export function Factory(Module) {
       throw new SQLiteError('not a string', SQLITE_MISUSE);
     }
     return strings.get(str).offset;
-  }
+  };
 
   api.str_finish = function(str) {
     if (!strings.has(str)) {
@@ -502,41 +581,15 @@ export function tag(sqlite3, db) {
           break;
         }
         try {
-          // Extract the column names.
-          const columns = [];
-          const nColumns = sqlite3.column_count(prepared.stmt);
-          for (let i = 0; i < nColumns; ++i) {
-            columns.push(sqlite3.column_name(prepared.stmt, i));
-          }
-
           // Step through the rows.
           const rows = [];
+          const columns = sqlite3.column_names(prepared.stmt)
           while (await sqlite3.step(prepared.stmt) === SQLITE_ROW) {
             // Collect row elements.
-            const row = [];
-            for (let i = 0; i < nColumns; ++i) {
-              const type = sqlite3.column_type(prepared.stmt, i);
-              switch (type) {
-              case SQLITE_INTEGER:
-                row.push(sqlite3.column_int(prepared.stmt, i));
-                break;
-              case SQLITE_FLOAT:
-                row.push(sqlite3.column_double(prepared.stmt, i));
-                break;
-              case SQLITE_TEXT:
-                row.push(sqlite3.column_text(prepared.stmt, i));
-                break;
-              case SQLITE_BLOB:
-                row.push(sqlite3.column_blob(prepared.stmt, i));
-                break;
-              default:
-                row.push(null);
-                break;
-              }      
-            }
+            const row = sqlite3.row(prepared.stmt);
             rows.push(row);
           }
-          if (nColumns) {
+          if (columns.length) {
             results.push({ columns, rows });
           }
         } finally {

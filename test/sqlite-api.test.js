@@ -14,6 +14,12 @@ describe('sqlite-api', function() {
   beforeEach(async function() {
     db = await sqlite3.open_v2('foo');
     sql = SQLite.tag(sqlite3, db);
+
+    // Delete all tables.
+    const tables = await sql`SELECT name FROM sqlite_master WHERE type='table'`;
+    for (const row of tables[0].rows) {
+      await sql`DROP TABLE ${row[0]}`;
+    }
   });
 
   afterEach(async function() {
@@ -28,6 +34,29 @@ describe('sqlite-api', function() {
     expect(sqlite3.column_name(prepared.stmt, 0)).toBe('1 + 1');
     await sqlite3.finalize(prepared.stmt);
     sqlite3.str_finish(str);
+  });
+
+  it('exec', async function() {
+    const rows = [];
+    await sqlite3.exec(
+      db, `
+      CREATE TABLE tableA (x, y);
+      INSERT INTO tableA VALUES (1, 2);
+      CREATE TABLE tableB (a, b, c);
+      INSERT INTO tableB VALUES ('foo', 'bar', 'baz');
+      INSERT INTO tableB VALUES ('how', 'now', 'brown');
+      SELECT * FROM tableA;
+      SELECT * FROM tableB;
+      `,
+      function(userData, n, row, columns) {
+        rows.push(row);
+      });
+
+      expect(rows).toEqual([
+        [1, 2],
+        ['foo', 'bar', 'baz'],
+        ['how', 'now', 'brown']
+      ]);
   });
 
   it('tag', async function() {
