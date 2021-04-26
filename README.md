@@ -4,6 +4,7 @@
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) - Note that there is a [regression in EMSDK 2.0.14](https://github.com/emscripten-core/emscripten/issues/13858) that prevents building.
 
 ## Build
+* Make sure `emcc` works.
 * `git clone ...`
 * `cd wa-sqlite`
 * `yarn install`
