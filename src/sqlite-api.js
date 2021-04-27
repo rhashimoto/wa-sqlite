@@ -275,12 +275,12 @@ export function Factory(Module) {
   function createUTF8(s) {
     if (typeof s !== 'string') return 0;
     const n = Module.lengthBytesUTF8(s);
-    const zts = Module._malloc(n + 1);
+    const zts = Module._sqlite3_malloc(n + 1);
     Module.stringToUTF8(s, zts, n + 1);
     return zts;
   }
   function destroyUTF8(utf8) {
-    if (utf8) Module._free(utf8);
+    if (utf8) Module._sqlite3_free(utf8);
   }
 
   const databases = new Set();
@@ -405,12 +405,10 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      const length = Module.lengthBytesUTF8(value);
-      const ptr = Module._sqlite3_malloc(length + 1);
-      Module.stringToUTF8(value, ptr, length + 1);
+      const ptr = createUTF8(value);
       // TODO: Replace SQLITE_TRANSIENT with _sqlite3_free address.
       const result = f(stmt, i, ptr, -1, SQLITE_TRANSIENT);
-      Module._sqlite3_free(ptr);
+      destroyUTF8(value);
       // trace(fname, result);
       return result;
     };
@@ -672,7 +670,7 @@ export function Factory(Module) {
     const sBytes = Module.lengthBytesUTF8(s);
     const str = stringId++ & 0xffffffff;
     const data = {
-      offset: Module._malloc(sBytes + 1),
+      offset: Module._sqlite3_malloc(sBytes + 1),
       bytes: sBytes
     };
     strings.set(str, data);
@@ -688,12 +686,12 @@ export function Factory(Module) {
 
     const sBytes = Module.lengthBytesUTF8(s);
     const newBytes = data.bytes + sBytes;
-    const newOffset = Module._malloc(newBytes + 1);
+    const newOffset = Module._sqlite3_malloc(newBytes + 1);
     const newArray = Module.HEAP8.subarray(newOffset, newOffset + newBytes + 1);
     newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
     Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
 
-    Module._free(data.offset);
+    Module._sqlite3_free(data.offset);
     data.offset = newOffset;
     data.bytes = newBytes;
     strings.set(str, data);
@@ -712,7 +710,7 @@ export function Factory(Module) {
     }
     const data = strings.get(str);
     strings.delete(str);
-    Module._free(data.offset);
+    Module._sqlite3_free(data.offset);
   };
 
   api.vfs_register = function(vfs, makeDefault) {
