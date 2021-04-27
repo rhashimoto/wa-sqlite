@@ -267,20 +267,20 @@ function trace(...args) {
 export function Factory(Module) {
   const api = {};
 
+  const sqliteFreeAddress = Module._getSqliteFree();
+
   // Allocate some space for 32-bit returned values.
   const tmp = Module._malloc(8);
   const tmpPtr = [tmp, tmp + 4];
 
-  // Manage temporary strings.
+  // Convert a JS string to a C string. sqlite3_malloc is used to allocate
+  // memory.
   function createUTF8(s) {
     if (typeof s !== 'string') return 0;
     const n = Module.lengthBytesUTF8(s);
     const zts = Module._sqlite3_malloc(n + 1);
     Module.stringToUTF8(s, zts, n + 1);
     return zts;
-  }
-  function destroyUTF8(utf8) {
-    if (utf8) Module._sqlite3_free(utf8);
   }
 
   const databases = new Set();
@@ -337,9 +337,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const ptr = Module._sqlite3_malloc(value.byteLength);
       Module.HEAP8.subarray(ptr).set(value);
-      // TODO: Replace SQLITE_TRANSIENT with _sqlite3_free address.
-      const result = f(stmt, i, ptr, value.byteLength, SQLITE_TRANSIENT);
-      Module._sqlite3_free(ptr);
+      const result = f(stmt, i, ptr, value.byteLength, sqliteFreeAddress);
       // trace(fname, result);
       return result;
     };
@@ -406,9 +404,7 @@ export function Factory(Module) {
     return function(stmt, i, value) {
       verifyStatement(stmt);
       const ptr = createUTF8(value);
-      // TODO: Replace SQLITE_TRANSIENT with _sqlite3_free address.
-      const result = f(stmt, i, ptr, -1, SQLITE_TRANSIENT);
-      destroyUTF8(value);
+      const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
       // trace(fname, result);
       return result;
     };
@@ -589,7 +585,7 @@ export function Factory(Module) {
 
       const db = Module.getValue(tmpPtr[0], 'i32');
       databases.add(db);
-      destroyUTF8(zVfs);
+      Module._sqlite3_free(zVfs);
 
       Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
       check(fname, result);

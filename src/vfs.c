@@ -92,7 +92,7 @@ const sqlite3_vfs* EMSCRIPTEN_KEEPALIVE register_vfs(
   return vfs;
 }
 
-void* EMSCRIPTEN_KEEPALIVE getFree() {
+void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
   return sqlite3_free;
 }
 
