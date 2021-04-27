@@ -61,6 +61,9 @@ export const SQLITE_FLOAT = 2;
 export const SQLITE_TEXT = 3;
 export const SQLITE_BLOB = 4;
 
+export const SQLITE_STATIC = 0;
+export const SQLITE_TRANSIENT = -1;
+
 export class SQLiteError extends Error {
   constructor(message, code) {
     super(message);
@@ -70,17 +73,63 @@ export class SQLiteError extends Error {
 
 const async = true;
 
-function trace(fname, result) {
+function trace(...args) {
   // const date = new Date();
   // const t = date.getHours().toString().padStart(2, '0') + ':' +
   //           date.getMinutes().toString().padStart(2, '0') + ':' +
   //           date.getSeconds().toString().padStart(2, '0') + '.' +
   //           date.getMilliseconds().toString().padStart(3, '0');
-  // console.debug(t, fname, result);
+  // console.debug(t, ...args);
 }
 
 /**
  * @typedef {Object} SQLiteAPI
+ * 
+ * @property {(
+ *  stmt: number,
+ *  bindings: object|Array<null|number|string|Int8Array|Array<number>>) => number} bind
+ *  Binds a collection of values to a statement. This is a convenience
+ *  function for Javascript.
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number,
+ *  value: Int8Array|Array<number>) => number} bind_blob Bind blob to
+ *  prepared statement. Arguments are modified from C API for Javascript.
+ *  See https://www.sqlite.org/c3ref/bind_blob.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number,
+ *  value: number) => number} bind_double
+ *  See https://www.sqlite.org/c3ref/bind_blob.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number,
+ *  value: number) => number} bind_int
+ *  See https://www.sqlite.org/c3ref/bind_blob.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  value: number) => number} bind_null
+ *  See https://www.sqlite.org/c3ref/bind_blob.html
+ * 
+ * @property {(
+ *  stmt: number) => number} bind_parameter_count Number of SQL Parameters.
+ *  See https://www.sqlite.org/c3ref/bind_parameter_count.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number) => string} bind_parameter_name Name of a host parameter.
+ *  See https://www.sqlite.org/c3ref/bind_parameter_name.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number,
+ *  value: string) => number} bind_text Bind string to
+ *  prepared statement. Arguments are modified from C API for Javascript.
+ *  See https://www.sqlite.org/c3ref/bind_blob.html
  * 
  * @property {(
  *  db: number) => Promise<number>} close
@@ -88,31 +137,33 @@ function trace(fname, result) {
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => Int8Array} column_blob
+ *  iCol: number) => Int8Array} column_blob Result values from a query.
+ *  Note that the result will be valid until the next SQLite call. For
+ *  longer retention, make a copy.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => number} column_bytes
+ *  iCol: number) => number} column_bytes Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
- *  stmt: number) => number} column_count
- *  See https://www.sqlite.org/c3ref/column_blob.html
- * 
- * @property {(
- *  stmt: number,
- *  iCol: number) => number} column_double
+ *  stmt: number) => number} column_count Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => number} column_int
+ *  iCol: number) => number} column_double Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => string} column_name
+ *  iCol: number) => number} column_int Result values from a query.
+ *  See https://www.sqlite.org/c3ref/column_blob.html
+ * 
+ * @property {(
+ *  stmt: number,
+ *  iCol: number) => string} column_name Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
@@ -122,12 +173,12 @@ function trace(fname, result) {
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => string} column_text
+ *  iCol: number) => string} column_text Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
  *  stmt: number,
- *  iCol: number) => number} column_type
+ *  iCol: number) => number} column_type Result values from a query.
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
@@ -137,8 +188,11 @@ function trace(fname, result) {
  * @property {(
  *  db: number,
  *  sql: string,
- *  callback: function(*, number, *[], string[]): any,
+ *  callback?: function(*, number, *[], string[]): any,
  *  userData?: any) => Promise<number>} exec One-step query execution interface.
+ *  The optional callback is called for each output row with arguments
+ *  `userData`, `nColumns`, `rowValues`, `columnNames`.
+ *  See https://www.sqlite.org/c3ref/exec.html
  * 
  * @property {(
  *  stmt: number) => Promise<number>} finalize Destroy a prepared statement
@@ -151,6 +205,7 @@ function trace(fname, result) {
  *  connection. SQLite open flags can optionally be provided or omitted
  *  for the default (CREATE + READWRITE). A VFS name can optionally be
  *  provided. The opaque database id is returned.
+ *  See https://www.sqlite.org/c3ref/open.html
  * 
  * @property {(
  *  db: number,
@@ -177,19 +232,29 @@ function trace(fname, result) {
  * 
  * @property {(db: number, s?: string) => number} str_new Create a new
  *  dynamic string object. An optional initialization argument has
- *  been added for convenience.
+ *  been added for convenience which is functionally equivalent to (but
+ *  slightly more efficient):
+ *  ```
+ *  const str = sqlite3.str_new(db);
+ *  sqlite3.str_appendall(str, s);
+ *  ```
+ *  See https://www.sqlite.org/c3ref/str_append.html
  * 
  * @property {(str: number, s: string) => void} str_appendall Add content
  *  to a dynamic string. Not recommended for building strings; prefer
  *  using Javascript and `str_new` with initialization.
+ *  See https://www.sqlite.org/c3ref/str_append.html
  * 
  * @property {(str: number) => number} str_value Get pointer to dynamic
  *  string content.
+ *  See https://www.sqlite.org/c3ref/str_append.html
  * 
  * @property {(str: number) => void} str_finish Finalize a dynamic string.
+ *  See https://www.sqlite.org/c3ref/str_append.html
  * 
  * @property {(vfs: any, makeDefault?: boolean) => number} vfs_register
  *  Register a new Virtual File System.
+ *  See https://www.sqlite.org/c3ref/str_append.html
  */
 
 /**
@@ -231,6 +296,125 @@ export function Factory(Module) {
       throw new SQLiteError('not a statement', SQLITE_MISUSE);
     }
   }
+
+  api.bind = function(stmt, bindings) {
+    verifyStatement(stmt);
+    const isArray = Array.isArray(bindings);
+    const nBindings = api.bind_parameter_count(stmt);
+    for (let i = 1; i <= nBindings; ++i) {
+      const key = isArray ? i - 1 : api.bind_parameter_name(stmt, i);
+      const value = bindings[key];
+      switch (typeof value) {
+        case 'number':
+          if (value === (value | 0)) {
+            api.bind_int(stmt, i, value);
+          } else {
+            api.bind_double(stmt, i, value);
+          }
+          break;
+        case 'string':
+          api.bind_text(stmt, i, value);
+          break;
+        default:
+          if (value instanceof Int8Array || Array.isArray(value)) {
+            api.bind_blob(stmt, i, value);
+          } else if (value === null) {
+            api.bind_null(stmt, i);
+          } else {
+            console.warn('unknown binding converted to null', value);
+            api.bind_null(stmt, i);
+          }
+          break;
+      }
+    }
+    return SQLITE_OK;
+  };
+
+  api.bind_blob = (function() {
+    const fname = 'sqlite3_bind_blob';
+    const f = Module.cwrap(fname, ...decl('nnnnn:n'));
+    return function(stmt, i, value) {
+      verifyStatement(stmt);
+      const ptr = Module._sqlite3_malloc(value.byteLength);
+      Module.HEAP8.subarray(ptr).set(value);
+      // TODO: Replace SQLITE_TRANSIENT with _sqlite3_free address.
+      const result = f(stmt, i, ptr, value.byteLength, SQLITE_TRANSIENT);
+      Module._sqlite3_free(ptr);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_parameter_count = (function() {
+    const fname = 'sqlite3_bind_parameter_count';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(stmt) {
+      verifyStatement(stmt);
+      const result = f(stmt);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_double = (function() {
+    const fname = 'sqlite3_bind_double';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(stmt, i, value) {
+      verifyStatement(stmt);
+      const result = f(stmt, i, value);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_int = (function() {
+    const fname = 'sqlite3_bind_int';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(stmt, i, value) {
+      verifyStatement(stmt);
+      const result = f(stmt, i, value);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_null = (function() {
+    const fname = 'sqlite3_bind_null';
+    const f = Module.cwrap(fname, ...decl('nn:n'));
+    return function(stmt, i) {
+      verifyStatement(stmt);
+      const result = f(stmt, i);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_parameter_name = (function() {
+    const fname = 'sqlite3_bind_parameter_name';
+    const f = Module.cwrap(fname, ...decl('n:s'));
+    return function(stmt, i) {
+      verifyStatement(stmt);
+      const result = f(stmt, i);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.bind_text = (function() {
+    const fname = 'sqlite3_bind_text';
+    const f = Module.cwrap(fname, ...decl('nnnnn:n'));
+    return function(stmt, i, value) {
+      verifyStatement(stmt);
+      const length = Module.lengthBytesUTF8(value);
+      const ptr = Module._sqlite3_malloc(length + 1);
+      Module.stringToUTF8(value, ptr, length + 1);
+      // TODO: Replace SQLITE_TRANSIENT with _sqlite3_free address.
+      const result = f(stmt, i, ptr, -1, SQLITE_TRANSIENT);
+      Module._sqlite3_free(ptr);
+      // trace(fname, result);
+      return result;
+    };
+  })();
 
   api.close = (function() {
     const fname = 'sqlite3_close';
@@ -370,7 +554,9 @@ export function Factory(Module) {
           const columns = api.column_names(prepared.stmt);
           while (await api.step(prepared.stmt) === SQLITE_ROW) {
             const row = api.row(prepared.stmt);
-            await callback(userData, row.length, row, columns)
+            if (callback) {
+              await callback(userData, row.length, row, columns);
+            }
           }
         } finally {
           api.finalize(prepared.stmt);
@@ -535,7 +721,7 @@ export function Factory(Module) {
   };
 
   function check(fname, result, db = null, allowed = [SQLITE_OK]) {
-    trace(fname, result);
+    // trace(fname, result);
     if (allowed.includes(result)) return result;
     const message = db ?
       Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :

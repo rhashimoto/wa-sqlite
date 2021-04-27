@@ -1,6 +1,7 @@
 // @ts-ignore
 import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
+import { SQLITE_DONE, SQLITE_OK } from './VFS.js';
 
 describe('sqlite-api', function() {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;
@@ -34,6 +35,68 @@ describe('sqlite-api', function() {
     expect(sqlite3.column_name(prepared.stmt, 0)).toBe('1 + 1');
     await sqlite3.finalize(prepared.stmt);
     sqlite3.str_finish(str);
+  });
+
+  it('bind', async function() {
+    await sqlite3.exec(db, `
+      CREATE TABLE tbl (id, cBlob, cDouble, cInt, cNull, cText);
+    `);
+
+    const str = sqlite3.str_new(db);
+    sqlite3.str_appendall(str, `
+      INSERT INTO tbl VALUES (:Id, :cBlob, :cDouble, :cInt, :cNull, :cText);
+    `);
+    const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
+
+    let result;
+    const cBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const cDouble = Math.PI;
+    const cInt = 42;
+    const cNull = null;
+    const cText = 'foobar';
+
+    result = sqlite3.bind(prepared.stmt, [
+      'array', cBlob, cDouble, cInt, cNull, cText
+    ]);
+    expect(result).toBe(SQLITE_OK);
+    result = await sqlite3.step(prepared.stmt);
+    expect(result).toBe(SQLITE_DONE);
+    result = sqlite3.reset(prepared.stmt);
+    expect(result).toBe(SQLITE_OK);
+
+    result = sqlite3.bind(prepared.stmt, {
+      ':Id': 'object',
+      ':cBlob': cBlob,
+      ':cDouble': cDouble,
+      ':cInt': cInt,
+      ':cNull': cNull,
+      ':cText': cText
+    });
+    expect(result).toBe(SQLITE_OK);
+    result = await sqlite3.step(prepared.stmt);
+    expect(result).toBe(SQLITE_DONE);
+    result = sqlite3.reset(prepared.stmt);
+    expect(result).toBe(SQLITE_OK);
+
+    result = await sqlite3.finalize(prepared.stmt);
+    expect(result).toBe(SQLITE_OK);
+
+    const results = [];
+    await sqlite3.exec(
+      db, `
+        SELECT cBlob, cDouble, cInt, cNull, cText FROM tbl;
+      `,
+      function(userData, n, rowData, columnNames) {
+        rowData = rowData.map(value => {
+          // Blob results do not remain valid so copy to retain.
+          return value instanceof Int8Array ? Array.from(value) : value;
+        });
+        results.push(rowData);
+      });
+
+    const expected = [Array.from(cBlob), cDouble, cInt, cNull, cText];
+    expect(results[0]).toEqual(expected);
+    expect(results[1]).toEqual(expected);
   });
 
   it('exec', async function() {
