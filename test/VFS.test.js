@@ -11,10 +11,14 @@ async function loadSampleTable(sql) {
     PRAGMA journal_mode = MEMORY;
     DROP TABLE IF EXISTS goog;
     CREATE TABLE goog (${GOOG.columns.join(',')});
+    BEGIN TRANSACTION;
   `;
   for (const row of GOOG.rows) {
     await sql`INSERT INTO goog VALUES (${row.join(',')})`;
   }
+  await sql`
+    COMMIT;
+  `;
 }
 
 describe('VFS', function() {
