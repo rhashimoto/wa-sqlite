@@ -1,36 +1,9 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-
-// Suppress some IDE warnings.
-#if 0
-const Module = {};
-const HEAP8 = new Int8Array();
-const LibraryManager = {};
-const Asyncify = {};
-function mergeInto(library, methods) {}
-function ccall(fname, type, argTypes, args) { return args }
-function getValue(ptr, type) { return 0; }
-function setValue(ptr, value, type) {}
-function UTF8ToString(ptr) { return ''; }
-let _vfsAccess;
-let _vfsCheckReservedLock;
-let _vfsClose;
-let _vfsDelete;
-let _vfsDeviceCharacteristics;
-let _vfsFileControl;
-let _vfsFileSize;
-let _vfsLock;
-let _vfsOpen;
-let _vfsRead;
-let _vfsSectorSize;
-let _vfsSync;
-let _vfsTruncate;
-let _vfsUnlock;
-let _vfsWrite;
-#endif
-
 const methods = {
   $method_support__postset: 'method_support();',
   $method_support: function() {
+    const hasAsyncify = typeof Asyncify === 'object';
+
     const mapIdToVFS = new Map();
     const mapFileToVFS = new Map();
 
@@ -40,19 +13,18 @@ const methods = {
         throw Error(`VFS '${vfs}' already registered`);
       }
 
-#if ASYNCIFY
-      // Inject Asyncify method.
-      vfs['handleAsync'] = Asyncify.handleAsync;
-#endif
+      if (hasAsyncify) {
+        // Inject Asyncify method.
+        vfs['handleAsync'] = Asyncify.handleAsync;
+      }
+
       const mxPathName = vfs.mxPathName ?? 64;
       const id = ccall('register_vfs', 'number', ['string', 'number', 'number'],
         [vfs.name, mxPathName, makeDefault ? 1 : 0]);
       mapIdToVFS.set(id, vfs);
     };
 
-#if ASYNCIFY
-    const closedFiles = new Set();
-#endif
+    const closedFiles = hasAsyncify ? new Set() : null;
 
     class Value {
       constructor(ptr, type) {
@@ -80,16 +52,16 @@ const methods = {
     _vfsClose = function(file) {
       const vfs = mapFileToVFS.get(file);
 
-#if ASYNCIFY
-      // Normally we would delete the mapFileToVFS entry here as it is not
-      // needed once the file is closed. But if the close implementation
-      // uses Asyncify then the function can be called again with the same
-      // state expected. So instead we just remember keys that should be
-      // removed at some point.
-      closedFiles.add(file);
-#else
-      mapFileToVFS.delete(file);
-#endif
+      if (hasAsyncify) {
+        // Normally we would delete the mapFileToVFS entry here as it is not
+        // needed once the file is closed. But if the close implementation
+        // uses Asyncify then the function can be called again with the same
+        // state expected. So instead we just remember keys that should be
+        // removed at some point.
+        closedFiles.add(file);
+      } else {
+        mapFileToVFS.delete(file);
+      }
       return vfs['xClose'](file);
     }
     
@@ -163,12 +135,14 @@ const methods = {
     _vfsOpen = function(vfsId, zName, file, flags, pOutFlags) {
       const vfs = mapIdToVFS.get(vfsId);
       mapFileToVFS.set(file, vfs);
-#if ASYNCIFY
-      closedFiles.delete(file);
-      for (const file of closedFiles) {
-        mapFileToVFS.delete(file);
+
+      if (hasAsyncify) {
+        closedFiles.delete(file);
+        for (const file of closedFiles) {
+          mapFileToVFS.delete(file);
+        }
       }
-#endif
+      
       return vfs['xOpen'](
         zName ? UTF8ToString(zName) : null,
         file,
