@@ -145,7 +145,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pOut 
+   * @param {{ value: Int8Array }} pOut 
    * @returns {number|Promise<number>}
    */
   xFileControl(fileId, flags, pOut) {

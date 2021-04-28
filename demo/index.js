@@ -8,6 +8,7 @@ import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../test/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
+import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
 import { tag } from '../src/tag.js';
 
@@ -42,6 +43,7 @@ const DB_NAME = "myDB";
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
+  sqlite3a.vfs_register(new IndexedDbVFS());
 
   const mapNameToTag = new Map();
   async function addTag(key, sqlite3, vfs) {
@@ -51,7 +53,7 @@ const DB_NAME = "myDB";
   }
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
-  // await addTag('idb', sqlite3a, 'idb');
+  await addTag('idb', sqlite3a, 'idb');
 
   const selectDB = document.getElementById('vfs');
   let sql = mapNameToTag.get(selectDB['value']);
