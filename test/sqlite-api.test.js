@@ -3,7 +3,7 @@ import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 // @ts-ignore
 import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { SQLITE_DONE, SQLITE_OK } from './VFS.js';
+import { SQLITE_DONE, SQLITE_OK } from '../src/VFS.js';
 
 const LIBVERSION = '3.33.0';
 const LIBVERSION_NUMBER = 3033000;

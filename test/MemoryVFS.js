@@ -1,5 +1,5 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-import * as VFS from './VFS.js';
+import * as VFS from '../src/VFS.js';
 
 export class MemoryVFS extends VFS.Base {
   name = 'memory';
