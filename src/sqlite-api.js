@@ -144,6 +144,11 @@ function trace(...args) {
  * 
  * @property {(
  *  stmt: number,
+ *  iCol) => number|string|Int8Array|null} column Returns a query
+ *  column value. This is a convenience function for Javascript.
+ * 
+ * @property {(
+ *  stmt: number,
  *  iCol: number) => Int8Array} column_blob Result values from a query.
  *  Note that the result will be valid until the next SQLite call. For
  *  longer retention, make a copy.
@@ -434,6 +439,25 @@ export function Factory(Module) {
     };
   })();
 
+  api.column = function(stmt, iCol) {
+    verifyStatement(stmt);
+    const type = api.column_type(stmt, iCol);
+    switch (type) {
+      case SQLITE_BLOB:
+        return api.column_blob(stmt, iCol);
+      case SQLITE_FLOAT:
+        return api.column_double(stmt, iCol);
+      case SQLITE_INTEGER:
+        return api.column_int(stmt, iCol);
+      case SQLITE_NULL:
+        return null;
+      case SQLITE_TEXT:
+        return api.column_text(stmt, iCol);
+      default:
+        throw new SQLiteError('unknown type', type);
+    }
+  }
+
   api.column_blob = (function() {
     const fname = 'sqlite3_column_blob';
     const f = Module.cwrap(fname, ...decl('nn:n'));
@@ -654,24 +678,7 @@ export function Factory(Module) {
     const row = [];
     const nColumns = api.data_count(stmt);
     for (let i = 0; i < nColumns; ++i) {
-      const type = api.column_type(stmt, i);
-      switch (type) {
-      case SQLITE_INTEGER:
-        row.push(api.column_int(stmt, i));
-        break;
-      case SQLITE_FLOAT:
-        row.push(api.column_double(stmt, i));
-        break;
-      case SQLITE_TEXT:
-        row.push(api.column_text(stmt, i));
-        break;
-      case SQLITE_BLOB:
-        row.push(api.column_blob(stmt, i));
-        break;
-      default:
-        row.push(null);
-        break;
-      }      
+      row.push(api.column(stmt, i));
     }
     return row;
   }

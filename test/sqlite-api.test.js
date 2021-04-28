@@ -153,6 +153,28 @@ function shared(sqlite3Ready) {
         ['how', 'now', 'brown']
       ]);
   });
+
+  it('reset', async function() {
+    await sqlite3.exec(
+      db, `
+      CREATE TABLE tbl (x);
+      INSERT INTO tbl VALUES ('a'), ('b'), ('c');
+    `);
+
+    const str = sqlite3.str_new(db, 'SELECT x FROM tbl ORDER BY x');
+    const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
+    await sqlite3.step(prepared.stmt);
+    expect(sqlite3.column(prepared.stmt, 0)).toBe('a');
+    await sqlite3.step(prepared.stmt);
+    expect(sqlite3.column(prepared.stmt, 0)).toBe('b');
+
+    sqlite3.reset(prepared.stmt);
+    await sqlite3.step(prepared.stmt);
+    expect(sqlite3.column(prepared.stmt, 0)).toBe('a');
+
+    sqlite3.finalize(prepared.stmt);
+    sqlite3.str_finish(str);
+  });
 }
 
 describe('sqlite-api', function() {
