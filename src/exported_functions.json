@@ -25,6 +25,8 @@
   "_sqlite3_exec",
   "_sqlite3_finalize",
   "_sqlite3_free",
+  "_sqlite3_libversion",
+  "_sqlite3_libversion_number",
   "_sqlite3_malloc",
   "_sqlite3_open_v2",
   "_sqlite3_prepare_v2",

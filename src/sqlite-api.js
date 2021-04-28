@@ -1,3 +1,5 @@
+// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
+
 // Useful result codes.
 // https://www.sqlite.org/rescode.html
 export const SQLITE_OK = 0;
@@ -56,11 +58,16 @@ export const SQLITE_IOCAP_POWERSAFE_OVERWRITE = 0x00001000;
 export const SQLITE_IOCAP_IMMUTABLE = 0x00002000;
 export const SQLITE_IOCAP_BATCH_ATOMIC = 0x00004000;
 
+// Fundamental datatypes.
+// https://www.sqlite.org/c3ref/c_blob.html
 export const SQLITE_INTEGER = 1;
 export const SQLITE_FLOAT = 2;
 export const SQLITE_TEXT = 3;
 export const SQLITE_BLOB = 4;
+export const SQLITE_NULL = 5;
 
+// Special destructor behavior.
+// https://www.sqlite.org/c3ref/c_static.html
 export const SQLITE_STATIC = 0;
 export const SQLITE_TRANSIENT = -1;
 
@@ -198,6 +205,12 @@ function trace(...args) {
  *  stmt: number) => Promise<number>} finalize Destroy a prepared statement
  *  object. See https://www.sqlite.org/c3ref/finalize.html
  * 
+ * @property {() => string} libversion Run-time library version numbers.
+ * https://www.sqlite.org/c3ref/libversion.html
+ * 
+ * @property {() => number} libversion_number Run-time library version numbers.
+ * https://www.sqlite.org/c3ref/libversion.html
+ *
  * @property {(
  *  zFilename: string,
  *  iFlags?: number,
@@ -274,7 +287,7 @@ export function Factory(Module) {
   const tmpPtr = [tmp, tmp + 4];
 
   // Convert a JS string to a C string. sqlite3_malloc is used to allocate
-  // memory.
+  // memory (use sqlite3_free to deallocate).
   function createUTF8(s) {
     if (typeof s !== 'string') return 0;
     const n = Module.lengthBytesUTF8(s);
@@ -572,6 +585,24 @@ export function Factory(Module) {
       const statement = statements.get(stmt);
       statements.delete(stmt)
       return check(fname, result, statement);
+    };
+  })();
+
+  api.libversion = (function() {
+    const fname = 'sqlite3_libversion';
+    const f = Module.cwrap(fname, ...decl(':s'));
+    return function() {
+      const result = f();
+      return result;
+    };
+  })();
+
+  api.libversion_number = (function() {
+    const fname = 'sqlite3_libversion_number';
+    const f = Module.cwrap(fname, ...decl(':n'));
+    return function() {
+      const result = f();
+      return result;
     };
   })();
 

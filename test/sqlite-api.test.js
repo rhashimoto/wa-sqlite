@@ -5,6 +5,9 @@ import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 import { SQLITE_DONE, SQLITE_OK } from './VFS.js';
 
+const LIBVERSION = '3.33.0';
+const LIBVERSION_NUMBER = 3033000;
+
 // Shared test definitions for sync and async.
 function shared(sqlite3Ready) {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;
@@ -24,6 +27,14 @@ function shared(sqlite3Ready) {
 
   afterEach(async function() {
     await sqlite3.close(db);
+  });
+
+  it('version', async function() {
+    const sVersion = sqlite3.libversion();
+    expect(sVersion).toBe(LIBVERSION);
+
+    const nVersion = sqlite3.libversion_number();
+    expect(nVersion).toBe(LIBVERSION_NUMBER);
   });
 
   it('prepare', async function() {
