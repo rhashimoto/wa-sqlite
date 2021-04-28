@@ -1,8 +1,14 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 // @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
-import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
+import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
+// @ts-ignore
+import SQLiteModuleAsyncFactory from '../dist/wa-sqlite-async.mjs';
+
 import * as SQLite from '../src/sqlite-api.js';
+
+import { MemoryVFS } from '../test/MemoryVFS.js';
+import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
+
 import { tag } from '../src/tag.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
@@ -22,38 +28,65 @@ const DB_NAME = "myDB";
 
 (async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
-  const [SQLiteModule, editor] = await Promise.all([SQLiteModuleFactory(), createEditor()]);
-  const sqlite3 = SQLite.Factory(SQLiteModule);
+  const [SQLiteModule, SQLiteAsyncModule, editor] = await Promise.all([
+    SQLiteModuleFactory(),
+    SQLiteModuleAsyncFactory(),
+    createEditor()
+  ]);
 
-  // Create and register a VFS.
-  const vfs = new MemoryAsyncVFS();
-  sqlite3.vfs_register(vfs, false);
+  // Build API objects for each module.
+  const sqlite3s = SQLite.Factory(SQLiteModule);
+  const sqlite3a = SQLite.Factory(SQLiteAsyncModule);
+
+  // Register Virtual File Systems.
+  sqlite3s.vfs_register(new MemoryVFS());
+  sqlite3a.vfs_register(new MemoryVFS());
+  sqlite3a.vfs_register(new MemoryAsyncVFS());
+
+  const mapNameToTag = new Map();
+  async function addTag(key, sqlite3, vfs) {
+    const db = await sqlite3.open_v2(vfs, undefined, vfs);
+    const t = tag(sqlite3, db);
+    mapNameToTag.set(key, t);
+  }
+  await addTag('mem', sqlite3s, 'memory');
+  await addTag('mem-async', sqlite3a, 'memory-async');
+  // await addTag('idb', sqlite3a, 'idb');
+
+  const selectDB = document.getElementById('vfs');
+  let sql = mapNameToTag.get(selectDB['value']);
 
   // Execute SQL on button click.
+  const button = /** @type {HTMLButtonElement} */(document.getElementById('execute'));
   document.getElementById('execute').addEventListener('click', async function() {
+    button.disabled = true;
+
     // Get SQL from editor.
     const selection = editor.getSelection();
     const queries = selection.isEmpty() ?
       editor.getValue() :
       editor.getModel().getValueInRange(selection);
 
-    // Open and close the database on every execution to test data persistence.
-    const db = await sqlite3.open_v2(DB_NAME, undefined, vfs.name);
-    const sql = tag(sqlite3, db);
-
     const output = document.getElementById('output');
     while (output.firstChild) output.removeChild(output.lastChild);
+
+    const timestamp = document.getElementById('timestamp');
+    timestamp.textContent = new Date().toLocaleTimeString();
+
+    let time = Date.now();
     try {
       // Execute the SQL.
       const results = await sql`${queries}`;
+      time = Date.now() - time;
 
       results.map(formatTable).forEach(table => output.append(table));
     } catch (e) {
-      output.innerHTML = `<pre>${e.stack}</pre>`;
-    } finally {
-      // Make sure to close to avoid leaking resources.
-      sqlite3.close(db);
+      // Adjust for browser differences in Error.stack().
+      const report = (window['chrome'] ? '' : `${e.message}\n`) + e.stack;
+      output.innerHTML = `<pre>${report}</pre>`;
     }
+    timestamp.textContent += ` ${time / 1000} seconds`;
+    button.disabled = false;
   });
 
   // Change the button text with selection.
@@ -73,6 +106,11 @@ const DB_NAME = "myDB";
     }, 1000);
   });
   editor.setValue(localStorage.getItem('wa-sqlite demo') ?? DEFAULT_SQL);
+
+  // Choose VFS.
+  selectDB.addEventListener('input', event => {
+    sql = mapNameToTag.get(event.target['value']);
+  });
 })();
 
 async function createEditor() {

@@ -4,7 +4,7 @@ import * as SQLite from './sqlite-api.js';
  * Template tag builder. This function creates a tag with an API and
  * database from the same module, then the tag can be used like this:
  * ```
- * const sql = SQLiteAPI.tag(sqlite3, db);
+ * const sql = tag(sqlite3, db);
  * const results = await sql`SELECT 1 + 1; SELECT 6 * 7;`;
  * ```
  * The returned Promise value contains an array of results for each
