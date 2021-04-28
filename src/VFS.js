@@ -55,6 +55,7 @@ export const SQLITE_IOCAP_POWERSAFE_OVERWRITE = 0x00001000;
 export const SQLITE_IOCAP_IMMUTABLE = 0x00002000;
 export const SQLITE_IOCAP_BATCH_ATOMIC = 0x00004000;
 
+// Base class for a VFS.
 export class Base {
   mxPathName = 64;
 

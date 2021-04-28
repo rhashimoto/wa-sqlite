@@ -8,7 +8,8 @@ const methods = {
     const mapFileToVFS = new Map();
 
     Module['registerVFS'] = function(vfs, makeDefault) {
-      const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'], [vfs]);
+      const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'],
+        [vfs.name]);
       if (vfsAlreadyRegistered) {
         throw Error(`VFS '${vfs}' already registered`);
       }
