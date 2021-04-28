@@ -200,10 +200,9 @@ function trace(...args) {
  * @property {(
  *  db: number,
  *  sql: string,
- *  callback?: function(*, number, *[], string[]): any,
- *  userData?: any) => Promise<number>} exec One-step query execution interface.
- *  The optional callback is called for each output row with arguments
- *  `userData`, `nColumns`, `rowValues`, `columnNames`.
+ *  callback?: function(*[], string[]): any) => Promise<number>} exec
+ *  One-step query execution interface. The optional callback is called
+ *  for each output row.
  *  See https://www.sqlite.org/c3ref/exec.html
  * 
  * @property {(
@@ -568,7 +567,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.exec = async function(db, sql, callback, userData) {
+  api.exec = async function(db, sql, callback) {
     const str = api.str_new(db, sql);
     try {
       // Initialize the prepared statement state that will evolve
@@ -586,7 +585,7 @@ export function Factory(Module) {
           while (await api.step(prepared.stmt) === SQLITE_ROW) {
             const row = api.row(prepared.stmt);
             if (callback) {
-              await callback(userData, row.length, row, columns);
+              await callback(row, columns);
             }
           }
         } finally {

@@ -43,7 +43,7 @@ function shared(ready) {
       });
 
       const results = [];
-      await sqlite3.exec(db, interleaved.join(''), (_, nCols, row, columns) => {
+      await sqlite3.exec(db, interleaved.join(''), (row, columns) => {
         results.push(row);
       });
       return results;

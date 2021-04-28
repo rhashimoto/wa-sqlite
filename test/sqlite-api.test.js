@@ -20,7 +20,7 @@ function shared(sqlite3Ready) {
     const tables = [];
     await sqlite3.exec(db, `
       SELECT name FROM sqlite_master WHERE type='table';
-    `, (_, nCols, row) => {
+    `, row => {
       tables.push(row[0]);
     });
     for (const table of tables) {
@@ -99,7 +99,7 @@ function shared(sqlite3Ready) {
       db, `
         SELECT cBlob, cDouble, cInt, cNull, cText FROM tbl;
       `,
-      function(userData, n, rowData, columnNames) {
+      function(rowData, columnNames) {
         rowData = rowData.map(value => {
           // Blob results do not remain valid so copy to retain.
           return value instanceof Int8Array ? Array.from(value) : value;
@@ -130,9 +130,8 @@ function shared(sqlite3Ready) {
       SELECT * FROM tableA;
       SELECT * FROM tableB;
       `,
-      function(userData, n, row, columns) {
-        expect(userData).toBe('foobar');
-        switch (n) {
+      function(row, columns) {
+        switch (columns.length) {
           case 2:
             expect(columns).toEqual(['x', 'y']);
             break;
@@ -144,8 +143,7 @@ function shared(sqlite3Ready) {
             break;
         }
         rows.push(row);
-      },
-      'foobar');
+      });
 
       expect(rows).toEqual([
         [1, 2],

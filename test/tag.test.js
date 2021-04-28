@@ -19,7 +19,7 @@ describe('tag', function() {
     const tables = [];
     await sqlite3.exec(db, `
       SELECT name FROM sqlite_master WHERE type='table';
-    `, (_, nCols, row) => {
+    `, row => {
       tables.push(row[0]);
     });
     for (const table of tables) {
