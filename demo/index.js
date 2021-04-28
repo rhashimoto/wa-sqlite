@@ -3,6 +3,7 @@
 import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
 import * as SQLite from '../src/sqlite-api.js';
+import { tag } from '../src/tag.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
 // This will need to be changed if using a package manager other than Yarn 2.
@@ -38,7 +39,7 @@ const DB_NAME = "myDB";
 
     // Open and close the database on every execution to test data persistence.
     const db = await sqlite3.open_v2(DB_NAME, undefined, vfs.name);
-    const sql = SQLite.tag(sqlite3, db);
+    const sql = tag(sqlite3, db);
 
     const output = document.getElementById('output');
     while (output.firstChild) output.removeChild(output.lastChild);
