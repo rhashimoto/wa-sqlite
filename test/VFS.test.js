@@ -8,19 +8,25 @@ import { MemoryVFS } from './MemoryVFS.js';
 
 import GOOG from './GOOG.js';
 
-async function loadSampleTable(sql) {
-  await sql`
+/**
+ * @param {SQLite.SQLiteAPI} sqlite3 
+ * @param {number} db 
+ */
+async function loadSampleTable(sqlite3, db) {
+  await sqlite3.exec(db, `
     PRAGMA journal_mode = MEMORY;
     DROP TABLE IF EXISTS goog;
     CREATE TABLE goog (${GOOG.columns.join(',')});
     BEGIN TRANSACTION;
-  `;
+  `);
   for (const row of GOOG.rows) {
-    await sql`INSERT INTO goog VALUES (${row.join(',')})`;
+    await sqlite3.exec(db, `
+      INSERT INTO goog VALUES (${row.join(',')})
+    `);
   }
-  await sql`
+  await sqlite3.exec(db, `
     COMMIT;
-  `;
+  `);
 }
 
 function shared(ready) {
@@ -29,7 +35,19 @@ function shared(ready) {
   beforeEach(async function() {
     ({ sqlite3, vfs} = await ready);
     db = await sqlite3.open_v2('foo', 0x06, vfs.name);
-    sql = SQLite.tag(sqlite3, db);
+
+    sql = async function(strings, ...values) {
+      let interleaved = [];
+      strings.forEach((s, i) => {
+        interleaved.push(s, values[i]);
+      });
+
+      const results = [];
+      await sqlite3.exec(db, interleaved.join(''), (_, nCols, row, columns) => {
+        results.push(row);
+      });
+      return results;
+    }
   });
 
   afterEach(async function() {
@@ -38,41 +56,16 @@ function shared(ready) {
 
   it('persists', async function() {
     // Load data into the database.
-    await loadSampleTable(sql);
+    await loadSampleTable(sqlite3, db);
     const resultA = await sql`SELECT COUNT(*) FROM goog`;
-    expect(resultA[0].rows[0][0]).toBeGreaterThan(0);
+    expect(resultA[0][0]).toBeGreaterThan(0);
 
     // Close and reopen the database.
     await sqlite3.close(db);
     db = await sqlite3.open_v2('foo', 0x06, vfs.name);
-    sql = SQLite.tag(sqlite3, db);
 
     const resultB = await sql`SELECT COUNT(*) FROM goog`;
-    expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
-  });
-
-  xit('timing', async function() {
-    const VFS_NAME = 'mem';
-    const N = 10;
-
-    const timestamp = Date.now();
-    for (let i = 0; i < N; ++i) {
-      let db = await sqlite3.open_v2('foobar', 0x06, VFS_NAME);
-      let sql = SQLite.tag(sqlite3, db);
-      await loadSampleTable(sql);
-      const resultA = await sql`SELECT SUM(Volume) FROM goog`;
-      expect(resultA[0].rows[0][0]).toBeGreaterThan(0);
-
-      await sqlite3.close(db);
-      db = await sqlite3.open_v2('foobar', 0x06, VFS_NAME);
-      sql = SQLite.tag(sqlite3, db);
-  
-      const resultB = await sql`SELECT SUM(Volume) FROM goog`;
-      expect(resultB[0].rows[0][0]).toBe(resultA[0].rows[0][0]);
-
-      await sqlite3.close(db);
-    }
-    console.log('elapsed', (Date.now() - timestamp) / N);
+    expect(resultB[0][0]).toBe(resultA[0][0]);
   });
 }
 

@@ -12,16 +12,19 @@ const LIBVERSION_NUMBER = 3033000;
 function shared(sqlite3Ready) {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;
   let db;
-  let sql;
   beforeEach(async function() {
     sqlite3 = await sqlite3Ready;
     db = await sqlite3.open_v2('foo');
-    sql = SQLite.tag(sqlite3, db);
 
     // Delete all tables.
-    const tables = await sql`SELECT name FROM sqlite_master WHERE type='table'`;
-    for (const row of tables[0].rows) {
-      await sql`DROP TABLE ${row[0]}`;
+    const tables = [];
+    await sqlite3.exec(db, `
+      SELECT name FROM sqlite_master WHERE type='table';
+    `, (_, nCols, row) => {
+      tables.push(row[0]);
+    });
+    for (const table of tables) {
+      await sqlite3.exec(db, `DROP TABLE ${table}`);
     }
   });
 
@@ -110,11 +113,17 @@ function shared(sqlite3Ready) {
   });
 
   it('exec', async function() {
-    const rows = [];
+    // Without callback.
     await sqlite3.exec(
       db, `
       CREATE TABLE tableA (x, y);
       INSERT INTO tableA VALUES (1, 2);
+    `);
+
+    // With callback.
+    const rows = [];
+    await sqlite3.exec(
+      db, `
       CREATE TABLE tableB (a, b, c);
       INSERT INTO tableB VALUES ('foo', 'bar', 'baz');
       INSERT INTO tableB VALUES ('how', 'now', 'brown');
@@ -122,8 +131,21 @@ function shared(sqlite3Ready) {
       SELECT * FROM tableB;
       `,
       function(userData, n, row, columns) {
+        expect(userData).toBe('foobar');
+        switch (n) {
+          case 2:
+            expect(columns).toEqual(['x', 'y']);
+            break;
+          case 3:
+            expect(columns).toEqual(['a', 'b', 'c']);
+            break;
+          default:
+            fail();
+            break;
+        }
         rows.push(row);
-      });
+      },
+      'foobar');
 
       expect(rows).toEqual([
         [1, 2],
@@ -133,6 +155,7 @@ function shared(sqlite3Ready) {
   });
 
   it('tag', async function() {
+    const sql = SQLite.tag(sqlite3, db);
     const result = await sql`
       DROP TABLE IF EXISTS abc; -- doesn't produce output
       SELECT 6 * 7
