@@ -139,6 +139,10 @@ function trace(...args) {
  *  See https://www.sqlite.org/c3ref/bind_blob.html
  * 
  * @property {(
+ *  db: number) => number} changes Count the number of rows modified.
+ *  See https://www.sqlite.org/c3ref/changes.html
+ * 
+ * @property {(
  *  db: number) => Promise<number>} close
  *  See https://www.sqlite.org/c3ref/close.html
  * 
@@ -242,6 +246,10 @@ function trace(...args) {
  * @property {(
  *  stmt: number) => Array<any>} row Returns row data for a prepared
  *  statement. This is a convenience function for Javascript.
+ * 
+ * @property {(
+ *  stmt: number) => string} sql Retrieving statement SQL.
+ *  See https://www.sqlite.org/c3ref/expanded_sql.html
  * 
  * @property {(
  *  stmt: number) => Promise<number>} step Evaluate an SQL statement.
@@ -422,6 +430,17 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const ptr = createUTF8(value);
       const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.changes = (function() {
+    const fname = 'sqlite3_changes';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(db) {
+      verifyDatabase(db);
+      const result = f(db);
       // trace(fname, result);
       return result;
     };
@@ -681,6 +700,17 @@ export function Factory(Module) {
     }
     return row;
   }
+
+  api.sql = (function() {
+    const fname = 'sqlite3_sql';
+    const f = Module.cwrap(fname, ...decl('n:s'));
+    return function(stmt) {
+      verifyStatement(stmt);
+      const result = f(stmt);
+      // trace(fname, result);
+      return result;
+    };
+  })();
 
   api.step = (function() {
     const fname = 'sqlite3_step';

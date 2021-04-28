@@ -46,6 +46,7 @@ function shared(sqlite3Ready) {
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
     expect(typeof prepared.stmt).toBe('number');
     expect(sqlite3.column_name(prepared.stmt, 0)).toBe('1 + 1');
+    expect(sqlite3.sql(prepared.stmt)).toBe('SELECT 1 + 1');
     await sqlite3.finalize(prepared.stmt);
     sqlite3.str_finish(str);
   });
@@ -158,6 +159,7 @@ function shared(sqlite3Ready) {
       CREATE TABLE tbl (x);
       INSERT INTO tbl VALUES ('a'), ('b'), ('c');
     `);
+    expect(sqlite3.changes(db)).toBe(3);
 
     const str = sqlite3.str_new(db, 'SELECT x FROM tbl ORDER BY x');
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));

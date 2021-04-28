@@ -31,6 +31,7 @@
   "_sqlite3_open_v2",
   "_sqlite3_prepare_v2",
   "_sqlite3_reset",
+  "_sqlite3_sql",
   "_sqlite3_step",
   "_sqlite3_vfs_find"
 ]
