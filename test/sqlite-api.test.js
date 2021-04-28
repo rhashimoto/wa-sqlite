@@ -153,15 +153,6 @@ function shared(sqlite3Ready) {
         ['how', 'now', 'brown']
       ]);
   });
-
-  it('tag', async function() {
-    const sql = SQLite.tag(sqlite3, db);
-    const result = await sql`
-      DROP TABLE IF EXISTS abc; -- doesn't produce output
-      SELECT 6 * 7
-    `;
-    expect(result[0].rows[0][0]).toBe(42);
-  });
 }
 
 describe('sqlite-api', function() {
