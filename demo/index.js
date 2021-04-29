@@ -57,7 +57,7 @@ const DB_NAME = "myDB";
   await addTag('idb', sqlite3a, 'idb');
 
   const selectDB = document.getElementById('vfs');
-  let sql = mapNameToTag.get(selectDB['value']);
+  let sql = window['sql'] = mapNameToTag.get(selectDB['value']);
 
   // Execute SQL on button click.
   const button = /** @type {HTMLButtonElement} */(document.getElementById('execute'));
@@ -112,7 +112,7 @@ const DB_NAME = "myDB";
 
   // Choose VFS.
   selectDB.addEventListener('input', event => {
-    sql = mapNameToTag.get(event.target['value']);
+    sql = window['sql'] = mapNameToTag.get(event.target['value']);
   });
 })();
 
