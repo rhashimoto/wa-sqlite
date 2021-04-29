@@ -3,8 +3,8 @@ import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 // @ts-ignore
 import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { MemoryAsyncVFS } from './MemoryAsyncVFS.js';
-import { MemoryVFS } from './MemoryVFS.js';
+import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
+import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 
 import GOOG from './GOOG.js';
 

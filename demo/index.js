@@ -6,8 +6,8 @@ import SQLiteModuleAsyncFactory from '../dist/wa-sqlite-async.mjs';
 
 import * as SQLite from '../src/sqlite-api.js';
 
-import { MemoryVFS } from '../test/MemoryVFS.js';
-import { MemoryAsyncVFS } from '../test/MemoryAsyncVFS.js';
+import { MemoryVFS } from '../src/examples/MemoryVFS.js';
+import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
 import { tag } from '../src/tag.js';

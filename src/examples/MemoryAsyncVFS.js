@@ -1,6 +1,9 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 import { MemoryVFS } from './MemoryVFS.js';
 
+// Asynchronous memory filesystem. This filesystem requires an Asyncify
+// build. It is mainly useful for testing that the Asyncify build is
+// working.
 export class MemoryAsyncVFS extends MemoryVFS {
   name = 'memory-async';
   

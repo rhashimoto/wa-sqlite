@@ -19,7 +19,7 @@ module.exports = function(config) {
       { pattern: '{dist,debug}/*.mjs', type: 'module', included: false },
       { pattern: '{dist,debug}/*.wasm', type: 'wasm', included: false },
       { pattern: 'test/*.test.js', type: 'module' },
-      { pattern: 'src/*.js', included: false },
+      { pattern: 'src/**/*.js', included: false },
       { pattern: 'test/*.js', included: false }
     ],
 

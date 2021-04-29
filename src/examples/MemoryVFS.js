@@ -1,6 +1,8 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-import * as VFS from '../src/VFS.js';
+import * as VFS from '../VFS.js';
 
+// Memory filesystem. Although this is mainly provided as an example
+// for new VFS classes, it seems to be faster than the default filesystem.
 export class MemoryVFS extends VFS.Base {
   name = 'memory';
   

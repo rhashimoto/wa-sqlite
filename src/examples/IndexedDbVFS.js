@@ -11,6 +11,10 @@ const BLOCK_KEY_DIGITS = 10;
 // This is the maximum number of cached blocks per file.
 const CACHE_SIZE = 16;
 
+// Use IndexedDB as a block device. This class does not implement locking
+// so although it can be used for multiple connections to a database, it
+// is not safe for concurrent transactions (arbitration must be provided
+// at the application level).
 export class IndexedDbVFS extends VFS.Base {
   name = 'idb';
   mapIdToFile = new Map();
