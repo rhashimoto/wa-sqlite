@@ -25,7 +25,17 @@ export class IndexedDbVFS extends VFS.Base {
     }).then(db => this.db = db);
   }
 
-   xOpen(name, fileId, flags, pOutFlags) {
+  getBlock(store, file, index) {
+    const key = this._blockKey(file.meta.name, index);
+    return idb(store.get(key));
+  }
+
+  putBlock(store, file, index, block) {
+    const key = this._blockKey(file.meta.name, index);
+    return idb(store.put(block, key));
+  }
+
+  xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       // Generate a random name if requested.
       name = name || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
@@ -34,8 +44,8 @@ export class IndexedDbVFS extends VFS.Base {
 
       // If creating the database file, get and put must be in the same
       // transaction to prevent simultaneous creation (unlikely but possible).
-      const blocks = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-      let meta = await idb(blocks.get(this._metaKey(name)));
+      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+      let meta = await idb(store.get(this._metaKey(name)));
       if (!meta) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
           // Create a new metadata object.
@@ -44,16 +54,13 @@ export class IndexedDbVFS extends VFS.Base {
             size: 0,
             blockSize: BLOCK_SIZE
           };
-          blocks.put(meta, this._metaKey(name));
+          store.put(meta, this._metaKey(name));
         } else {
           return VFS.SQLITE_CANTOPEN;
         }
       }
 
-      const file = { meta };
-      if (flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-        file.deleteOnClose = true;
-      }
+      const file = { meta, flags };
 
       // Put the file in the opened files map.
       this.mapIdToFile.set(fileId, file);
@@ -65,7 +72,7 @@ export class IndexedDbVFS extends VFS.Base {
   xClose(fileId) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      if (file.deleteOnClose) {
+      if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const file = this.mapIdToFile.get(fileId);
         await this._delete(this._metaKey(file.name));
       }
@@ -76,7 +83,8 @@ export class IndexedDbVFS extends VFS.Base {
 
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
-      const meta = this.mapIdToFile.get(fileId).meta;
+      const file = this.mapIdToFile.get(fileId);
+      const meta = file.meta;
 
       // Clip the requested read to the file boundary.
       const bgn = Math.min(iOffset, meta.size);
@@ -86,14 +94,13 @@ export class IndexedDbVFS extends VFS.Base {
       let arrayOffset = 0;
       if (nRemaining) {
         let fileOffset = iOffset;
-        const blocks = this.db.transaction('blocks', 'readonly').objectStore('blocks');
+        const store = this.db.transaction('blocks', 'readonly').objectStore('blocks');
         while (nRemaining) {
           const blockIndex = Math.floor(fileOffset / meta.blockSize);
           const blockOffset = fileOffset % meta.blockSize;
           const blockBytes = Math.min(meta.blockSize - blockOffset, nRemaining);
 
-          const key = this._blockKey(meta.name, blockIndex);
-          let blockData = await idb(blocks.get(key));
+          let blockData = await this.getBlock(store, file, blockIndex);
           if (!blockData) {
             // This block doesn't exist in spite of being within the file
             // size. This can happen if writes are not purely sequential.
@@ -119,14 +126,15 @@ export class IndexedDbVFS extends VFS.Base {
 
   xWrite(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
-      const meta = this.mapIdToFile.get(fileId).meta;
+      const file = this.mapIdToFile.get(fileId);
+      const meta = file.meta;
       
       let arrayOffset = 0;
       let nRemaining = pData.size;
       if (nRemaining) {
         let fileOffset = iOffset;
         const lastBlockIndex = Math.floor(meta.size / meta.blockSize);
-        const blocks = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
         while (nRemaining) {
           const blockIndex = Math.floor(fileOffset / meta.blockSize);
           const blockOffset = fileOffset % meta.blockSize;
@@ -137,7 +145,7 @@ export class IndexedDbVFS extends VFS.Base {
           if (blockIndex <= lastBlockIndex && blockBytes < meta.blockSize) {
             // The write is to only part of a block that may have been
             // already written.
-            blockData = await idb(blocks.get(key));
+            blockData = await this.getBlock(store, file, blockIndex);
           }
           if (!blockData) {
             // We should reach here when:
@@ -149,7 +157,7 @@ export class IndexedDbVFS extends VFS.Base {
 
           new Int8Array(blockData, blockOffset, blockBytes)
             .set(pData.value.subarray(arrayOffset, arrayOffset + blockBytes));
-          await idb(blocks.put(blockData, key));
+          this.putBlock(store, file, blockIndex, blockData);
 
           arrayOffset += blockBytes;
           fileOffset += blockBytes;
