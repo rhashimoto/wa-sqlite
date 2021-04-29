@@ -8,6 +8,9 @@ const BLOCK_SIZE = 8192;
 // changing this number will make existing databases unreadable.
 const BLOCK_KEY_DIGITS = 10;
 
+// This is the maximum number of cached blocks per file.
+const CACHE_SIZE = 16;
+
 export class IndexedDbVFS extends VFS.Base {
   name = 'idb';
   mapIdToFile = new Map();
@@ -25,14 +28,48 @@ export class IndexedDbVFS extends VFS.Base {
     }).then(db => this.db = db);
   }
 
-  getBlock(store, file, index) {
+  async getBlock(store, file, index) {
     const key = this._blockKey(file.meta.name, index);
-    return idb(store.get(key));
+    if (file.cache.has(key)) {
+      // Move the cache entry to the end of the map.
+      const block = file.cache.get(key);
+      file.cache.delete(key);
+      file.cache.set(key, block);
+      return block.data;
+    }
+
+    // Cache miss, fetch from IDB.
+    const blockData = await idb(store.get(key));
+    file.cache.set(key, { data: blockData });
+    this.purgeCache(store, file);
+    return blockData;
   }
 
-  putBlock(store, file, index, block) {
+  putBlock(store, file, index, blockData, options) {
     const key = this._blockKey(file.meta.name, index);
-    return idb(store.put(block, key));
+    file.cache.delete(key);
+    file.cache.set(key, { data: blockData, dirty: true });
+    this.purgeCache(store, file);
+  }
+
+  purgeCache(store, file, size = CACHE_SIZE) {
+    const keys = Array.from(file.cache.keys()).slice(0, -size);
+    for (const key of keys) {
+      const block = file.cache.get(key);
+      file.cache.delete(key);
+      if (block.dirty) {
+        idb(store.put(block.data, key));
+      }
+    }
+  }
+
+  async flushCache(store, file) {
+    for (const [key, block] of file.cache.entries()) {
+      if (block.dirty) {
+        await idb(store.put(block.data, key));
+        block.dirty = false;
+      }
+    }
   }
 
   xOpen(name, fileId, flags, pOutFlags) {
@@ -60,7 +97,11 @@ export class IndexedDbVFS extends VFS.Base {
         }
       }
 
-      const file = { meta, flags };
+      const file = {
+        meta,
+        flags,
+        cache: new Map()
+      };
 
       // Put the file in the opened files map.
       this.mapIdToFile.set(fileId, file);
@@ -94,7 +135,7 @@ export class IndexedDbVFS extends VFS.Base {
       let arrayOffset = 0;
       if (nRemaining) {
         let fileOffset = iOffset;
-        const store = this.db.transaction('blocks', 'readonly').objectStore('blocks');
+        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
         while (nRemaining) {
           const blockIndex = Math.floor(fileOffset / meta.blockSize);
           const blockOffset = fileOffset % meta.blockSize;
@@ -183,8 +224,12 @@ export class IndexedDbVFS extends VFS.Base {
 
   xSync(fileId, flags) {
     return this.handleAsync(async () => {
-      const meta = this.mapIdToFile.get(fileId).meta;
+      const file = this.mapIdToFile.get(fileId);
+      const meta = file.meta;
       await this._putMeta(meta.name, meta);
+
+      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+      await this.flushCache(store, file);
       return VFS.SQLITE_OK;
     });
   }
@@ -201,6 +246,9 @@ export class IndexedDbVFS extends VFS.Base {
       // Update metadata.
       const file = this.mapIdToFile.get(fileId);
       file.meta = await this._getMeta(file.meta.name);
+
+      // TODO: Retain cache if file not changed.
+      file.cache.clear();
       return VFS.SQLITE_OK;
     });
   }
@@ -217,7 +265,6 @@ export class IndexedDbVFS extends VFS.Base {
   xDeviceCharacteristics(fileId) {
     return VFS.SQLITE_IOCAP_ATOMIC |
            VFS.SQLITE_IOCAP_SAFE_APPEND |
-           VFS.SQLITE_IOCAP_SEQUENTIAL |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
