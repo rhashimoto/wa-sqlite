@@ -51,6 +51,7 @@ const DB_NAME = "myDB";
     const t = tag(sqlite3, db);
     mapNameToTag.set(key, t);
   }
+  await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
   await addTag('idb', sqlite3a, 'idb');
