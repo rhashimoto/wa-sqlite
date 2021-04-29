@@ -68,6 +68,16 @@ function shared(ready) {
     const resultB = await sql`SELECT COUNT(*) FROM goog`;
     expect(resultB[0][0]).toBe(resultA[0][0]);
   });
+
+  it('resize', async function() {
+    // Load data into the database.
+    await loadSampleTable(sqlite3, db);
+    await sql`DELETE FROM goog WHERE Close > Open`;
+    await sql`VACUUM`;
+
+    const result = await sql`SELECT COUNT(*) FROM goog`;
+    expect(result[0][0]).toBeGreaterThan(0);
+  });
 }
 
 describe('MemoryVFS', function() {
