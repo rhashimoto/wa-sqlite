@@ -93,7 +93,8 @@ export class IndexedDbVFS extends VFS.Base {
           meta = {
             name,
             size: 0,
-            blockSize: BLOCK_SIZE
+            blockSize: BLOCK_SIZE,
+            syncs: 0
           };
           store.put(meta, this._metaKey(name));
         } else {
@@ -104,6 +105,7 @@ export class IndexedDbVFS extends VFS.Base {
       const file = {
         meta,
         flags,
+        lockType: VFS.SQLITE_LOCK_NONE,
         cache: new Map()
       };
 
@@ -228,12 +230,14 @@ export class IndexedDbVFS extends VFS.Base {
 
   xSync(fileId, flags) {
     return this.handleAsync(async () => {
+      // Write blocks before updating file size metadata.
       const file = this.mapIdToFile.get(fileId);
-      const meta = file.meta;
-      await this._putMeta(meta.name, meta);
-
       const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
       await this.flushCache(store, file);
+
+      file.meta.syncs = ++file.meta.syncs >>> 0;
+      await this._putMeta(file.meta.name, file.meta);
+
       return VFS.SQLITE_OK;
     });
   }
@@ -247,17 +251,24 @@ export class IndexedDbVFS extends VFS.Base {
 
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
-      // Update metadata.
       const file = this.mapIdToFile.get(fileId);
-      file.meta = await this._getMeta(file.meta.name);
+      if (flags && file.lockType === VFS.SQLITE_LOCK_NONE) {
+        const syncs = file.meta.syncs;
+        file.meta = await this._getMeta(file.meta.name);
 
-      // TODO: Retain cache if file not changed.
-      file.cache.clear();
+        if (file.meta.syncs !== syncs) {
+          // Another connection has synced this file.
+          file.cache.clear();
+        }
+      }
+      file.lockType = flags;
       return VFS.SQLITE_OK;
     });
   }
 
   xUnlock(fileId, flags) {
+    const file = this.mapIdToFile.get(fileId);
+    file.lockType = flags;
     return VFS.SQLITE_OK;
   }
 

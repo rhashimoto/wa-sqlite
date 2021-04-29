@@ -37,6 +37,14 @@ export const SQLITE_OPEN_PRIVATECACHE = 0x00040000;
 export const SQLITE_OPEN_WAL = 0x00080000;
 export const SQLITE_OPEN_NOFOLLOW = 0x01000000;
 
+// Locking levels.
+// https://www.sqlite.org/c3ref/c_lock_exclusive.html
+export const SQLITE_LOCK_NONE = 0;
+export const SQLITE_LOCK_SHARED = 1;
+export const SQLITE_LOCK_RESERVED = 2;
+export const SQLITE_LOCK_PENDING = 3;
+export const SQLITE_LOCK_EXCLUSIVE = 4;
+
 // Device characteristics.
 // https://www.sqlite.org/c3ref/c_iocap_atomic.html
 export const SQLITE_IOCAP_ATOMIC = 0x00000001;
