@@ -5,8 +5,8 @@ import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 import { SQLITE_DONE, SQLITE_OK } from '../src/VFS.js';
 
-const LIBVERSION = '3.33.0';
-const LIBVERSION_NUMBER = 3033000;
+const LIBVERSION = '3.35.5';
+const LIBVERSION_NUMBER = 3035005;
 
 // Shared test definitions for sync and async.
 function shared(sqlite3Ready) {

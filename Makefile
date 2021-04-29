@@ -1,8 +1,8 @@
 # dependencies
 
-SQLITE_AMALGAMATION = sqlite-amalgamation-3330000
-SQLITE_AMALGAMATION_ZIP_URL = https://www.sqlite.org/2020/${SQLITE_AMALGAMATION}.zip
-SQLITE_AMALGAMATION_ZIP_SHA3 = fb7dfd39009fb40519097b0b1a6af5e8acb17006c848f6d6b7707a4a0c3885c3
+SQLITE_AMALGAMATION = sqlite-amalgamation-3350500
+SQLITE_AMALGAMATION_ZIP_URL = https://www.sqlite.org/2021/${SQLITE_AMALGAMATION}.zip
+SQLITE_AMALGAMATION_ZIP_SHA3 = 8175cba8e28c2274aa6f8305076116622a4ecb7829673b92290dc047fba9bba6
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
