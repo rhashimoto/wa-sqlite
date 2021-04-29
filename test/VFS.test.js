@@ -5,6 +5,7 @@ import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
+import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
 import GOOG from './GOOG.js';
 
@@ -69,7 +70,7 @@ function shared(ready) {
   });
 }
 
-describe('VFS', function() {
+describe('MemoryVFS', function() {
   let resolveReady;
   let ready = new Promise(resolve => {
     resolveReady = resolve;
@@ -86,7 +87,7 @@ describe('VFS', function() {
   shared(ready);
 });
 
-describe('VFS async', function() {
+describe('MemoryAsyncVFS', function() {
   let resolveReady;
   let ready = new Promise(resolve => {
     resolveReady = resolve;
@@ -96,6 +97,23 @@ describe('VFS async', function() {
 
     const sqlite3 = SQLite.Factory(SQLiteModule);
     const vfs = new MemoryAsyncVFS();
+    sqlite3.vfs_register(vfs, false);
+    resolveReady({ sqlite3 , vfs });
+  });
+
+  shared(ready);
+});
+
+describe('IndexedDbVFS', function() {
+  let resolveReady;
+  let ready = new Promise(resolve => {
+    resolveReady = resolve;
+  });
+  beforeAll(async function() {
+    const SQLiteModule = await SQLiteAsyncModuleFactory();
+
+    const sqlite3 = SQLite.Factory(SQLiteModule);
+    const vfs = new IndexedDbVFS();
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });
   });
