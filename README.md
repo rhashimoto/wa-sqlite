@@ -4,6 +4,7 @@ This is a WebAssembly build of SQLite with experimental support for writing SQLi
 ## Prerequisites
 * Building on Linux is known to work, compatibility with other platforms is unknown.
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) - Note that there is a [regression in EMSDK 2.0.14](https://github.com/emscripten-core/emscripten/issues/13858) that prevents building.
+* `curl`, `make`, `openssl`, `sed`, `unzip`
 
 ## Build
 * Make sure `emcc` works.
