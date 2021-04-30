@@ -1,4 +1,6 @@
 # Acknowledgments
+This project does not use code from [SQL.js](https://sql.js.org/#/), but is inspired and influenced by it.
+
 This project uses or derives material from the following sources.
 
 ## [sqlite-wasm](https://github.com/mandel59/sqlite-wasm)
