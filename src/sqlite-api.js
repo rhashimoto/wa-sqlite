@@ -87,15 +87,6 @@ export class SQLiteError extends Error {
 
 const async = true;
 
-function trace(...args) {
-  // const date = new Date();
-  // const t = date.getHours().toString().padStart(2, '0') + ':' +
-  //           date.getMinutes().toString().padStart(2, '0') + ':' +
-  //           date.getSeconds().toString().padStart(2, '0') + '.' +
-  //           date.getMilliseconds().toString().padStart(3, '0');
-  // console.debug(t, ...args);
-}
-
 /**
  * @typedef {Object} SQLiteAPI
  * 
@@ -133,7 +124,7 @@ function trace(...args) {
  * 
  * @property {(
  *  stmt: number,
- *  value: number) => number} bind_null
+ *  i: number) => number} bind_null
  *  See https://www.sqlite.org/c3ref/bind_blob.html
  * 
  * @property {(
@@ -217,9 +208,11 @@ function trace(...args) {
  *  nArg: number,
  *  eTextRep: number,
  *  pApp: number,
- *  xFunc: function,
- *  xStep: function,
- *  xFinal: function) => number} create_function 
+ *  xFunc: (context: number, values: Uint32Array) => void?,
+ *  xStep: (context: number, values: Uint32Array) => void?,
+ *  xFinal: (context: number) => void?) => number} create_function Create or
+ *  redefine SQL functions.
+ *  See https://sqlite.org/c3ref/create_function.html
  * 
  * @property {(
  *  stmt: number) => number} data_count Number of columns in a result set.
@@ -270,6 +263,7 @@ function trace(...args) {
  * @property {(
  *  context: number,
  *  value: Int8Array|number|null|string) => void} result 
+ * 
  * @property {(
  *  context: number,
  *  value: Int8Array) => void} result_blob Setting the result of an SQL function.
@@ -374,7 +368,7 @@ function trace(...args) {
  * @returns {SQLiteAPI}
  */
 export function Factory(Module) {
-  const api = {};
+  /** @type {SQLiteAPI} */ const api = {};
 
   const sqliteFreeAddress = Module._getSqliteFree();
 
@@ -661,17 +655,6 @@ export function Factory(Module) {
     };
   })();
 
-  api.data_count = (function() {
-    const fname = 'sqlite3_data_count';
-    const f = Module.cwrap(fname, ...decl('n:n'));
-    return function(stmt) {
-      verifyStatement(stmt);
-      const result = f(stmt);
-      // trace(fname, result);
-      return result;
-    };
-  })();
-
   api.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
     verifyDatabase(db);
     if (xFunc && !xStep && !xFinal) {
@@ -686,6 +669,17 @@ export function Factory(Module) {
 
     throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
   };
+
+  api.data_count = (function() {
+    const fname = 'sqlite3_data_count';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(stmt) {
+      verifyStatement(stmt);
+      const result = f(stmt);
+      // trace(fname, result);
+      return result;
+    };
+  })();
 
   api.exec = async function(db, sql, callback) {
     const str = api.str_new(db, sql);
@@ -793,15 +787,6 @@ export function Factory(Module) {
     };
   })();
 
-  api.row = function(stmt) {
-    const row = [];
-    const nColumns = api.data_count(stmt);
-    for (let i = 0; i < nColumns; ++i) {
-      row.push(api.column(stmt, i));
-    }
-    return row;
-  };
-
   api.result = function(context, value) {
     switch (typeof value) {
       case 'number':
@@ -821,7 +806,7 @@ export function Factory(Module) {
           api.result_null(context);
         } else {
           console.warn('unknown result converted to null', value);
-          api.bind_null(context);
+          api.result_null(context);
         }
         break;
     }
@@ -870,6 +855,15 @@ export function Factory(Module) {
       f(context, ptr, -1, sqliteFreeAddress);
     };
   })();
+
+  api.row = function(stmt) {
+    const row = [];
+    const nColumns = api.data_count(stmt);
+    for (let i = 0; i < nColumns; ++i) {
+      row.push(api.column(stmt, i));
+    }
+    return row;
+  };
 
   api.sql = (function() {
     const fname = 'sqlite3_sql';
@@ -930,13 +924,6 @@ export function Factory(Module) {
     strings.set(str, data);
   };
 
-  api.str_value = function(str) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLITE_MISUSE);
-    }
-    return strings.get(str).offset;
-  };
-
   api.str_finish = function(str) {
     if (!strings.has(str)) {
       throw new SQLiteError('not a string', SQLITE_MISUSE);
@@ -944,6 +931,13 @@ export function Factory(Module) {
     const data = strings.get(str);
     strings.delete(str);
     Module._sqlite3_free(data.offset);
+  };
+
+  api.str_value = function(str) {
+    if (!strings.has(str)) {
+      throw new SQLiteError('not a string', SQLITE_MISUSE);
+    }
+    return strings.get(str).offset;
   };
 
   api.user_data = function(context) {
@@ -1045,6 +1039,15 @@ export function Factory(Module) {
   }
 
   return api;
+}
+
+function trace(...args) {
+  // const date = new Date();
+  // const t = date.getHours().toString().padStart(2, '0') + ':' +
+  //           date.getMinutes().toString().padStart(2, '0') + ':' +
+  //           date.getSeconds().toString().padStart(2, '0') + '.' +
+  //           date.getMilliseconds().toString().padStart(3, '0');
+  // console.debug(t, ...args);
 }
 
 // Helper function to use a more compact signature specification.
