@@ -11,10 +11,10 @@ const BLOCK_KEY_DIGITS = 10;
 // This is the maximum number of cached blocks per file.
 const CACHE_SIZE = 16;
 
-// Use IndexedDB as a block device. This class does not implement locking
-// so although it can be used for multiple connections to a database, it
-// is not safe for concurrent transactions (arbitration must be provided
-// at the application level).
+// Use IndexedDB as a block device. This class does not wait for a lock;
+// it returns SQLITE_BUSY if the database is already locked. This can
+// result in an orphaned lock, e.g. if an application holding the lock
+// exits or crashes during a transaction.
 export class IndexedDbVFS extends VFS.Base {
   name = 'idb';
   mapIdToFile = new Map();
@@ -85,8 +85,9 @@ export class IndexedDbVFS extends VFS.Base {
 
       // If creating the database file, get and put must be in the same
       // transaction to prevent simultaneous creation (unlikely but possible).
+      const key = this._metaKey(name);
       const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-      let meta = await idb(store.get(this._metaKey(name)));
+      let meta = await idb(store.get(key));
       if (!meta) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
           // Create a new metadata object.
@@ -94,9 +95,10 @@ export class IndexedDbVFS extends VFS.Base {
             name,
             size: 0,
             blockSize: BLOCK_SIZE,
+            isLocked: false,
             syncs: 0
           };
-          store.put(meta, this._metaKey(name));
+          store.put(meta, key);
         } else {
           return VFS.SQLITE_CANTOPEN;
         }
@@ -121,7 +123,7 @@ export class IndexedDbVFS extends VFS.Base {
       const file = this.mapIdToFile.get(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const file = this.mapIdToFile.get(fileId);
-        await this._delete(this._metaKey(file.name));
+        await this._delete(this._metaKey(file.meta.name));
       }
       this.mapIdToFile.delete(fileId);
       return VFS.SQLITE_OK;
@@ -254,7 +256,15 @@ export class IndexedDbVFS extends VFS.Base {
       const file = this.mapIdToFile.get(fileId);
       if (flags && file.lockType === VFS.SQLITE_LOCK_NONE) {
         const syncs = file.meta.syncs;
-        file.meta = await this._getMeta(file.meta.name);
+
+        const key = this._metaKey(file.meta.name)
+        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+        file.meta = await idb(store.get(key));
+        if (file.meta.isLocked) {
+          return VFS.SQLITE_BUSY;
+        }
+        file.meta.isLocked = true;
+        idb(store.put(file.meta, key));
 
         if (file.meta.syncs !== syncs) {
           // Another connection has synced this file.
@@ -269,6 +279,13 @@ export class IndexedDbVFS extends VFS.Base {
   xUnlock(fileId, flags) {
     const file = this.mapIdToFile.get(fileId);
     file.lockType = flags;
+
+    if (flags === VFS.SQLITE_LOCK_NONE) {
+      const key = this._metaKey(file.meta.name)
+      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+      file.meta.isLocked = false;
+      idb(store.put(file.meta, key));
+    }
     return VFS.SQLITE_OK;
   }
 
