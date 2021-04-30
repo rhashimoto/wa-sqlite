@@ -13,6 +13,8 @@ export const SQLITE_NOTFOUND = 12;
 export const SQLITE_CANTOPEN = 14;
 export const SQLITE_MISUSE = 21;
 export const SQLITE_NOTADB = 26;
+export const SQLITE_NOTICE = 27;
+export const SQLITE_WARNING = 28;
 export const SQLITE_ROW = 100;
 export const SQLITE_DONE = 101;
 
@@ -393,9 +395,9 @@ export function Factory(Module) {
     }
   }
 
-  const statements = new Map();
+  const mapStmtToDB = new Map();
   function verifyStatement(stmt) {
-    if (!statements.has(stmt)) {
+    if (!mapStmtToDB.has(stmt)) {
       throw new SQLiteError('not a statement', SQLITE_MISUSE);
     }
   }
@@ -428,6 +430,9 @@ export function Factory(Module) {
           return api.bind_blob(stmt, i, value);
         } else if (value === null) {
           return api.bind_null(stmt, i);
+        } else if (value === undefined) {
+          // Existing binding (or NULL) will be used.
+          return SQLITE_NOTICE;
         } else {
           console.warn('unknown binding converted to null', value);
           return api.bind_null(stmt, i);
@@ -444,7 +449,7 @@ export function Factory(Module) {
       Module.HEAP8.subarray(ptr).set(value);
       const result = f(stmt, i, ptr, value.byteLength, sqliteFreeAddress);
       // trace(fname, result);
-      return result;
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -466,7 +471,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const result = f(stmt, i, value);
       // trace(fname, result);
-      return result;
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -477,7 +482,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const result = f(stmt, i, value);
       // trace(fname, result);
-      return result;
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -488,7 +493,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const result = f(stmt, i);
       // trace(fname, result);
-      return result;
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -511,7 +516,7 @@ export function Factory(Module) {
       const ptr = createUTF8(value);
       const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
       // trace(fname, result);
-      return result;
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -719,9 +724,9 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const result = await f(stmt);
 
-      const statement = statements.get(stmt);
-      statements.delete(stmt)
-      return check(fname, result, statement);
+      const db = mapStmtToDB.get(stmt);
+      mapStmtToDB.delete(stmt)
+      return check(fname, result, db);
     };
   })();
 
@@ -770,7 +775,7 @@ export function Factory(Module) {
 
       const stmt = Module.getValue(tmpPtr[0], 'i32');
       if (stmt) {
-        statements.set(stmt, db);
+        mapStmtToDB.set(stmt, db);
         return { stmt, sql: Module.getValue(tmpPtr[1], 'i32') };
       }
       return null;
@@ -783,7 +788,7 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      return check(fname, result, statements.get(stmt));
+      return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
 
@@ -819,7 +824,7 @@ export function Factory(Module) {
     return function(context, value) {
       const ptr = Module._sqlite3_malloc(value.byteLength);
       Module.HEAP8.subarray(ptr).set(value);
-      f(context, ptr, value.byteLength, sqliteFreeAddress);
+      f(context, ptr, value.byteLength, sqliteFreeAddress); // void return
     };
   })();
 
@@ -852,7 +857,7 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(context, value) {
       const ptr = createUTF8(value);
-      f(context, ptr, -1, sqliteFreeAddress);
+      f(context, ptr, -1, sqliteFreeAddress); // void return
     };
   })();
 
@@ -882,7 +887,7 @@ export function Factory(Module) {
     return async function(stmt) {
       verifyStatement(stmt);
       const result = await f(stmt);
-      return check(fname, result, statements.get(stmt), [SQLITE_ROW, SQLITE_DONE]);
+      return check(fname, result, mapStmtToDB.get(stmt), [SQLITE_ROW, SQLITE_DONE]);
     };
   })();
 
@@ -1025,8 +1030,8 @@ export function Factory(Module) {
   })();
 
   api.vfs_register = function(vfs, makeDefault) {
-    Module.registerVFS(vfs, makeDefault);
-    return SQLITE_OK;
+    const result = Module.registerVFS(vfs, makeDefault);
+    return check('sqlite3_vfs_register', result);
   };
 
   function check(fname, result, db = null, allowed = [SQLITE_OK]) {

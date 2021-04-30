@@ -20,9 +20,15 @@ const methods = {
       }
 
       const mxPathName = vfs.mxPathName ?? 64;
-      const id = ccall('register_vfs', 'number', ['string', 'number', 'number'],
-        [vfs.name, mxPathName, makeDefault ? 1 : 0]);
-      mapIdToVFS.set(id, vfs);
+      const out = Module['_malloc'](4);
+      const result = ccall('register_vfs', 'number', ['string', 'number', 'number', 'number'],
+        [vfs.name, mxPathName, makeDefault ? 1 : 0, out]);
+      if (!result) {
+        const id = getValue(out, 'i32');
+        mapIdToVFS.set(id, vfs);
+      }
+      Module['_free'](out);
+      return result;
     };
 
     const closedFiles = hasAsyncify ? new Set() : null;

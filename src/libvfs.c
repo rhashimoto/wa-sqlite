@@ -59,11 +59,16 @@ static int xFullPathname(sqlite3_vfs* vfs, const char* zName, int nOut, char* zO
   return SQLITE_OK;
 }
 
-const sqlite3_vfs* EMSCRIPTEN_KEEPALIVE register_vfs(
+const int EMSCRIPTEN_KEEPALIVE register_vfs(
   const char* zName,
   int mxPathName,
-  int makeDefault) {
-  sqlite3_vfs* vfs = (sqlite3_vfs*)sqlite3_malloc(sizeof(sqlite3_vfs));
+  int makeDefault,
+  sqlite3_vfs** ppVFS) {
+  sqlite3_vfs* vfs = *ppVFS = (sqlite3_vfs*)sqlite3_malloc(sizeof(sqlite3_vfs));
+  if (!vfs) {
+    return SQLITE_NOMEM;
+  }
+
   vfs->iVersion = 1;
   vfs->szOsFile = sizeof(sqlite3_file);
   vfs->mxPathname = mxPathName;
@@ -88,8 +93,12 @@ const sqlite3_vfs* EMSCRIPTEN_KEEPALIVE register_vfs(
   COPY_FIELD(xGetLastError);
 #undef COPY_FIELD
 
-  sqlite3_vfs_register(vfs, makeDefault);
-  return vfs;
+  const int result = sqlite3_vfs_register(vfs, makeDefault);
+  if (result != SQLITE_OK) {
+    *ppVFS = 0;
+    sqlite3_free(vfs);
+  }
+  return result;
 }
 
 void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
