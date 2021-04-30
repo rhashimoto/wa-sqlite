@@ -3,7 +3,6 @@ import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 // @ts-ignore
 import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { SQLITE_DONE, SQLITE_OK } from '../src/VFS.js';
 
 const LIBVERSION = '3.35.5';
 const LIBVERSION_NUMBER = 3035005;
@@ -69,16 +68,16 @@ function shared(sqlite3Ready) {
     const cNull = null;
     const cText = 'foobar';
 
-    result = sqlite3.bind(prepared.stmt, [
+    result = sqlite3.bind_collection(prepared.stmt, [
       'array', cBlob, cDouble, cInt, cNull, cText
     ]);
-    expect(result).toBe(SQLITE_OK);
+    expect(result).toBe(SQLite.SQLITE_OK);
     result = await sqlite3.step(prepared.stmt);
-    expect(result).toBe(SQLITE_DONE);
+    expect(result).toBe(SQLite.SQLITE_DONE);
     result = sqlite3.reset(prepared.stmt);
-    expect(result).toBe(SQLITE_OK);
+    expect(result).toBe(SQLite.SQLITE_OK);
 
-    result = sqlite3.bind(prepared.stmt, {
+    result = sqlite3.bind_collection(prepared.stmt, {
       ':Id': 'object',
       ':cBlob': cBlob,
       ':cDouble': cDouble,
@@ -86,14 +85,14 @@ function shared(sqlite3Ready) {
       ':cNull': cNull,
       ':cText': cText
     });
-    expect(result).toBe(SQLITE_OK);
+    expect(result).toBe(SQLite.SQLITE_OK);
     result = await sqlite3.step(prepared.stmt);
-    expect(result).toBe(SQLITE_DONE);
+    expect(result).toBe(SQLite.SQLITE_DONE);
     result = sqlite3.reset(prepared.stmt);
-    expect(result).toBe(SQLITE_OK);
+    expect(result).toBe(SQLite.SQLITE_OK);
 
     result = await sqlite3.finalize(prepared.stmt);
-    expect(result).toBe(SQLITE_OK);
+    expect(result).toBe(SQLite.SQLITE_OK);
 
     const results = [];
     await sqlite3.exec(
@@ -174,6 +173,83 @@ function shared(sqlite3Ready) {
 
     sqlite3.finalize(prepared.stmt);
     sqlite3.str_finish(str);
+  });
+
+  it('function', async function() {
+    // Populate a table with each value type, one value per row.
+    await sqlite3.exec(db, `CREATE TABLE tbl (value)`);
+    const str = sqlite3.str_new(db, `
+      INSERT INTO tbl VALUES (?), (?), (?), (?), (?);
+    `);
+    const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
+
+    let result;
+    const vBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const vDouble = Math.PI;
+    const vInt = 42;
+    const vNull = null;
+    const vText = 'foobar';
+    result = sqlite3.bind_collection(prepared.stmt, [
+      vBlob, vDouble, vInt, vNull, vText
+    ]);
+    expect(result).toBe(SQLite.SQLITE_OK);
+    result = await sqlite3.step(prepared.stmt);
+    expect(result).toBe(SQLite.SQLITE_DONE);
+    result = await sqlite3.finalize(prepared.stmt);
+    expect(result).toBe(SQLite.SQLITE_OK);
+
+    // This function evaluates to its second argument.
+    let appData = null;
+    function f(context, values) {
+      // Unlikely anyone will ever use this call but check it anyway.
+      appData = sqlite3.user_data(context);
+
+      const value = sqlite3.value(values[1]);
+      sqlite3.result(context, value);
+    }
+    result = sqlite3.create_function(
+      db, "MyFunc", 2, SQLite.SQLITE_UTF8, 0x1234, f, null, null);
+    expect(result).toBe(SQLite.SQLITE_OK);
+
+    // Apply the function to each row.
+    const values = [];
+    await sqlite3.exec(db, `SELECT MyFunc(0, value) FROM tbl`, row => {
+      // Blob results do not remain valid so copy to retain.
+      const value = row[0] instanceof Int8Array ? Array.from(row[0]) : row[0];
+      values.push(value);
+    });
+    const expected = [Array.from(vBlob), vDouble, vInt, vNull, vText];
+    expect(values).toEqual(expected);
+
+    expect(appData).toBe(0x1234);
+  });
+
+  it('aggregate', async function() {
+    // A real aggregate function would need to manage separate
+    // invocations by keying off context but that is unnecessary
+    // for this test.
+    let sum = 0;
+    function SumStep(context, values) {
+      const value = sqlite3.value_int(values[0]);
+      sum += value;
+    }
+    function SumFinal(context) {
+      sqlite3.result(context, sum);
+    }
+
+    let result;
+    result = sqlite3.create_function(
+      db, "MySum", 1, SQLite.SQLITE_UTF8, 0x1234, null, SumStep, SumFinal);
+    expect(result).toBe(SQLite.SQLITE_OK);
+
+    await sqlite3.exec(db, `
+      CREATE TABLE tbl (value);
+      INSERT INTO tbl VALUES (1), (2), (3), (4);
+      SELECT MySum(value) FROM tbl;
+    `, row => {
+      result = row[0];
+    });
+    expect(result).toBe(10);
   });
 }
 

@@ -71,6 +71,13 @@ export const SQLITE_NULL = 5;
 export const SQLITE_STATIC = 0;
 export const SQLITE_TRANSIENT = -1;
 
+// Text encodings.
+// https://sqlite.org/c3ref/c_any.html
+export const SQLITE_UTF8 = 1     /* IMP: R-37514-35566 */
+export const SQLITE_UTF16LE = 2  /* IMP: R-03371-37637 */
+export const SQLITE_UTF16BE = 3  /* IMP: R-51971-34154 */
+export const SQLITE_UTF16 = 4    /* Use native byte order */
+
 export class SQLiteError extends Error {
   constructor(message, code) {
     super(message);
@@ -94,9 +101,16 @@ function trace(...args) {
  * 
  * @property {(
  *  stmt: number,
- *  bindings: object|Array<null|number|string|Int8Array|Array<number>>) => number} bind
+ *  bindings: object|Array<null|number|string|Int8Array|Array<number>>) => number} bind_collection
  *  Binds a collection of values to a statement. This is a convenience
  *  function for Javascript.
+ * 
+ * @property {(
+ *  stmt: number,
+ *  i: number,
+ *  value: Int8Array|Array<number>|number|string|null) => number} bind
+ *  Bind value to prepared statement. This is a convenience function
+ *  for Javascript.
  * 
  * @property {(
  *  stmt: number,
@@ -148,7 +162,7 @@ function trace(...args) {
  * 
  * @property {(
  *  stmt: number,
- *  iCol) => number|string|Int8Array|null} column Returns a query
+ *  iCol: number) => number|string|Int8Array|null} column Returns a query
  *  column value. This is a convenience function for Javascript.
  * 
  * @property {(
@@ -198,6 +212,16 @@ function trace(...args) {
  *  See https://www.sqlite.org/c3ref/column_blob.html
  * 
  * @property {(
+ *  db: number,
+ *  zFunctionName: string,
+ *  nArg: number,
+ *  eTextRep: number,
+ *  pApp: number,
+ *  xFunc: function,
+ *  xStep: function,
+ *  xFinal: function) => number} create_function 
+ * 
+ * @property {(
  *  stmt: number) => number} data_count Number of columns in a result set.
  *  See https://www.sqlite.org/c3ref/data_count.html
  * 
@@ -244,6 +268,33 @@ function trace(...args) {
  *  See https://www.sqlite.org/c3ref/reset.html
  * 
  * @property {(
+ *  context: number,
+ *  value: Int8Array|number|null|string) => void} result 
+ * @property {(
+ *  context: number,
+ *  value: Int8Array) => void} result_blob Setting the result of an SQL function.
+ *  See https://sqlite.org/c3ref/result_blob.html
+ * 
+ * @property {(
+ *  context: number,
+ *  value: number) => void} result_double Setting the result of an SQL function.
+ *  See https://sqlite.org/c3ref/result_blob.html
+ * 
+ * @property {(
+ *  context: number,
+ *  value: number) => void} result_int Setting the result of an SQL function.
+ *  See https://sqlite.org/c3ref/result_blob.html
+ * 
+ * @property {(
+ *  context: number) => void} result_null Setting the result of an SQL function.
+ *  See https://sqlite.org/c3ref/result_blob.html
+ * 
+ * @property {(
+ *  context: number,
+ *  value:string) => void} result_text Setting the result of an SQL function.
+ *  See https://sqlite.org/c3ref/result_blob.html
+ * 
+ * @property {(
  *  stmt: number) => Array<any>} row Returns row data for a prepared
  *  statement. This is a convenience function for Javascript.
  * 
@@ -276,6 +327,39 @@ function trace(...args) {
  * 
  * @property {(str: number) => void} str_finish Finalize a dynamic string.
  *  See https://www.sqlite.org/c3ref/str_append.html
+ * 
+ * @property {(context: number) => any} user_data User data for functions.
+ *  See https://sqlite.org/c3ref/user_data.html
+ * 
+ * @property {(
+ *  pValue: number) => number|string|Int8Array|null} value Returns a function
+ *  argument value. This is a convenience function for Javascript.
+ * 
+ * @property {(
+ *  pValue: number) => Int8Array} value_blob Obtaining SQL values.
+ *  Note that the result will be valid until the next SQLite call. For
+ *  longer retention, make a copy.
+ *  See https://sqlite.org/c3ref/value_blob.html
+ * 
+ * @property {(
+ *  pValue: number) => number} value_bytes Obtaining SQL values.
+ *  See https://sqlite.org/c3ref/value_blob.html
+ * 
+ * @property {(
+ *  pValue: number) => number} value_double Obtaining SQL values.
+ *  See https://sqlite.org/c3ref/value_blob.html
+ * 
+ * @property {(
+ *  pValue: number) => number} value_int Obtaining SQL values.
+ *  See https://sqlite.org/c3ref/value_blob.html
+ * 
+ * @property {(
+ *  pValue: number) => string} value_text Obtaining SQL values.
+ *  See https://sqlite.org/c3ref/value_blob.html
+ * 
+ * @property {(
+ *  pValue: number) => number} value_type Obtaining SQL values.
+ *  See https://sqlite.org/c3ref/value_blob.html
  * 
  * @property {(vfs: any, makeDefault?: boolean) => number} vfs_register
  *  Register a new Virtual File System.
@@ -322,37 +406,39 @@ export function Factory(Module) {
     }
   }
 
-  api.bind = function(stmt, bindings) {
+  api.bind_collection = function(stmt, bindings) {
     verifyStatement(stmt);
     const isArray = Array.isArray(bindings);
     const nBindings = api.bind_parameter_count(stmt);
     for (let i = 1; i <= nBindings; ++i) {
       const key = isArray ? i - 1 : api.bind_parameter_name(stmt, i);
       const value = bindings[key];
-      switch (typeof value) {
-        case 'number':
-          if (value === (value | 0)) {
-            api.bind_int(stmt, i, value);
-          } else {
-            api.bind_double(stmt, i, value);
-          }
-          break;
-        case 'string':
-          api.bind_text(stmt, i, value);
-          break;
-        default:
-          if (value instanceof Int8Array || Array.isArray(value)) {
-            api.bind_blob(stmt, i, value);
-          } else if (value === null) {
-            api.bind_null(stmt, i);
-          } else {
-            console.warn('unknown binding converted to null', value);
-            api.bind_null(stmt, i);
-          }
-          break;
-      }
+      api.bind(stmt, i, value);
     }
     return SQLITE_OK;
+  };
+
+  api.bind = function(stmt, i, value) {
+    verifyStatement(stmt);
+    switch (typeof value) {
+      case 'number':
+        if (value === (value | 0)) {
+          return api.bind_int(stmt, i, value);
+        } else {
+          return api.bind_double(stmt, i, value);
+        }
+      case 'string':
+        return api.bind_text(stmt, i, value);
+      default:
+        if (value instanceof Int8Array || Array.isArray(value)) {
+          return api.bind_blob(stmt, i, value);
+        } else if (value === null) {
+          return api.bind_null(stmt, i);
+        } else {
+          console.warn('unknown binding converted to null', value);
+          return api.bind_null(stmt, i);
+        }
+    }
   };
 
   api.bind_blob = (function() {
@@ -586,6 +672,21 @@ export function Factory(Module) {
     };
   })();
 
+  api.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
+    verifyDatabase(db);
+    if (xFunc && !xStep && !xFinal) {
+      const result = Module.createFunction(db, zFunctionName, nArg, eTextRep, pApp, xFunc);
+      return check('sqlite3_create_function', result, db);
+    }
+
+    if (!xFunc && xStep && xFinal) {
+      const result = Module.createAggregate(db, zFunctionName, nArg, eTextRep, pApp, xStep, xFinal);
+      return check('sqlite3_create_function', result, db);
+    }
+
+    throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
+  }
+
   api.exec = async function(db, sql, callback) {
     const str = api.str_new(db, sql);
     try {
@@ -600,10 +701,10 @@ export function Factory(Module) {
         }
         try {
           // Step through the rows.
-          const columns = api.column_names(prepared.stmt);
+          const columns = callback ? api.column_names(prepared.stmt) : null;
           while (await api.step(prepared.stmt) === SQLITE_ROW) {
-            const row = api.row(prepared.stmt);
             if (callback) {
+              const row = api.row(prepared.stmt);
               await callback(row, columns);
             }
           }
@@ -701,6 +802,75 @@ export function Factory(Module) {
     return row;
   }
 
+  api.result = function(context, value) {
+    switch (typeof value) {
+      case 'number':
+        if (value === (value | 0)) {
+          api.result_int(context, value);
+        } else {
+          api.result_double(context, value);
+        }
+        break;
+      case 'string':
+        api.result_text(context, value);
+        break;
+      default:
+        if (value instanceof Int8Array || Array.isArray(value)) {
+          api.result_blob(context, value);
+        } else if (value === null) {
+          api.result_null(context);
+        } else {
+          console.warn('unknown result converted to null', value);
+          api.bind_null(context);
+        }
+        break;
+    }
+
+  }
+
+  api.result_blob = (function() {
+    const fname = 'sqlite3_result_blob';
+    const f = Module.cwrap(fname, ...decl('nnnn:n'));
+    return function(context, value) {
+      const ptr = Module._sqlite3_malloc(value.byteLength);
+      Module.HEAP8.subarray(ptr).set(value);
+      f(context, ptr, value.byteLength, sqliteFreeAddress);
+    };
+  })();
+
+  api.result_double = (function() {
+    const fname = 'sqlite3_result_double';
+    const f = Module.cwrap(fname, ...decl('nn:n'));
+    return function(context, value) {
+      f(context, value); // void return
+    };
+  })();
+
+  api.result_int = (function() {
+    const fname = 'sqlite3_result_int';
+    const f = Module.cwrap(fname, ...decl('nn:n'));
+    return function(context, value) {
+      f(context, value); // void return
+    };
+  })();
+
+  api.result_null = (function() {
+    const fname = 'sqlite3_result_null';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(context) {
+      f(context); // void return
+    };
+  })();
+
+  api.result_text = (function() {
+    const fname = 'sqlite3_result_text';
+    const f = Module.cwrap(fname, ...decl('nnnn:n'));
+    return function(context, value) {
+      const ptr = createUTF8(value);
+      f(context, ptr, -1, sqliteFreeAddress);
+    };
+  })();
+
   api.sql = (function() {
     const fname = 'sqlite3_sql';
     const f = Module.cwrap(fname, ...decl('n:s'));
@@ -775,6 +945,90 @@ export function Factory(Module) {
     strings.delete(str);
     Module._sqlite3_free(data.offset);
   };
+
+  api.user_data = function(context) {
+    return Module.getFunctionUserData(context);
+  };
+
+  api.value = function(pValue) {
+    const type = api.value_type(pValue);
+    switch (type) {
+      case SQLITE_BLOB:
+        return api.value_blob(pValue);
+      case SQLITE_FLOAT:
+        return api.value_double(pValue);
+      case SQLITE_INTEGER:
+        return api.value_int(pValue);
+      case SQLITE_NULL:
+        return null;
+      case SQLITE_TEXT:
+        return api.value_text(pValue);
+      default:
+        throw new SQLiteError('unknown type', type);
+    }
+  }
+
+  api.value_blob = (function() {
+    const fname = 'sqlite3_value_blob';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const nBytes = api.value_bytes(pValue);
+      const address = f(pValue);
+      const result = Module.HEAP8.subarray(address, address + nBytes);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.value_bytes = (function() {
+    const fname = 'sqlite3_value_bytes';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.value_double = (function() {
+    const fname = 'sqlite3_value_double';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.value_int = (function() {
+    const fname = 'sqlite3_value_int';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.value_text = (function() {
+    const fname = 'sqlite3_value_text';
+    const f = Module.cwrap(fname, ...decl('n:s'));
+    return function(pValue) {
+      const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  api.value_type = (function() {
+    const fname = 'sqlite3_value_type';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
 
   api.vfs_register = function(vfs, makeDefault) {
     Module.registerVFS(vfs, makeDefault);

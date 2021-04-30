@@ -26,3 +26,7 @@ declare var _vfsSync;
 declare var _vfsTruncate;
 declare var _vfsUnlock;
 declare var _vfsWrite;
+
+declare var _jsFunc;
+declare var _jsStep;
+declare var _jsFinal;
