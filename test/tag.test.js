@@ -1,7 +1,7 @@
 // @ts-ignore
 import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { tag } from '../src/tag.js';
+import { tag } from '../src/examples/tag.js';
 
 describe('tag', function() {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;

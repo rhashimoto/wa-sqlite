@@ -10,7 +10,7 @@ import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
-import { tag } from '../src/tag.js';
+import { tag } from '../src/examples/tag.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
 // This will need to be changed if using a package manager other than Yarn 2.
@@ -25,8 +25,6 @@ REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
 SELECT y * y FROM tbl WHERE x = 'bar';
 `.trim();
 
-const DB_NAME = "myDB";
-
 (async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
   const [SQLiteModule, SQLiteAsyncModule, editor] = await Promise.all([
@@ -39,12 +37,19 @@ const DB_NAME = "myDB";
   const sqlite3s = SQLite.Factory(SQLiteModule);
   const sqlite3a = SQLite.Factory(SQLiteAsyncModule);
 
-  // Register Virtual File Systems.
+  // Register Virtual File Systems with the SQLite runtimes. A
+  // synchronous VFS will work in both the synchronous and asynchronous
+  // runtimes; an asynchronous VFS will work only in the asynchronous
+  // runtime.
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IndexedDbVFS());
 
+  // Create the set of databases with respective runtime and VFS. For
+  // each database we generate a template tag function that is used
+  // to submit SQL queries. The tag is an example of an application-level
+  // API that can be built on top of the low-level SQLite API.
   const mapNameToTag = new Map();
   async function addTag(key, sqlite3, vfs) {
     const db = await sqlite3.open_v2(vfs, undefined, vfs);
@@ -56,6 +61,9 @@ const DB_NAME = "myDB";
   await addTag('mem-async', sqlite3a, 'memory-async');
   await addTag('idb', sqlite3a, 'idb');
 
+  // The selector widget determines the active template tag function.
+  // It is also attached to the window so SQL queries can be easily
+  // entered on the browser Dev Tools console.
   const selectDB = document.getElementById('vfs');
   let sql = window['sql'] = mapNameToTag.get(selectDB['value']);
 
@@ -70,6 +78,7 @@ const DB_NAME = "myDB";
       editor.getValue() :
       editor.getModel().getValueInRange(selection);
 
+    // Clear any previous output on the page.
     const output = document.getElementById('output');
     while (output.firstChild) output.removeChild(output.lastChild);
 
@@ -78,10 +87,11 @@ const DB_NAME = "myDB";
 
     let time = Date.now();
     try {
-      // Execute the SQL.
+      // Execute the SQL using the template tag function.
       const results = await sql`${queries}`;
       time = Date.now() - time;
 
+      // Everything below this point is just user interface stuff.
       results.map(formatTable).forEach(table => output.append(table));
     } catch (e) {
       // Adjust for browser differences in Error.stack().
