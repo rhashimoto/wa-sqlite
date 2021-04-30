@@ -560,7 +560,7 @@ export function Factory(Module) {
       default:
         throw new SQLiteError('unknown type', type);
     }
-  }
+  };
 
   api.column_blob = (function() {
     const fname = 'sqlite3_column_blob';
@@ -637,7 +637,7 @@ export function Factory(Module) {
       columns.push(api.column_name(stmt, i));
     }
     return columns;
-  }
+  };
 
   api.column_text = (function() {
     const fname = 'sqlite3_column_text';
@@ -685,7 +685,7 @@ export function Factory(Module) {
     }
 
     throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
-  }
+  };
 
   api.exec = async function(db, sql, callback) {
     const str = api.str_new(db, sql);
@@ -800,7 +800,7 @@ export function Factory(Module) {
       row.push(api.column(stmt, i));
     }
     return row;
-  }
+  };
 
   api.result = function(context, value) {
     switch (typeof value) {
@@ -826,7 +826,7 @@ export function Factory(Module) {
         break;
     }
 
-  }
+  };
 
   api.result_blob = (function() {
     const fname = 'sqlite3_result_blob';
@@ -922,7 +922,7 @@ export function Factory(Module) {
     const newOffset = Module._sqlite3_malloc(newBytes + 1);
     const newArray = Module.HEAP8.subarray(newOffset, newOffset + newBytes + 1);
     newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
-    Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1)
+    Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1);
 
     Module._sqlite3_free(data.offset);
     data.offset = newOffset;
@@ -966,7 +966,7 @@ export function Factory(Module) {
       default:
         throw new SQLiteError('unknown type', type);
     }
-  }
+  };
 
   api.value_blob = (function() {
     const fname = 'sqlite3_value_blob';

@@ -21,7 +21,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} fileId 
    * @param {number} flags 
    * @param {{ set: function(number): void }} pOutFlags 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xOpen(name, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
@@ -36,7 +36,7 @@ export class MemoryVFS extends VFS.Base {
           flags,
           size: 0,
           data: new ArrayBuffer(0)
-        }
+        };
         this.mapNameToFile.set(name, file);
       } else {
         return VFS.SQLITE_CANTOPEN;
@@ -51,6 +51,7 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
+   * @returns {number|Promise<number>}
    */
   xClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
@@ -66,6 +67,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} fileId 
    * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
   xRead(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
@@ -85,6 +87,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} fileId 
    * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
   xWrite(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
@@ -105,7 +108,7 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xTruncate(fileId, iSize) {
     const file = this.mapIdToFile.get(fileId);
@@ -118,7 +121,7 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {number} fileId 
    * @param {{ set: function(number): void }} pSize64 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
@@ -131,7 +134,7 @@ export class MemoryVFS extends VFS.Base {
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xDelete(name, syncDir) {
     this.mapNameToFile.delete(name);
@@ -142,7 +145,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {string} name 
    * @param {number} flags 
    * @param {{ set: function(number): void }} pResOut 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
   xAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);

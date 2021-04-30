@@ -32,50 +32,6 @@ export class IndexedDbVFS extends VFS.Base {
     }).then(db => this.db = db);
   }
 
-  async getBlock(store, file, index) {
-    const key = this._blockKey(file.meta.name, index);
-    if (file.cache.has(key)) {
-      // Move the cache entry to the end of the map.
-      const block = file.cache.get(key);
-      file.cache.delete(key);
-      file.cache.set(key, block);
-      return block.data;
-    }
-
-    // Cache miss, fetch from IDB.
-    const blockData = await idb(store.get(key));
-    file.cache.set(key, { data: blockData });
-    this.purgeCache(store, file);
-    return blockData;
-  }
-
-  putBlock(store, file, index, blockData, options) {
-    const key = this._blockKey(file.meta.name, index);
-    file.cache.delete(key);
-    file.cache.set(key, { data: blockData, dirty: true });
-    this.purgeCache(store, file);
-  }
-
-  purgeCache(store, file, size = CACHE_SIZE) {
-    const keys = Array.from(file.cache.keys()).slice(0, -size);
-    for (const key of keys) {
-      const block = file.cache.get(key);
-      file.cache.delete(key);
-      if (block.dirty) {
-        idb(store.put(block.data, key));
-      }
-    }
-  }
-
-  async flushCache(store, file) {
-    for (const [key, block] of file.cache.entries()) {
-      if (block.dirty) {
-        await idb(store.put(block.data, key));
-        block.dirty = false;
-      }
-    }
-  }
-
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       // Generate a random name if requested.
@@ -85,9 +41,9 @@ export class IndexedDbVFS extends VFS.Base {
 
       // If creating the database file, get and put must be in the same
       // transaction to prevent simultaneous creation (unlikely but possible).
-      const key = this._metaKey(name);
-      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-      let meta = await idb(store.get(key));
+      const metaKey = this._metaKey(name);
+      const store = this._getStore();
+      let meta = await idb(store.get(metaKey));
       if (!meta) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
           // Create a new metadata object.
@@ -98,21 +54,20 @@ export class IndexedDbVFS extends VFS.Base {
             isLocked: false,
             syncs: 0
           };
-          store.put(meta, key);
+          store.put(meta, metaKey);
         } else {
           return VFS.SQLITE_CANTOPEN;
         }
       }
 
-      const file = {
+      // Put the file in the opened files map.
+      this.mapIdToFile.set(fileId, {
         meta,
+        metaKey,
         flags,
         lockType: VFS.SQLITE_LOCK_NONE,
         cache: new Map()
-      };
-
-      // Put the file in the opened files map.
-      this.mapIdToFile.set(fileId, file);
+      });
       pOutFlags.set(flags);
       return VFS.SQLITE_OK;
     });
@@ -123,7 +78,7 @@ export class IndexedDbVFS extends VFS.Base {
       const file = this.mapIdToFile.get(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const file = this.mapIdToFile.get(fileId);
-        await this._delete(this._metaKey(file.meta.name));
+        await this._delete(file.metaKey);
       }
       this.mapIdToFile.delete(fileId);
       return VFS.SQLITE_OK;
@@ -143,13 +98,13 @@ export class IndexedDbVFS extends VFS.Base {
       let arrayOffset = 0;
       if (nRemaining) {
         let fileOffset = iOffset;
-        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+        const store = this._getStore();
         while (nRemaining) {
           const blockIndex = Math.floor(fileOffset / meta.blockSize);
           const blockOffset = fileOffset % meta.blockSize;
           const blockBytes = Math.min(meta.blockSize - blockOffset, nRemaining);
 
-          let blockData = await this.getBlock(store, file, blockIndex);
+          let blockData = await this._getBlock(store, file, blockIndex);
           if (!blockData) {
             // This block doesn't exist in spite of being within the file
             // size. This can happen if writes are not purely sequential.
@@ -183,18 +138,17 @@ export class IndexedDbVFS extends VFS.Base {
       if (nRemaining) {
         let fileOffset = iOffset;
         const lastBlockIndex = Math.floor(meta.size / meta.blockSize);
-        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+        const store = this._getStore();
         while (nRemaining) {
           const blockIndex = Math.floor(fileOffset / meta.blockSize);
           const blockOffset = fileOffset % meta.blockSize;
           const blockBytes = Math.min(meta.blockSize - blockOffset, nRemaining);
 
-          const key = this._blockKey(meta.name, blockIndex);
           let blockData;
           if (blockIndex <= lastBlockIndex && blockBytes < meta.blockSize) {
             // The write is to only part of a block that may have been
             // already written.
-            blockData = await this.getBlock(store, file, blockIndex);
+            blockData = await this._getBlock(store, file, blockIndex);
           }
           if (!blockData) {
             // We should reach here when:
@@ -206,7 +160,7 @@ export class IndexedDbVFS extends VFS.Base {
 
           new Int8Array(blockData, blockOffset, blockBytes)
             .set(pData.value.subarray(arrayOffset, arrayOffset + blockBytes));
-          this.putBlock(store, file, blockIndex, blockData);
+          this._putBlock(store, file, blockIndex, blockData);
 
           arrayOffset += blockBytes;
           fileOffset += blockBytes;
@@ -221,11 +175,12 @@ export class IndexedDbVFS extends VFS.Base {
 
   xTruncate(fileId, iSize) {
     return this.handleAsync(async () => {
-      const meta = this.mapIdToFile.get(fileId).meta;
+      const file = this.mapIdToFile.get(fileId);
+      const meta = file.meta;
       meta.size = Math.min(meta.size, iSize);
 
       const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
-      this._delete(this._blockKey(meta.name, nBlocks), this._metaKey(meta.name));
+      this._delete(this._blockKey(meta.name, nBlocks), file.metaKey);
       return VFS.SQLITE_OK;
     });
   }
@@ -234,20 +189,19 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       // Write blocks before updating file size metadata.
       const file = this.mapIdToFile.get(fileId);
-      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-      await this.flushCache(store, file);
+      const store = this._getStore();
+      await this._flushCache(store, file);
 
       file.meta.syncs = ++file.meta.syncs >>> 0;
-      await this._putMeta(file.meta.name, file.meta);
+      await idb(store.put(file.meta, file.metaKey));
 
       return VFS.SQLITE_OK;
     });
   }
 
   xFileSize(fileId, pSize64) {
-    const meta = this.mapIdToFile.get(fileId).meta;
-
-    pSize64.set(meta.size);
+    const file = this.mapIdToFile.get(fileId);
+    pSize64.set(file.meta.size);
     return VFS.SQLITE_OK;
   }
 
@@ -257,14 +211,15 @@ export class IndexedDbVFS extends VFS.Base {
       if (flags && file.lockType === VFS.SQLITE_LOCK_NONE) {
         const syncs = file.meta.syncs;
 
-        const key = this._metaKey(file.meta.name)
-        const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-        file.meta = await idb(store.get(key));
+        // Acquire lock atomically.
+        const store = this._getStore();
+        file.meta = await idb(store.get(file.metaKey));
         if (file.meta.isLocked) {
+          // Don't block if already locked; just give up.
           return VFS.SQLITE_BUSY;
         }
         file.meta.isLocked = true;
-        idb(store.put(file.meta, key));
+        idb(store.put(file.meta, file.metaKey));
 
         if (file.meta.syncs !== syncs) {
           // Another connection has synced this file.
@@ -281,10 +236,9 @@ export class IndexedDbVFS extends VFS.Base {
     file.lockType = flags;
 
     if (flags === VFS.SQLITE_LOCK_NONE) {
-      const key = this._metaKey(file.meta.name)
-      const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+      const store = this._getStore();
       file.meta.isLocked = false;
-      idb(store.put(file.meta, key));
+      idb(store.put(file.meta, file.metaKey));
     }
     return VFS.SQLITE_OK;
   }
@@ -309,31 +263,15 @@ export class IndexedDbVFS extends VFS.Base {
 
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
-      const meta = await this._getMeta(name);
+      const store = this._getStore('readonly');
+      const meta = await idb(store.getKey(this._metaKey(name)));
       pResOut.set(meta ? 1 : 0);
       return VFS.SQLITE_OK;
     });
   }
 
-  /**
-   * Fetch file metadata.
-   * @param {string} name 
-   * @returns {Promise<object|undefined>}
-   */
-  _getMeta(name) {
-    const blocks = this.db.transaction('blocks', 'readonly').objectStore('blocks');
-    return idb(blocks.get(this._metaKey(name)));
-  }
-
-  /**
-   * Store file metadata.
-   * @param {string} name 
-   * @param {object} metadata 
-   * @returns {Promise}
-   */
-  _putMeta(name, metadata) {
-    const blocks = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
-    return idb(blocks.put(metadata, this._metaKey(name)));
+  _getStore(mode = 'readwrite') {
+    return this.db.transaction('blocks', mode).objectStore('blocks');
   }
 
   /**
@@ -355,6 +293,50 @@ export class IndexedDbVFS extends VFS.Base {
     return this._metaKey(name) + index.toString(16).padStart(BLOCK_KEY_DIGITS, '0');
   }
 
+  async _getBlock(store, file, index) {
+    const key = this._blockKey(file.meta.name, index);
+    if (file.cache.has(key)) {
+      // Move the cache entry to the end of the map.
+      const block = file.cache.get(key);
+      file.cache.delete(key);
+      file.cache.set(key, block);
+      return block.data;
+    }
+
+    // Cache miss, fetch from IDB.
+    const blockData = await idb(store.get(key));
+    file.cache.set(key, { data: blockData, dirty: false });
+    this._purgeCache(store, file);
+    return blockData;
+  }
+
+  _putBlock(store, file, index, blockData) {
+    const key = this._blockKey(file.meta.name, index);
+    file.cache.delete(key);
+    file.cache.set(key, { data: blockData, dirty: true });
+    this._purgeCache(store, file);
+  }
+
+  _purgeCache(store, file, size = CACHE_SIZE) {
+    const keys = Array.from(file.cache.keys()).slice(0, -size);
+    for (const key of keys) {
+      const block = file.cache.get(key);
+      file.cache.delete(key);
+      if (block.dirty) {
+        idb(store.put(block.data, key));
+      }
+    }
+  }
+
+  async _flushCache(store, file) {
+    for (const [key, block] of file.cache.entries()) {
+      if (block.dirty) {
+        await idb(store.put(block.data, key));
+        block.dirty = false;
+      }
+    }
+  }
+
   /**
    * Helper function that deletes all keys greater or equal to `key`
    * provided they start with `prefix`.
@@ -363,7 +345,7 @@ export class IndexedDbVFS extends VFS.Base {
    * @returns 
    */
   _delete(key, prefix = key) {
-    const store = this.db.transaction('blocks', 'readwrite').objectStore('blocks');
+    const store = this._getStore();
     return idb(store.openCursor(IDBKeyRange.lowerBound(key)), {
       success(event) {
         const cursor = event.target.result;

@@ -16,17 +16,16 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {number} fileId 
    * @param {number} flags 
    * @param {{ set: function(number): void }} pOutFlags 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => super.xOpen(name, fileId, flags, pOutFlags));
   }
 
   /**
    * @param {number} fileId 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xClose(fileId) {
     return this.handleAsync(async () => super.xClose(fileId));
   }
@@ -35,8 +34,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {number} fileId 
    * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => super.xRead(fileId, pData, iOffset));
   }
@@ -45,8 +44,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {number} fileId 
    * @param {{ size: number, value: Int8Array }} pData 
    * @param {number} iOffset
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xWrite(fileId, pData, iOffset) {
     return this.handleAsync(async () => super.xWrite(fileId, pData, iOffset));
   }
@@ -54,9 +53,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xTruncate(fileId, iSize) {
     return this.handleAsync(async () => super.xTruncate(fileId, iSize));
   }
@@ -64,9 +62,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
   /**
    * @param {number} fileId 
    * @param {{ set: function(number): void }} pSize64 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xFileSize(fileId, pSize64) {
     return this.handleAsync(async () => super.xFileSize(fileId, pSize64));
   }
@@ -75,9 +72,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xDelete(name, syncDir) {
     return this.handleAsync(async () => super.xDelete(name, syncDir));
   }
@@ -86,9 +82,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {string} name 
    * @param {number} flags 
    * @param {{ set: function(number): void }} pResOut 
-   * @returns 
+   * @returns {number|Promise<number>}
    */
-  // @ts-ignore
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => super.xAccess(name, flags, pResOut));
   }
