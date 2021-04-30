@@ -11,9 +11,9 @@ This is a WebAssembly build of SQLite with experimental support for writing SQLi
 * `git clone ...`
 * `cd wa-sqlite`
 * `yarn install`
-* `make`
+* `make` (or `yarn prepack`)
 
-All builds produce ES6 modules + WASM, synchronous and asynchronous (using Asyncify).
+All builds produce ES6 modules + WASM, synchronous and asynchronous (using Asyncify) in `dist/`.
 
 ## Demo page
 * `yarn start`
