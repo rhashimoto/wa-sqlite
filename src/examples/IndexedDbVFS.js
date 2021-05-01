@@ -8,8 +8,8 @@ const BLOCK_SIZE = 8192;
 // changing this number will make existing databases unreadable.
 const BLOCK_KEY_DIGITS = 10;
 
-// This is the maximum number of cached blocks per file.
-const CACHE_SIZE = 16;
+// This is the default maximum number of cached blocks per file.
+const DEFAULT_CACHE_SIZE = 16;
 
 // Use IndexedDB as a block device. This class does not wait for a lock;
 // it returns SQLITE_BUSY if the database is already locked. This can
@@ -18,6 +18,7 @@ const CACHE_SIZE = 16;
 export class IndexedDbVFS extends VFS.Base {
   name = 'idb';
   mapIdToFile = new Map();
+  cacheSize = DEFAULT_CACHE_SIZE;
 
   /**
    * @param {string} idbName Name of IndexedDB database.
@@ -317,7 +318,7 @@ export class IndexedDbVFS extends VFS.Base {
     this._purgeCache(store, file);
   }
 
-  _purgeCache(store, file, size = CACHE_SIZE) {
+  _purgeCache(store, file, size = this.cacheSize) {
     const keys = Array.from(file.cache.keys()).slice(0, -size);
     for (const key of keys) {
       const block = file.cache.get(key);
