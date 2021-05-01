@@ -35,9 +35,26 @@ describe('tag', function() {
 
   it('returns rows', async function() {
     const result = await sql`
-      DROP TABLE IF EXISTS abc; -- doesn't produce output
-      SELECT 6 * 7
+      DROP TABLE IF EXISTS abc;
+      SELECT 6 * 7, 6 * 9;
+      CREATE TABLE abc (x, y);
+      INSERT INTO abc VALUES ('foo', 0.5), ('bar', NULL);
+      SELECT * FROM abc;
     `;
-    expect(result[0].rows[0][0]).toBe(42);
+    expect(result).toEqual([
+      {
+        "columns": ["6 * 7", "6 * 9"],
+        "rows": [
+          [42, 54]
+        ]
+      },
+      {
+        "columns": ["x", "y"],
+        "rows": [
+          ["foo", 0.5],
+          ["bar", null]
+        ]
+      }
+    ]);
   });
 });
