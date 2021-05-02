@@ -9,6 +9,7 @@ An application-level API can be easily built on the core API, but that is outsid
 
 ## Prerequisites
 * Building on Linux is known to work, compatibility with other platforms is unknown.
+* `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) - Note that there is a [regression in EMSDK 2.0.14](https://github.com/emscripten-core/emscripten/issues/13858) that prevents building.
 * `curl`, `make`, `openssl`, `sed`, `unzip`
 
@@ -28,3 +29,5 @@ All builds produce ES6 modules + WASM, synchronous and asynchronous (using Async
 The demo page provides access to databases on multiple VFS implementations.
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
+
+If the page crashes or is closed in the middle of a transaction on the IndexedDB VFS, e.g. if you execute a `BEGIN TRANSACTION` and no subsequent `COMMIT` or `ROLLBACK`, the database will be left with an orphaned lock. To clear it, use the browser Developer Tools to delete the IndexedDB database or object store and reload the page.
