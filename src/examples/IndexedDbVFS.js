@@ -180,8 +180,15 @@ export class IndexedDbVFS extends VFS.Base {
       const meta = file.meta;
       meta.size = Math.min(meta.size, iSize);
 
+      // Remove blocks past EOF from the cache.
       const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
-      this._delete(this._blockKey(meta.name, nBlocks), file.metaKey);
+      const startKey = this._blockKey(meta.name, nBlocks);
+      const endKey = this._blockKey(meta.name, parseInt('f'.repeat(BLOCK_KEY_DIGITS), 16));
+      for (const key of file.cache.keys()) {
+        if (key >= startKey && key <= endKey) {
+          file.cache.delete(key);
+        }
+      }
       return VFS.SQLITE_OK;
     });
   }
@@ -190,11 +197,16 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       // Write blocks before updating file size metadata.
       const file = this.mapIdToFile.get(fileId);
+      const meta = file.meta;
       const store = this._getStore();
       await this._flushCache(store, file);
 
-      file.meta.syncs = ++file.meta.syncs >>> 0;
-      await idb(store.put(file.meta, file.metaKey));
+      meta.syncs = ++meta.syncs >>> 0;
+      await idb(store.put(meta, file.metaKey));
+
+      // Remove blocks past EOF from IndexedDB.
+      const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
+      this._delete(this._blockKey(meta.name, nBlocks), file.metaKey);
 
       return VFS.SQLITE_OK;
     });
@@ -209,7 +221,7 @@ export class IndexedDbVFS extends VFS.Base {
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      if (flags && file.lockType === VFS.SQLITE_LOCK_NONE) {
+      if (flags !== file.lockType && file.lockType === VFS.SQLITE_LOCK_NONE) {
         const syncs = file.meta.syncs;
 
         // Acquire lock atomically.
@@ -234,13 +246,12 @@ export class IndexedDbVFS extends VFS.Base {
 
   xUnlock(fileId, flags) {
     const file = this.mapIdToFile.get(fileId);
-    file.lockType = flags;
-
-    if (flags === VFS.SQLITE_LOCK_NONE) {
-      const store = this._getStore();
+    if (flags !== file.lockType && flags === VFS.SQLITE_LOCK_NONE) {
       file.meta.isLocked = false;
+      const store = this._getStore();
       idb(store.put(file.meta, file.metaKey));
     }
+    file.lockType = flags;
     return VFS.SQLITE_OK;
   }
 

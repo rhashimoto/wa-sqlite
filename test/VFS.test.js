@@ -31,6 +31,8 @@ async function loadSampleTable(sqlite3, db) {
 }
 
 function shared(ready) {
+  const setup = {};
+
   /** @type {SQLite.SQLiteAPI} */ let sqlite3, vfs;
   let db, sql;
   beforeEach(async function() {
@@ -49,6 +51,9 @@ function shared(ready) {
       });
       return results;
     }
+
+    // Package test objects for non-shared tests.
+    Object.assign(setup, { sqlite3, db, sql })
   });
 
   afterEach(async function() {
@@ -78,6 +83,8 @@ function shared(ready) {
     const result = await sql`SELECT COUNT(*) FROM goog`;
     expect(result[0][0]).toBeGreaterThan(0);
   });
+
+  return setup;
 }
 
 describe('MemoryVFS', function() {
@@ -114,6 +121,27 @@ describe('MemoryAsyncVFS', function() {
   shared(ready);
 });
 
+// Explore the IndexedDB filesystem without using SQLite.
+class ExploreIndexedDbVFS extends IndexedDbVFS {
+  handleAsync(f) {
+    return f();
+  }
+}
+
+// Convenience Promisification for IDBRequest.
+function idb(request, listeners = {}) {
+  listeners = Object.assign({
+    'success': () => request.resolve(request.result),
+    'error': () => request.reject('idb error')
+  }, listeners);
+  return new Promise(function(resolve, reject) {
+    Object.assign(request, { resolve, reject });
+    for (const type of Object.keys(listeners)) {
+      request.addEventListener(type, listeners[type]);
+    }
+  });
+}
+
 describe('IndexedDbVFS', function() {
   let resolveReady;
   let ready = new Promise(resolve => {
@@ -128,5 +156,44 @@ describe('IndexedDbVFS', function() {
     resolveReady({ sqlite3 , vfs });
   });
 
-  shared(ready);
+  const setup = shared(ready);
+
+  it('xTruncate reduces filesize', async function() {
+    const sqlite3 = setup.sqlite3;
+    const db = setup.db;
+    const sql = setup.sql;
+
+    const vfs = new ExploreIndexedDbVFS();
+    const fileId = 0;
+    await vfs.xOpen('foo', fileId, 0x6, { set() {} });
+
+    // Load data into the database and record file size.
+    const fileSizes = [];
+    await loadSampleTable(sqlite3, db);
+    await vfs.xLock(fileId, 0x1);
+    await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, 0x0);
+
+    // Shrink the database and record file size.
+    await sql`DELETE FROM goog WHERE Close > Open`;
+    await sql`VACUUM`;
+    await vfs.xLock(fileId, 0x1);
+    // SQLite doesn't always call xSync after xTruncate. The file size is
+    // written to IDB on xUnlock but the extra blocks will remain until
+    // whenever xSync is called. We call it here to delete the blocks
+    // immediately.
+    await vfs.xSync(fileId, 0x2);
+    await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, 0x0);
+
+    vfs.xClose(fileId);
+    expect(fileSizes[1]).toBeLessThan(fileSizes[0]);
+
+    // Check that the number of IDB blocks is consistent.
+    const nBlocks = Math.floor((fileSizes[1] + 8192 - 1) / 8192);
+    const store = vfs.db.transaction('blocks').objectStore('blocks');
+    const keyRange = IDBKeyRange.bound('foo#0', 'foo#~');
+    const keys = await idb(store.getAllKeys(keyRange));
+    expect(keys.length).toBe(nBlocks);
+  });
 });
