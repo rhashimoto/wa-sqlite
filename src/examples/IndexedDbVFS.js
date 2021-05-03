@@ -33,6 +33,11 @@ export class IndexedDbVFS extends VFS.Base {
     }).then(db => this.db = db);
   }
 
+  async close() {
+    if (this.db.then) await this.db;
+    this.db.close();
+  }
+
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       // Generate a random name if requested.
@@ -268,7 +273,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   xDelete(name, syncDir) {
     return this.handleAsync(async () => {
-      await this._delete(this._metaKey(name));
+      await this.deleteFile(name);
       return VFS.SQLITE_OK;
     });
   }
@@ -280,6 +285,26 @@ export class IndexedDbVFS extends VFS.Base {
       pResOut.set(meta ? 1 : 0);
       return VFS.SQLITE_OK;
     });
+  }
+
+  /**
+   * Delete a file from IndexedDB.
+   * @param {string} name 
+   */
+  async deleteFile(name) {
+    await this._delete(this._metaKey(name));
+  }
+
+  /**
+   * Forcibly clear an orphaned file lock.
+   * @param {string} name 
+   */
+  async forceClearLock(name) {
+    const store = this._getStore();
+    const key = this._metaKey(name);
+    const meta = await idb(store.get(key));
+    meta.isLocked = false;
+    await idb(store.put(meta, key));
   }
 
   _getStore(mode = 'readwrite') {
