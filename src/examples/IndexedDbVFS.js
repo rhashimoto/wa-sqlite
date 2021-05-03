@@ -292,6 +292,7 @@ export class IndexedDbVFS extends VFS.Base {
    * @param {string} name 
    */
   async deleteFile(name) {
+    if (this.db.then) await this.db;
     await this._delete(this._metaKey(name));
   }
 
@@ -300,6 +301,7 @@ export class IndexedDbVFS extends VFS.Base {
    * @param {string} name 
    */
   async forceClearLock(name) {
+    if (this.db.then) await this.db;
     const store = this._getStore();
     const key = this._metaKey(name);
     const meta = await idb(store.get(key));

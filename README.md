@@ -29,5 +29,3 @@ All builds produce ES6 modules + WASM, synchronous and asynchronous (using Async
 The demo page provides access to databases on multiple VFS implementations.
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
-
-If the page crashes or is closed in the middle of a transaction on the IndexedDB VFS, e.g. if you execute a `BEGIN TRANSACTION` and no subsequent `COMMIT` or `ROLLBACK`, the database will be left with an orphaned lock. To clear it, use the browser Developer Tools to delete the IndexedDB database or object store and reload the page.
