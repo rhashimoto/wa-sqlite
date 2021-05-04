@@ -6,6 +6,7 @@
   "files": [
     "src/sqlite-api.js",
     "src/VFS.js",
+    "src/examples/*",
     "dist/*"
   ],
   "scripts": {
