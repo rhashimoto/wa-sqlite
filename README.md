@@ -8,6 +8,8 @@ A [sample IndexedDB VFS](https://github.com/rhashimoto/wa-sqlite/blob/master/src
 An application-level API can be easily built on the core API, but that is outside the scope of this project. The [demo page](https://github.com/rhashimoto/wa-sqlite/tree/master/demo) uses a [simple tagged template function](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/tag.js) for its SQL queries that may be useful as a coding example.
 
 ## Prerequisites
+If you don't want to build the Emscripten components, use the 'buildless' branch that has pre-built artifacts checked in.
+
 * Building on Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) - Note that there is a [regression in EMSDK 2.0.14](https://github.com/emscripten-core/emscripten/issues/13858) that prevents building.
