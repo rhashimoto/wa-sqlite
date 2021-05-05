@@ -217,8 +217,18 @@ const async = true;
  *  See https://sqlite.org/c3ref/create_function.html
  * 
  * @property {(
+ *  db: number,
+ *  zName: string,
+ *  module: object,
+ *  appData?) => Promise<number>} create_module
+ * 
+ * @property {(
  *  stmt: number) => number} data_count Number of columns in a result set.
  *  See https://www.sqlite.org/c3ref/data_count.html
+ * 
+ * @property {(
+ *  db: number,
+ *  zSQL: string) => number} declare_vtab
  * 
  * @property {(
  *  db: number,
@@ -675,6 +685,12 @@ export function Factory(Module) {
     throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
   };
 
+  api.create_module = async function(db, zName, module, appData) {
+    verifyDatabase(db);
+    const result = await Module.createModule(db, zName, module, appData);
+    return check('sqlite3_create_module', result, db);
+  };
+
   api.data_count = (function() {
     const fname = 'sqlite3_data_count';
     const f = Module.cwrap(fname, ...decl('n:n'));
@@ -684,6 +700,15 @@ export function Factory(Module) {
       // trace(fname, result);
       return result;
     };
+  })();
+
+  api.declare_vtab = (function() {
+    const fname = 'sqlite3_declare_vtab';
+    const f = Module.cwrap(fname, ...decl('ns:n'));
+    return function(pVTab, zSQL) {
+      const result = f(pVTab, zSQL);
+      return check('sqlite3_declare_vtab', result);
+    }
   })();
 
   api.exec = async function(db, sql, callback) {

@@ -3,6 +3,8 @@ declare namespace Asyncify {
 }
 
 declare function UTF8ToString(ptr: number): string;
+declare function lengthBytesUTF8(s: string): number;
+declare function stringToUTF8(s: string, p: number, n: number);
 declare function ccall(name: string, returns: string, args: Array<any>, options?: object): any;
 declare function getValue(ptr: number, type: string): number;
 declare function setValue(ptr: number, value: number, type: string): number;
@@ -30,3 +32,24 @@ declare var _vfsWrite;
 declare var _jsFunc;
 declare var _jsStep;
 declare var _jsFinal;
+
+declare var _modStruct;
+declare var _modCreate;
+declare var _modConnect;
+declare var _modBestIndex;
+declare var _modDisconnect;
+declare var _modDestroy;
+declare var _modOpen;
+declare var _modClose;
+declare var _modFilter;
+declare var _modNext;
+declare var _modEof;
+declare var _modColumn;
+declare var _modRowid;
+declare var _modUpdate;
+declare var _modBegin;
+declare var _modSync;
+declare var _modCommit;
+declare var _modRollback;
+declare var _modFindFunction;
+declare var _modRename;
