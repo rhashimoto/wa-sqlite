@@ -10,7 +10,7 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 
-LIBRARY_FILES = src/libvfs.js src/libfunction.js
+LIBRARY_FILES = src/libfunction.js src/libmodule.js src/libvfs.js
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXTRA_EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
@@ -19,8 +19,9 @@ ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 BITCODE_FILES = \
 	tmp/bc/sqlite3.bc tmp/bc/extension-functions.bc \
-	tmp/bc/libvfs.bc \
-	tmp/bc/libfunction.bc
+	tmp/bc/libfunction.bc \
+	tmp/bc/libmodule.bc \
+	tmp/bc/libvfs.bc
 
 # build options
 
@@ -29,11 +30,11 @@ EMCC ?= emcc
 CFLAGS = \
 	-O3 \
 	-flto \
-	-I'deps/$(SQLITE_AMALGAMATION)'
+	-I'deps/$(SQLITE_AMALGAMATION)' \
+	-Wno-non-literal-null-conversion
 
 EMFLAGS = \
 	-s ALLOW_MEMORY_GROWTH=1 \
-	-s RESERVED_FUNCTION_POINTERS=64 \
 	-s WASM=1 \
 	-s INVOKE_RUN
 
@@ -53,8 +54,9 @@ EMFLAGS_INTERFACES = \
 	-s EXTRA_EXPORTED_RUNTIME_METHODS=@$(EXTRA_EXPORTED_RUNTIME_METHODS)
 
 EMFLAGS_LIBRARIES = \
-	--js-library src/libvfs.js \
-	--js-library src/libfunction.js
+	--js-library src/libfunction.js \
+	--js-library src/libmodule.js \
+	--js-library src/libvfs.js
 
 EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
@@ -137,11 +139,15 @@ tmp/bc/extension-functions.bc: deps/$(EXTENSION_FUNCTIONS)
 	mkdir -p tmp/bc
 	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
 
-tmp/bc/libvfs.bc: src/libvfs.c
+tmp/bc/libfunction.bc: src/libfunction.c
 	mkdir -p tmp/bc
 	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
 
-tmp/bc/libfunction.bc: src/libfunction.c
+tmp/bc/libmodule.bc: src/libmodule.c
+	mkdir -p tmp/bc
+	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
+
+tmp/bc/libvfs.bc: src/libvfs.c
 	mkdir -p tmp/bc
 	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
 
