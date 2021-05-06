@@ -22,9 +22,12 @@ const MONACO_VS = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/m
 
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
-CREATE TABLE tbl (x PRIMARY KEY, y);
+CREATE TABLE IF NOT EXISTS tbl (x PRIMARY KEY, y);
 REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
 SELECT y * y FROM tbl WHERE x = 'bar';
+
+CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
+SELECT * FROM goog LIMIT 5;
 `.trim();
 
 (async function() {
