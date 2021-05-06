@@ -19,8 +19,14 @@ async function loadSampleTable(sqlite3, db) {
     BEGIN TRANSACTION;
   `);
   for (const row of GOOG.rows) {
+    const formattedRow = row.map(value => {
+      if (typeof value === 'string') {
+        return `'${value}'`;
+      }
+      return value;
+    }).join(',');
     await sqlite3.exec(db, `
-      INSERT INTO goog VALUES (${row.join(',')})
+      INSERT INTO goog VALUES (${formattedRow})
     `);
   }
   await sqlite3.exec(db, `

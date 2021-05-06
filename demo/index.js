@@ -9,8 +9,10 @@ import * as SQLite from '../src/sqlite-api.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { ArrayModule } from '../src/examples/ArrayModule.js';
 
 import { tag } from '../src/examples/tag.js';
+import GOOG from '../test/GOOG.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
 // This will need to be changed if using a package manager other than Yarn 2.
@@ -55,6 +57,10 @@ SELECT y * y FROM tbl WHERE x = 'bar';
     const db = await sqlite3.open_v2(vfs, undefined, vfs);
     const t = tag(sqlite3, db);
     mapNameToTag.set(key, t);
+
+    // Add an example module with an array back-end.
+    // @ts-ignore
+    sqlite3.create_module(db, 'array', new ArrayModule(sqlite3, db, GOOG.rows, GOOG.columns));
   }
   await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
