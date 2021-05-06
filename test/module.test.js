@@ -33,4 +33,32 @@ describe('module', function() {
     expect(results[0][0]).toBeGreaterThan(0);
     expect(results[0][1]).toBeGreaterThan(0);
   });
+
+  it('xUpdate', async function() {
+    const array = [['existing', Math.PI]];
+    const module = new ArrayModule(
+      sqlite3, db,
+      array, ['x', 'y']);
+    sqlite3.create_module(db, 'imod', module);
+
+    const results = [];
+    await sqlite3.exec(db, `
+      CREATE VIRTUAL TABLE xvt USING imod;
+      INSERT INTO xvt VALUES ('foo', 42), ('bar', NULL);
+      SELECT * FROM xvt;
+    `, function(row) { results.push(row); });
+    expect(array.length).toBe(3);
+    expect(array[1]).toEqual(['foo', 42]);
+    expect(array[2]).toEqual(['bar', null]);
+    expect(results).toEqual(array);
+
+    results.splice(0, results.length);
+    await sqlite3.exec(db, `
+      DELETE FROM xvt WHERE x = 'foo';
+      SELECT * FROM xvt;
+      DROP TABLE xvt
+    `, function(row) { results.push(row); });
+    expect(array.length).toBe(3);
+    expect(array[1]).toBe(null);
+  });
 });

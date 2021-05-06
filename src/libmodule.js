@@ -246,7 +246,7 @@ const mod_methods = {
     _modUpdate = function(pVTab, argc, argv, pRowid) {
       const m = mapVTabToModule.get(pVTab);
       argv = new Uint32Array(HEAP8.buffer, argv, argc);
-      return m.module['xUpdate'](pVTab, argc, new Value(pRowid, 'i64'));
+      return m.module['xUpdate'](pVTab, argv, new Value(pRowid, 'i64'));
     };
 
     _modBegin = function(pVTab) {
