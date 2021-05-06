@@ -1,13 +1,11 @@
-// @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
+import { getSQLite } from './api-instances.js';
 import * as SQLite from '../src/sqlite-api.js';
 import { tag } from '../src/examples/tag.js';
 
 describe('tag', function() {
   /** @type {SQLite.SQLiteAPI} */ let sqlite3;
   beforeAll(async function() {
-    const SQLiteModule = await SQLiteModuleFactory();
-    sqlite3 = SQLite.Factory(SQLiteModule);
+    sqlite3 = await getSQLite();
   });
 
   let db;

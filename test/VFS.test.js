@@ -1,7 +1,4 @@
-// @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
-// @ts-ignore
-import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
+import { getSQLite, getSQLiteAsync } from './api-instances.js';
 import * as SQLite from '../src/sqlite-api.js';
 import * as VFS from '../src/VFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
@@ -94,9 +91,7 @@ describe('MemoryVFS', function() {
     resolveReady = resolve;
   });
   beforeAll(async function() {
-    const SQLiteModule = await SQLiteModuleFactory();
-
-    const sqlite3 = SQLite.Factory(SQLiteModule);
+    const sqlite3 = await getSQLite();
     const vfs = new MemoryVFS();
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });
@@ -111,9 +106,7 @@ describe('MemoryAsyncVFS', function() {
     resolveReady = resolve;
   });
   beforeAll(async function() {
-    const SQLiteModule = await SQLiteAsyncModuleFactory();
-
-    const sqlite3 = SQLite.Factory(SQLiteModule);
+    const sqlite3 = await getSQLiteAsync();
     const vfs = new MemoryAsyncVFS();
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });
@@ -149,9 +142,7 @@ describe('IndexedDbVFS', function() {
     resolveReady = resolve;
   });
   beforeAll(async function() {
-    const SQLiteModule = await SQLiteAsyncModuleFactory();
-
-    const sqlite3 = SQLite.Factory(SQLiteModule);
+    const sqlite3 = await getSQLiteAsync();
     const vfs = new IndexedDbVFS();
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });

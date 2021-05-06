@@ -10,14 +10,17 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 
-LIBRARY_FILES = src/libvfs.js
+LIBRARY_FILES = src/libvfs.js src/libfunction.js
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXTRA_EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 # intermediate files
 
-BITCODE_FILES = tmp/bc/sqlite3.bc tmp/bc/extension-functions.bc tmp/bc/libvfs.bc
+BITCODE_FILES = \
+	tmp/bc/sqlite3.bc tmp/bc/extension-functions.bc \
+	tmp/bc/libvfs.bc \
+	tmp/bc/libfunction.bc
 
 # build options
 
@@ -50,12 +53,20 @@ EMFLAGS_INTERFACES = \
 	-s EXTRA_EXPORTED_RUNTIME_METHODS=@$(EXTRA_EXPORTED_RUNTIME_METHODS)
 
 EMFLAGS_LIBRARIES = \
-	--js-library src/libvfs.js
+	--js-library src/libvfs.js \
+	--js-library src/libfunction.js
 
-EMFLAGS_ASYNCIFY = \
+EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
-	-s ASYNCIFY_STACK_SIZE=12288 \
 	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json
+
+EMFLAGS_ASYNCIFY_DEBUG = \
+	$(EMFLAGS_ASYNCIFY_COMMON) \
+	-s ASYNCIFY_STACK_SIZE=24576
+
+EMFLAGS_ASYNCIFY_DIST = \
+	$(EMFLAGS_ASYNCIFY_COMMON) \
+	-s ASYNCIFY_STACK_SIZE=12288
 
 # https://www.sqlite.org/compile.html
 SQLITE_DEFINES = \
@@ -130,6 +141,10 @@ tmp/bc/libvfs.bc: src/libvfs.c
 	mkdir -p tmp/bc
 	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
 
+tmp/bc/libfunction.bc: src/libfunction.c
+	mkdir -p tmp/bc
+	$(EMCC) $(CFLAGS) $(SQLITE_DEFINES) $^ -c -o $@
+
 ## debug
 .PHONY: clean-debug
 clean-debug:
@@ -150,7 +165,7 @@ debug/wa-sqlite-async.mjs: $(BITCODE_FILES) $(LIBRARY_FILES) $(EXPORTED_FUNCTION
 	$(EMCC) $(EMFLAGS) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
-	  $(EMFLAGS_ASYNCIFY) \
+	  $(EMFLAGS_ASYNCIFY_DEBUG) \
 	  $(BITCODE_FILES) -o $@
 
 ## dist
@@ -173,5 +188,5 @@ dist/wa-sqlite-async.mjs: $(BITCODE_FILES) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS
 	$(EMCC) $(EMFLAGS) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
-	  $(EMFLAGS_ASYNCIFY) \
+	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(BITCODE_FILES) -o $@

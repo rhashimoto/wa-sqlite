@@ -1,7 +1,4 @@
-// @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
-// @ts-ignore
-import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
+import { getSQLite, getSQLiteAsync } from './api-instances.js';
 import * as SQLite from '../src/sqlite-api.js';
 
 const LIBVERSION = '3.35.5';
@@ -254,27 +251,11 @@ function shared(sqlite3Ready) {
 }
 
 describe('sqlite-api', function() {
-  let resolveSQLite;
-  let sqlite3Ready = new Promise(resolve => {
-    resolveSQLite = resolve;
-  });
-  beforeAll(async function() {
-    const SQLiteModule = await SQLiteModuleFactory();
-    resolveSQLite(SQLite.Factory(SQLiteModule));
-  });
-
+  const sqlite3Ready = getSQLite();
   shared(sqlite3Ready);
 });
 
 describe('sqlite-api async', function() {
-  let resolveSQLite;
-  let sqlite3Ready = new Promise(resolve => {
-    resolveSQLite = resolve;
-  });
-  beforeAll(async function() {
-    const SQLiteModule = await SQLiteAsyncModuleFactory();
-    resolveSQLite(SQLite.Factory(SQLiteModule));
-  });
-
+  const sqlite3Ready = getSQLiteAsync();
   shared(sqlite3Ready);
 });
