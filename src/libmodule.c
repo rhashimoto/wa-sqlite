@@ -155,5 +155,5 @@ int EMSCRIPTEN_KEEPALIVE create_module(
   if (flags & (1 << 16)) module->xRollback = modRollback;
   // xFindFunction not supported
   if (flags & (1 << 18)) module->xRename = modRename;
-  return sqlite3_create_module_v2(db, zName, module, pClientData, sqlite3_free);
+  return sqlite3_create_module(db, zName, module, pClientData);
 }
