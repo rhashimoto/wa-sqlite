@@ -28,6 +28,10 @@ All builds produce ES6 modules + WASM, synchronous and asynchronous (using Async
 * `yarn start`
 * Open a modern browser on http://localhost:8000/demo/
 
-The demo page provides access to databases on multiple VFS implementations.
+The demo page provides access to databases on multiple VFS implementations. In addition, in each database there is a SQLite module "array" that provides some historical stock data from a common Javascript array - access it like this:
+```sql
+CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
+SELECT * FROM goog LIMIT 5;
+```
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
