@@ -16,7 +16,7 @@ import { tag } from '../src/examples/tag.js';
 // This will need to be changed if using a package manager other than Yarn 2.
 // The value can also reference an external CDN, e.g.
 // https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs
-const MONACO_VS = '/.yarn/unplugged/monaco-editor-npm-0.23.0-f10184dc03/node_modules/monaco-editor/dev/vs';
+const MONACO_VS = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs';
 
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
