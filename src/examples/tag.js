@@ -14,7 +14,7 @@ import * as SQLite from '../sqlite-api.js';
  * SQL statement that produces output. Each result is an object with
  * properties `columns` (array of names) and `rows` (array of array
  * of values).
- * @param {SQLite.SQLiteAPI} sqlite3 
+ * @param {SQLiteAPI} sqlite3 
  * @param {number} db
  * @returns {function(TemplateStringsArray, ...any): Promise<object[]>}
  */
