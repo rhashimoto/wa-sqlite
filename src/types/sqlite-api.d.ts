@@ -1,4 +1,13 @@
 /**
+ * This is a WebAssembly build of SQLite with experimental support for
+ * writing SQLite virtual file systems and modules (for virtual tables)
+ * in Javascript. Also see the
+ * [GitHub repository](https://github.com/rhashimoto/wa-sqlite) and the
+ * [online demo](https://rhashimoto.github.io/wa-sqlite/demo/).
+ * @module
+ */
+
+/**
  *  Javascript types that SQLite can use
  * 
  * C integer and floating-point types both map to/from Javascript `number`.
@@ -6,7 +15,7 @@
  * each element converted to a byte); SQLite always returns blob data as
  * `Int8Array`
  */
-type SQLiteCompatibleType = number|string|Int8Array|Array<number>;
+type SQLiteCompatibleType = null|number|string|Int8Array|Array<number>;
 
 /**
  * SQLite Virtual File System object
@@ -76,6 +85,28 @@ declare interface SQLiteVFS {
   ): number|Promise<number>;
 }
 
+declare interface SQLiteModuleIndexInfo {
+  nConstraint: number,
+  aConstraint: Array<{
+    iColumn: number,
+    op: number,
+    usable: boolean
+  }>,
+  nOrderBy: number,
+  aOrderBy: Array<{
+    iColumn: number,
+    desc: boolean
+  }>,
+  aConstraintUsage: Array<{
+    argvIndex: number,
+    omit: boolean
+  }>,
+  idxNum: number,
+  idxStr: string|null,
+  orderByConsumed: boolean,
+  estimatedCost: number
+}
+
 /**
  * SQLite Module object
  * 
@@ -84,7 +115,7 @@ declare interface SQLiteVFS {
  * 
  * @see https://sqlite.org/vtab.html
  */
- declare interface SQLiteModule {
+declare interface SQLiteModule {
   xCreate?(
     db: number,
     appData,
@@ -101,7 +132,7 @@ declare interface SQLiteVFS {
     pzErr: { set(value: string): void }
   ): number|Promise<number>;
 
-  xBestIndex(pVTab: number, indexInfo: object): number|Promise<number>;
+  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number|Promise<number>;
 
   xDisconnect(pVTab: number): number|Promise<number>;
 
@@ -143,23 +174,25 @@ declare interface SQLiteVFS {
 }
 
 /**
- * Javascript wrappers for the SQLite C API (plus a
- * few convenience functions)
+ * Javascript wrappers for the SQLite C API (plus a few convenience functions)
  * 
- * Function signatures have been slightly
- * modified to be more Javascript-friendly. For the C functions that
- * return an error code, the corresponding Javascript wrapper will
- * throw an exception with a `code` property on an error.
+ * Function signatures have been slightly modified to be more
+ * Javascript-friendly. For the C functions that return an error code,
+ * the corresponding Javascript wrapper will throw an exception with a
+ * `code` property on an error.
  * 
  * Note that a few functions return a Promise in order to accomodate
  * either a synchronous or asynchronous SQLite build, generally those
  * involved with opening/closing a database or executing a statement.
+ * 
+ * @see https://sqlite.org/c3ref/funclist.html
  */
 declare interface SQLiteAPI {
   /**
    * Bind a collection (array or object) of values to a statement
    * @param stmt prepared statement pointer
    * @param bindings 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_collection(
     stmt: number,
@@ -174,6 +207,7 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind(stmt: number, i: number, value: SQLiteCompatibleType|null): number;
 
@@ -183,6 +217,7 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_blob(stmt: number, i: number, value: Int8Array|Array<number>): number;
 
@@ -192,6 +227,7 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
    bind_double(stmt: number, i: number, value: number): number;
 
@@ -201,6 +237,7 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_int(stmt: number, i: number, value: number): number;
 
@@ -209,6 +246,7 @@ declare interface SQLiteAPI {
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_null(stmt: number, i: number): number;
 
@@ -235,6 +273,7 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_text(stmt: number, i: number, value: string): number;
 
@@ -250,6 +289,7 @@ declare interface SQLiteAPI {
    * Close database connection
    * @see https://www.sqlite.org/c3ref/close.html
    * @param db database pointer
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   close(db): Promise<number>;
 
@@ -314,6 +354,7 @@ declare interface SQLiteAPI {
    * @see https://www.sqlite.org/c3ref/column_blob.html
    * @param stmt prepared statement pointer
    * @param i column index
+   * @returns column name
    */
   column_name(stmt: number, i: number): string;
 
@@ -353,6 +394,7 @@ declare interface SQLiteAPI {
    * @param xFunc 
    * @param xStep 
    * @param xFinal 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   create_function(
     db: number,
@@ -372,6 +414,7 @@ declare interface SQLiteAPI {
    * @param zName 
    * @param module 
    * @param appData 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   create_module(db: number, zName: string, module: SQLiteModule, appData?): number;
 
@@ -390,6 +433,7 @@ declare interface SQLiteAPI {
    * @see https://www.sqlite.org/c3ref/declare_vtab.html
    * @param db database pointer
    * @param zSQL schema declaration
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   declare_vtab(db: number, zSQL: string): number;
 
@@ -399,6 +443,7 @@ declare interface SQLiteAPI {
    * @param db database pointer
    * @param zSQL queries
    * @param callback called for each output row
+   * @returns Promise resolving to `SQLITE_OK` (rejects on error)
    */
   exec(
     db: number,
@@ -410,6 +455,7 @@ declare interface SQLiteAPI {
    * Destroy a prepared statement object
    * @see https://www.sqlite.org/c3ref/finalize.html
    * @param stmt prepared statement pointer
+   * @returns Promise resolving to `SQLITE_OK` (rejects on error)
    */
   finalize(stmt: number): Promise<number>;
 
@@ -449,6 +495,27 @@ declare interface SQLiteAPI {
    * object provides both the prepared statement and a pointer to the
    * still uncompiled SQL that can be used with the next call to this
    * function. A null value is returned when no statement remains.
+   * 
+   * Code using {@link prepare_v2} generally looks like this:
+   * ```javascript
+   * const str = sqlite3.str_new(db, sql);
+   * try {
+   *   // Traverse and prepare the SQL, statement by statement.
+   *   let prepared = { stmt: null, sql: sqlite3.str_value(str) };
+   *   while ((prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
+   *     try {
+   *       // Step through the rows produced by the statement.
+   *       while (await sqlite3.step(prepared.stmt) === SQLite.SQLITE_ROW) {
+   *         // Do something with the row data...
+   *       }
+   *     } finally {
+   *       sqlite3.finalize(prepared.stmt);
+   *     }
+   *   }
+   * } finally {
+   *   sqlite3.str_finish(str);
+   * }
+   * ```
    * @see https://www.sqlite.org/c3ref/prepare.html
    * @param db database pointer
    * @param sql SQL pointer
@@ -461,6 +528,7 @@ declare interface SQLiteAPI {
    * Reset a prepared statement object
    * @see https://www.sqlite.org/c3ref/reset.html
    * @param stmt prepared statement pointer
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   reset(stmt: number): number;
 
@@ -529,6 +597,7 @@ declare interface SQLiteAPI {
    * 
    * @see https://www.sqlite.org/c3ref/step.html
    * @param stmt prepared statement pointer
+   * @returns Promise resolving to `SQLITE_OK` (rejects on error)
    */
   step(stmt: number): Promise<number>;
 
@@ -595,6 +664,10 @@ declare interface SQLiteAPI {
 
   /**
    * Extract a value from sqlite3_value
+   * 
+   * The contents of the returned buffer may be invalid after the
+   * next SQLite call. Make a copy of the data (e.g. with `.slice()`)
+   * if longer retention is required.
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
    * @returns value
@@ -647,6 +720,7 @@ declare interface SQLiteAPI {
    * @see https://www.sqlite.org/c3ref/str_append.html
    * @param vfs VFS object
    * @param makeDefault 
+   * @returns `SQLITE_OK` (throws exception on error)
    */
   vfs_register(vfs: SQLiteVFS, makeDefault?: boolean): number;
 }
