@@ -8,7 +8,7 @@ export class ArrayModule {
   mapCursorToState = new Map();
 
   /**
-   * @param {SQLite.SQLiteAPI} sqlite3 
+   * @param {SQLiteAPI} sqlite3 
    * @param {number} db 
    * @param {Array<Array>} rows Table data.
    * @param {Array<string>} columns Column names.

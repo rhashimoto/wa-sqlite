@@ -8,7 +8,7 @@ import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 import GOOG from './GOOG.js';
 
 /**
- * @param {SQLite.SQLiteAPI} sqlite3 
+ * @param {SQLiteAPI} sqlite3 
  * @param {number} db 
  */
 async function loadSampleTable(sqlite3, db) {
@@ -19,8 +19,14 @@ async function loadSampleTable(sqlite3, db) {
     BEGIN TRANSACTION;
   `);
   for (const row of GOOG.rows) {
+    const formattedRow = row.map(value => {
+      if (typeof value === 'string') {
+        return `'${value}'`;
+      }
+      return value;
+    }).join(',');
     await sqlite3.exec(db, `
-      INSERT INTO goog VALUES (${row.join(',')})
+      INSERT INTO goog VALUES (${formattedRow})
     `);
   }
   await sqlite3.exec(db, `
@@ -31,7 +37,7 @@ async function loadSampleTable(sqlite3, db) {
 function shared(ready) {
   const setup = {};
 
-  /** @type {SQLite.SQLiteAPI} */ let sqlite3, vfs;
+  /** @type {SQLiteAPI} */ let sqlite3, vfs;
   let db, sql;
   beforeEach(async function() {
     ({ sqlite3, vfs} = await ready);
@@ -142,6 +148,7 @@ describe('IndexedDbVFS', function() {
     resolveReady = resolve;
   });
   beforeAll(async function() {
+    /** @type {SQLiteAPI} */
     const sqlite3 = await getSQLiteAsync();
     const vfs = new IndexedDbVFS();
     sqlite3.vfs_register(vfs, false);

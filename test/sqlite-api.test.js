@@ -6,7 +6,7 @@ const LIBVERSION_NUMBER = 3035005;
 
 // Shared test definitions for sync and async.
 function shared(sqlite3Ready) {
-  /** @type {SQLite.SQLiteAPI} */ let sqlite3;
+  /** @type {SQLiteAPI} */ let sqlite3;
   let db;
   beforeEach(async function() {
     sqlite3 = await sqlite3Ready;
