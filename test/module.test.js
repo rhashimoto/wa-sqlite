@@ -4,7 +4,7 @@ import { ArrayModule } from '../src/examples/ArrayModule.js';
 import GOOG from './GOOG.js';
 
 describe('module', function() {
-  /** @type {SQLite.SQLiteAPI} */ let sqlite3;
+  /** @type {SQLiteAPI} */ let sqlite3;
   beforeAll(async function() {
     sqlite3 = await getSQLite();
   });

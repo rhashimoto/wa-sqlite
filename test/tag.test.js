@@ -3,7 +3,7 @@ import * as SQLite from '../src/sqlite-api.js';
 import { tag } from '../src/examples/tag.js';
 
 describe('tag', function() {
-  /** @type {SQLite.SQLiteAPI} */ let sqlite3;
+  /** @type {SQLiteAPI} */ let sqlite3;
   beforeAll(async function() {
     sqlite3 = await getSQLite();
   });

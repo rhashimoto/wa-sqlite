@@ -56,7 +56,8 @@ SELECT * FROM goog LIMIT 5;
   // to submit SQL queries. The tag is an example of an application-level
   // API that can be built on top of the low-level SQLite API.
   const mapNameToTag = new Map();
-  async function addTag(key, sqlite3, vfs) {
+
+  async function addTag(key, /** @type {SQLiteAPI}*/sqlite3, vfs) {
     const db = await sqlite3.open_v2(vfs, undefined, vfs);
     const t = tag(sqlite3, db);
     mapNameToTag.set(key, t);
