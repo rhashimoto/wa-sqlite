@@ -1391,6 +1391,9 @@
 								<div class="lead">
 									<p>Opening a new database connection.</p>
 								</div>
+								<p>Note that this function differs from the C API in that it
+									returns the Promise-wrapped database pointer (instead of a
+								result code).</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://sqlite.org/c3ref/open.html">https://sqlite.org/c3ref/open.html</a></p>
@@ -1405,7 +1408,7 @@
 								<li>
 									<h5><span class="tsd-flag ts-flagOptional">Optional</span> iFlags: <span class="tsd-signature-type">number</span></h5>
 									<div class="tsd-comment tsd-typography">
-										<p>default <code>SQLite.CREATE | SQLite.READWRITE</code> (0x6)</p>
+										<p><code>SQLite.CREATE | SQLite.READWRITE</code> (0x6) if omitted</p>
 									</div>
 								</li>
 								<li>
@@ -1436,9 +1439,10 @@
 								</div>
 								<p>SQL is provided as a pointer in WASM memory, so the utility functions
 									<a href="sqliteapi.html#str_new">str_new</a> and <a href="sqliteapi.html#str_value">str_value</a> should be used. The returned
-									object provides both the prepared statement and a pointer to the
-									still uncompiled SQL that can be used with the next call to this
-								function. A null value is returned when no statement remains.</p>
+									Promise-wrapped object provides both the prepared statement and a
+									pointer to the still uncompiled SQL that can be used with the next
+									call to this function. A Promise containing <code>null</code> is returned
+								when no statement remains.</p>
 								<p>Code using <a href="sqliteapi.html#prepare_v2">prepare_v2</a> generally looks like this:</p>
 								<pre><code class="language-javascript"><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">str</span><span style="color: #000000"> = </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_new</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sql</span><span style="color: #000000">);</span>
 <span style="color: #AF00DB">try</span><span style="color: #000000"> {</span>
@@ -1481,7 +1485,8 @@
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">{ </span>sql<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span>stmt<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> }</span><span class="tsd-signature-symbol">&gt;</span></h4>
 							<p>Promise-wrapped object containing the prepared statement
-							pointer and next SQL pointer, <code>null</code> when no statement remains</p>
+								pointer and next SQL pointer, or a Promise containing <code>null</code> when
+							no statement remains</p>
 						</li>
 					</ul>
 				</section>
