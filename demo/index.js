@@ -18,13 +18,16 @@ import GOOG from '../test/GOOG.js';
 // This will need to be changed if using a package manager other than Yarn 2.
 // The value can also reference an external CDN, e.g.
 // https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs
-const MONACO_VS = '/.yarn/unplugged/monaco-editor-npm-0.23.0-f10184dc03/node_modules/monaco-editor/dev/vs';
+const MONACO_VS = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs';
 
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
-CREATE TABLE tbl (x PRIMARY KEY, y);
+CREATE TABLE IF NOT EXISTS tbl (x PRIMARY KEY, y);
 REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
 SELECT y * y FROM tbl WHERE x = 'bar';
+
+CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
+SELECT * FROM goog LIMIT 5;
 `.trim();
 
 (async function() {
