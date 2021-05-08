@@ -49,7 +49,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pVTab 
-   * @param {object} indexInfo 
+   * @param {SQLiteModuleIndexInfo} indexInfo 
    */
   xBestIndex(pVTab, indexInfo) {
     // A module capable of returning subsets rows based on constraints
