@@ -590,9 +590,13 @@ declare interface SQLiteAPI {
 
   /**
    * Opening a new database connection.
+   * 
+   * Note that this function differs from the C API in that it
+   * returns the Promise-wrapped database pointer (instead of a
+   * result code).
    * @see https://sqlite.org/c3ref/open.html
    * @param zFilename 
-   * @param iFlags default `SQLite.CREATE | SQLite.READWRITE` (0x6)
+   * @param iFlags `SQLite.CREATE | SQLite.READWRITE` (0x6) if omitted
    * @param zVfs VFS name
    * @returns Promise-wrapped database pointer.
    */
@@ -607,9 +611,10 @@ declare interface SQLiteAPI {
    * 
    * SQL is provided as a pointer in WASM memory, so the utility functions
    * {@link str_new} and {@link str_value} should be used. The returned
-   * object provides both the prepared statement and a pointer to the
-   * still uncompiled SQL that can be used with the next call to this
-   * function. A null value is returned when no statement remains.
+   * Promise-wrapped object provides both the prepared statement and a
+   * pointer to the still uncompiled SQL that can be used with the next
+   * call to this function. A Promise containing `null` is returned
+   * when no statement remains.
    * 
    * Code using {@link prepare_v2} generally looks like this:
    * ```javascript
@@ -635,7 +640,8 @@ declare interface SQLiteAPI {
    * @param db database pointer
    * @param sql SQL pointer
    * @returns Promise-wrapped object containing the prepared statement
-   * pointer and next SQL pointer, `null` when no statement remains
+   * pointer and next SQL pointer, or a Promise containing `null` when
+   * no statement remains
    */
   prepare_v2(db: number, sql: number): Promise<{ stmt: number, sql: number}|null>;
 
@@ -709,7 +715,6 @@ declare interface SQLiteAPI {
 
   /**
    * Evaluate an SQL statement
-   * 
    * @see https://www.sqlite.org/c3ref/step.html
    * @param stmt prepared statement pointer
    * @returns Promise resolving to `SQLITE_OK` (rejects on error)
