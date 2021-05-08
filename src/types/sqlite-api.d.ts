@@ -4,6 +4,7 @@
  * in Javascript. Also see the
  * [GitHub repository](https://github.com/rhashimoto/wa-sqlite) and the
  * [online demo](https://rhashimoto.github.io/wa-sqlite/demo/).
+ * 
  * @module
  */
 
@@ -15,7 +16,7 @@
  * each element converted to a byte); SQLite always returns blob data as
  * `Int8Array`
  */
-type SQLiteCompatibleType = null|number|string|Int8Array|Array<number>;
+type SQLiteCompatibleType = number|string|Int8Array|Array<number>|null;
 
 /**
  * SQLite Virtual File System object
@@ -23,52 +24,72 @@ type SQLiteCompatibleType = null|number|string|Int8Array|Array<number>;
  * Objects with this interface can be passed to {@link SQLiteAPI.vfs_register}
  * to define a new filesystem.
  * 
+ * There are examples of a synchronous
+ * [MemoryVFS.js](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/MemoryVFS.js),
+ * and asynchronous
+ * [MemoryAsyncVFS.js](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/MemoryAsyncVFS.js)
+ * and
+ * [IndexedDbVFS.js](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IndexedDbVFS.js).
+ * 
  * @see https://sqlite.org/vfs.html
+ * @see https://sqlite.org/c3ref/io_methods.html
  */
 declare interface SQLiteVFS {
-  /** Maximum length of a file path (default 64) */
+  /** Maximum length of a file path in UTF-8 bytes (default 64) */
   mxPathName?: number;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xClose(fileId: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xRead(
     fileId: number,
     pData: { size: number, value: Int8Array},
     iOffset: number
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xWrite(
     fileId: number,
     pData: { size: number, value: Int8Array},
     iOffset: number
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xTruncate(fileId: number, iSize: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xSync(fileId: number, flags: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileSize(
     fileId: number,
     pSize64: { set(value: number): void }
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xLock(fileId: number, flags: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xUnlock(fileId: number, flags: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xCheckReservedLock(
     fileId: number,
     pResOut: { set(value: number): void }
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileControl(
     fileId: number,
     flags: number,
     pOut: { value: Int8Array }
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/io_methods.html */
   xDeviceCharacteristics(fileId: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/vfs.html */
   xOpen(
     name: string|null,
     fileId: number,
@@ -76,8 +97,10 @@ declare interface SQLiteVFS {
     pOutFlags: { set(value: number): void }
   ): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/vfs.html */
   xDelete(name: string, syncDir: number): number|Promise<number>;
 
+  /** @see https://sqlite.org/c3ref/vfs.html */
   xAccess(
     name: string,
     flags: number,
@@ -85,6 +108,11 @@ declare interface SQLiteVFS {
   ): number|Promise<number>;
 }
 
+/**
+ * This object is passed by SQLite to implementations of
+ * {@link SQLiteModule.xBestIndex}
+ * @see https://sqlite.org/c3ref/index_info.html
+ */
 declare interface SQLiteModuleIndexInfo {
   nConstraint: number,
   aConstraint: Array<{
@@ -113,9 +141,16 @@ declare interface SQLiteModuleIndexInfo {
  * Objects with this interface can be passed to {@link SQLiteAPI.create_module}
  * to define a module for virtual tables.
  * 
+ * There is an example
+ * [ArrayModule.js](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js)
+ * that allows a virtual table to reference a Javascript array.
+ * 
  * @see https://sqlite.org/vtab.html
  */
 declare interface SQLiteModule {
+  /**
+   * @see https://sqlite.org/vtab.html#the_xcreate_method
+   */
   xCreate?(
     db: number,
     appData,
@@ -124,6 +159,9 @@ declare interface SQLiteModule {
     pzErr: { set(value: string): void }
   ): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xconnect_method
+   */
   xConnect(
     db: number,
     appData,
@@ -132,16 +170,34 @@ declare interface SQLiteModule {
     pzErr: { set(value: string): void }
   ): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xbestindex_method
+   */
   xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xdisconnect_method
+   */
   xDisconnect(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xdestroy_method
+   */
   xDestroy(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xopen_method
+   */
   xOpen(pVTab: number, pCursor: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xclose_method
+   */
   xClose(pCursor: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xfilter_method
+   */
   xFilter(
     pCursor: number,
     idxNum: number,
@@ -149,27 +205,57 @@ declare interface SQLiteModule {
     values: number[]
   ): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xnext_method
+   */
   xNext(pCursor: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xeof_method
+   */
   xEof(pCursor: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xcolumn_method
+   */
   xColumn(pCursor: number, pContext: number, iCol: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xrowid_method
+   */
   xRowid(pCursor: number, pRowid: { set(value: number): void }): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xupdate_method
+   */
   xUpdate(
     pVTab: number,
     values: number[],
     pRowId: { set(value: number): void }): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xbegin_method
+   */
   xBegin?(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xsync_method
+   */
   xSync?(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xcommit_method
+   */
   xCommit?(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xrollback_method
+   */
   xRollback?(pVTab: number): number|Promise<number>;
 
+  /**
+   * @see https://sqlite.org/vtab.html#the_xrename_method
+   */
   xRename?(pVTab: number, zNew: string): number|Promise<number>;
 }
 
@@ -184,6 +270,35 @@ declare interface SQLiteModule {
  * Note that a few functions return a Promise in order to accomodate
  * either a synchronous or asynchronous SQLite build, generally those
  * involved with opening/closing a database or executing a statement.
+ * 
+ * To create an instance of the API, follow these steps:
+ * 
+ * ```javascript
+ * // Import a module factory function from one of the package
+ * // builds, either 'wa-sqlite.mjs' (synchronous) or
+ * // 'wa-sqlite-async.mjs' (asynchronous). You should only
+ * // use the asynchronous build if you plan to use an
+ * // asynchronous VFS or module.
+ * import SQLiteModuleFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
+ * 
+ * // Import the API.
+ * import * as SQLite from 'wa-sqlite';
+ * 
+ * // Invoke the module factory to create the SQLite Emscripten
+ * // module. This will fetch and compile the .wasm file.
+ * const apiPromise = SQLiteModuleFactory().then(module => {
+ *   // Use the module to build the API instance. 
+ *   return SQLite.Factory(module);
+ * });
+ * 
+ * // Resolve the API instance in the Promise and use it inside
+ * // an async function like this:
+ * (async function() {
+ *   const sqlite3 = await apiPromise;
+ *   const db = await sqlite3.open_v2('myDB');
+ *   ...
+ * })();
+ * ```
  * 
  * @see https://sqlite.org/c3ref/funclist.html
  */
@@ -653,17 +768,17 @@ declare interface SQLiteAPI {
   user_data(context: number): any;
 
   /**
-   * Extract a value from sqlite3_value
+   * Extract a value from `sqlite3_value`
    * 
    * This is a convenience function that calls the appropriate `value_*`
    * function based on its type.
    * @param pValue `sqlite3_value` pointer
    * @returns value
    */
-  value(pValue: number): SQLiteCompatibleType|null;
+  value(pValue: number): SQLiteCompatibleType;
 
   /**
-   * Extract a value from sqlite3_value
+   * Extract a value from `sqlite3_value`
    * 
    * The contents of the returned buffer may be invalid after the
    * next SQLite call. Make a copy of the data (e.g. with `.slice()`)
@@ -683,7 +798,7 @@ declare interface SQLiteAPI {
   value_bytes(pValue: number): number;
 
   /**
-   * Extract a value from sqlite3_value
+   * Extract a value from `sqlite3_value`
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
    * @returns value
@@ -691,7 +806,7 @@ declare interface SQLiteAPI {
   value_double(pValue: number): number;
 
   /**
-   * Extract a value from sqlite3_value
+   * Extract a value from `sqlite3_value`
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
    * @returns value
@@ -699,7 +814,7 @@ declare interface SQLiteAPI {
   value_int(pValue: number): number;
 
   /**
-   * Extract a value from sqlite3_value
+   * Extract a value from `sqlite3_value`
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
    * @returns value
@@ -707,7 +822,7 @@ declare interface SQLiteAPI {
   value_text(pValue: number): string;
 
   /**
-   * Get type of sqlite3_value
+   * Get type of `sqlite3_value`
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
    * @returns enumeration value for type
