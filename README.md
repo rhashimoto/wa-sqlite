@@ -6,7 +6,9 @@ An [IndexedDB virtual filesystem](https://github.com/rhashimoto/wa-sqlite/blob/m
 [Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) with a modern desktop web browser.
 
 ## Build
-If you don't want to build the Emscripten components, use the "buildless" branch that has pre-built artifacts checked in. This is also advisable when including this project as a dependency (e.g. `yarn add "wa-sqlite@rhashimoto/wa-sqlite#buildless"`). Otherwise, here are the build prerequisites:
+The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the "buildless" branch with pre-built artifacts checked in. This is also recommended when including the project as a dependency (e.g. `yarn add "wa-sqlite@rhashimoto/wa-sqlite#buildless"`).
+
+If you do want to build - e.g. you want to change build flags or use a specific EMSDK version - here are the prerequisites:
 
 * Building on Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
