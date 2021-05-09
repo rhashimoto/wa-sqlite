@@ -266,8 +266,7 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   xDeviceCharacteristics(fileId) {
-    return VFS.SQLITE_IOCAP_ATOMIC |
-           VFS.SQLITE_IOCAP_SAFE_APPEND |
+    return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
