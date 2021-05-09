@@ -274,25 +274,26 @@ declare interface SQLiteModule {
  * To create an instance of the API, follow these steps:
  * 
  * ```javascript
- * // Import a module factory function from one of the package
- * // builds, either 'wa-sqlite.mjs' (synchronous) or
+ * // Import an ES6 module factory function from one of the
+ * // package builds, either 'wa-sqlite.mjs' (synchronous) or
  * // 'wa-sqlite-async.mjs' (asynchronous). You should only
  * // use the asynchronous build if you plan to use an
  * // asynchronous VFS or module.
- * import SQLiteModuleFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
+ * import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
  * 
  * // Import the API.
  * import * as SQLite from 'wa-sqlite';
  * 
- * // Invoke the module factory to create the SQLite Emscripten
- * // module. This will fetch and compile the .wasm file.
- * const apiPromise = SQLiteModuleFactory().then(module => {
+ * // Invoke the ES6 module factory to create the SQLite
+ * // Emscripten module. This will fetch and compile the
+ * // .wasm file.
+ * const apiPromise = SQLiteESMFactory().then(module => {
  *   // Use the module to build the API instance. 
  *   return SQLite.Factory(module);
  * });
  * 
- * // Resolve the API instance in the Promise and use it inside
- * // an async function like this:
+ * // Resolve the API instance in the Promise and use it
+ * // inside an async function like this:
  * (async function() {
  *   const sqlite3 = await apiPromise;
  *   const db = await sqlite3.open_v2('myDB');
