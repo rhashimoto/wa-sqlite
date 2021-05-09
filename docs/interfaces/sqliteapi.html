@@ -78,25 +78,26 @@
 						either a synchronous or asynchronous SQLite build, generally those
 					involved with opening/closing a database or executing a statement.</p>
 					<p>To create an instance of the API, follow these steps:</p>
-					<pre><code class="language-javascript"><span style="color: #008000">// Import a module factory function from one of the package</span>
-<span style="color: #008000">// builds, either &#039;wa-sqlite.mjs&#039; (synchronous) or</span>
+					<pre><code class="language-javascript"><span style="color: #008000">// Import an ES6 module factory function from one of the</span>
+<span style="color: #008000">// package builds, either &#039;wa-sqlite.mjs&#039; (synchronous) or</span>
 <span style="color: #008000">// &#039;wa-sqlite-async.mjs&#039; (asynchronous). You should only</span>
 <span style="color: #008000">// use the asynchronous build if you plan to use an</span>
 <span style="color: #008000">// asynchronous VFS or module.</span>
-<span style="color: #AF00DB">import</span><span style="color: #000000"> </span><span style="color: #001080">SQLiteModuleFactory</span><span style="color: #000000"> </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;wa-sqlite/dist/wa-sqlite.mjs&#039;</span><span style="color: #000000">;</span>
+<span style="color: #AF00DB">import</span><span style="color: #000000"> </span><span style="color: #001080">SQLiteESMFactory</span><span style="color: #000000"> </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;wa-sqlite/dist/wa-sqlite.mjs&#039;</span><span style="color: #000000">;</span>
 
 <span style="color: #008000">// Import the API.</span>
 <span style="color: #AF00DB">import</span><span style="color: #000000"> </span><span style="color: #0000FF">*</span><span style="color: #000000"> </span><span style="color: #AF00DB">as</span><span style="color: #000000"> </span><span style="color: #001080">SQLite</span><span style="color: #000000"> </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;wa-sqlite&#039;</span><span style="color: #000000">;</span>
 
-<span style="color: #008000">// Invoke the module factory to create the SQLite Emscripten</span>
-<span style="color: #008000">// module. This will fetch and compile the .wasm file.</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">apiPromise</span><span style="color: #000000"> = </span><span style="color: #795E26">SQLiteModuleFactory</span><span style="color: #000000">().</span><span style="color: #795E26">then</span><span style="color: #000000">(</span><span style="color: #001080">module</span><span style="color: #000000"> </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
+<span style="color: #008000">// Invoke the ES6 module factory to create the SQLite</span>
+<span style="color: #008000">// Emscripten module. This will fetch and compile the</span>
+<span style="color: #008000">// .wasm file.</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">apiPromise</span><span style="color: #000000"> = </span><span style="color: #795E26">SQLiteESMFactory</span><span style="color: #000000">().</span><span style="color: #795E26">then</span><span style="color: #000000">(</span><span style="color: #001080">module</span><span style="color: #000000"> </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
 <span style="color: #000000">  </span><span style="color: #008000">// Use the module to build the API instance. </span>
 <span style="color: #000000">  </span><span style="color: #AF00DB">return</span><span style="color: #000000"> </span><span style="color: #001080">SQLite</span><span style="color: #000000">.</span><span style="color: #795E26">Factory</span><span style="color: #000000">(</span><span style="color: #267F99">module</span><span style="color: #000000">);</span>
 <span style="color: #000000">});</span>
 
-<span style="color: #008000">// Resolve the API instance in the Promise and use it inside</span>
-<span style="color: #008000">// an async function like this:</span>
+<span style="color: #008000">// Resolve the API instance in the Promise and use it</span>
+<span style="color: #008000">// inside an async function like this:</span>
 <span style="color: #000000">(</span><span style="color: #0000FF">async</span><span style="color: #000000"> </span><span style="color: #0000FF">function</span><span style="color: #000000">() {</span>
 <span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">sqlite3</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">apiPromise</span><span style="color: #000000">;</span>
 <span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">db</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">open_v2</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;myDB&#039;</span><span style="color: #000000">);</span>
