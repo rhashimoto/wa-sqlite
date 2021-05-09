@@ -1,8 +1,8 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 // @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
+import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
 // @ts-ignore
-import SQLiteModuleAsyncFactory from '../dist/wa-sqlite-async.mjs';
+import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
 
 import * as SQLite from '../src/sqlite-api.js';
 
@@ -33,8 +33,8 @@ SELECT * FROM goog LIMIT 5;
 (async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
   const [SQLiteModule, SQLiteAsyncModule, editor] = await Promise.all([
-    SQLiteModuleFactory(),
-    SQLiteModuleAsyncFactory(),
+    SQLiteESMFactory(),
+    SQLiteAsyncESMFactory(),
     createEditor()
   ]);
 

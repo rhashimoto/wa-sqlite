@@ -1,18 +1,18 @@
 // @ts-ignore
-import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
+import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
 // @ts-ignore
-import SQLiteAsyncModuleFactory from '../dist/wa-sqlite-async.mjs';
+import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 
 export const getSQLite = (function() {
-  const sqlite3 = SQLiteModuleFactory().then(module => {
+  const sqlite3 = SQLiteESMFactory().then(module => {
     return SQLite.Factory(module);
   });
   return () => sqlite3;
 })();
 
 export const getSQLiteAsync = (function() {
-  const sqlite3 = SQLiteAsyncModuleFactory().then(module => {
+  const sqlite3 = SQLiteAsyncESMFactory().then(module => {
     return SQLite.Factory(module);
   });
   return () => sqlite3;
