@@ -305,7 +305,39 @@ declare interface SQLiteModule {
  */
 declare interface SQLiteAPI {
   /**
-   * Bind a collection (array or object) of values to a statement
+   * Bind a collection of values to a statement
+   * 
+   * This convenience function binds values from either an array or object
+   * to a prepared statement with placeholder parameters.
+   * 
+   * Array example using numbered parameters (numbering is implicit in
+   * this example):
+   * ```
+   * const str = sqlite3.str_new(db, `
+   *   INSERT INTO tbl VALUES (?, ?, ?);
+   * `);
+   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
+   * sqlite3.bind_collection(prepared.stmt, [42, 'hello', null]);
+   * ...
+   * ```
+   * 
+   * Object example using named parameters (':', '@', or '$' prefixes
+   * are allowed):
+   * ```
+   * const str = sqlite3.str_new(db, `
+   *   INSERT INTO tbl VALUES (@foo, @bar, @baz);
+   * `);
+   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
+   * sqlite3.bind_collection(prepared.stmt, {
+   *   '@foo': 42,
+   *   '@bar': 'hello',
+   *   '@baz': null,
+   * });
+   * ...
+   * ```
+   * 
+   * Note that SQLite bindings are indexed beginning with 1, but when
+   * binding values from an array `a` the values begin with `a[0]`.
    * @param stmt prepared statement pointer
    * @param bindings 
    * @returns `SQLITE_OK` (throws exception on error)
@@ -319,7 +351,7 @@ declare interface SQLiteAPI {
    * Bind value to prepared statement
    * 
    * This convenience function calls the appropriate `bind_*` function
-   * based on the type of `value`.
+   * based on the type of `value`. Note that binding indices begin with 1.
    * @param stmt prepared statement pointer
    * @param i binding index
    * @param value 
@@ -329,6 +361,8 @@ declare interface SQLiteAPI {
 
   /**
    * Bind blob to prepared statement parameter
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param i binding index
@@ -339,6 +373,8 @@ declare interface SQLiteAPI {
 
   /**
    * Bind number to prepared statement parameter
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param i binding index
@@ -349,6 +385,8 @@ declare interface SQLiteAPI {
 
    /**
    * Bind number to prepared statement parameter
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param i binding index
@@ -359,6 +397,8 @@ declare interface SQLiteAPI {
 
    /**
    * Bind null to prepared statement
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param value 
@@ -376,6 +416,8 @@ declare interface SQLiteAPI {
 
   /**
    * Get name of bound parameter
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_parameter_name.html
    * @param stmt prepared statement pointer
    * @param i binding index
@@ -385,6 +427,8 @@ declare interface SQLiteAPI {
 
    /**
    * Bind string to prepared statement
+   * 
+   * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
    * @param i binding index
@@ -411,6 +455,9 @@ declare interface SQLiteAPI {
 
   /**
    * Call the appropriate `column_*` function based on the column type
+   * 
+   * The type is determined by calling {@link column_type}, which may
+   * not match the type declared in `CREATE TABLE`.
    * @param stmt prepared statement pointer
    * @param i column index
    * @returns column value
@@ -491,7 +538,9 @@ declare interface SQLiteAPI {
   column_text(stmt: number, i: number): string;
 
   /**
-   * Get column type for a prepared statement.
+   * Get column type for a prepared statement
+   * 
+   * Note that this type may not match the type declared in `CREATE TABLE`.
    * @see https://www.sqlite.org/c3ref/column_blob.html
    * @param stmt prepared statement pointer
    * @param i column index
@@ -500,7 +549,7 @@ declare interface SQLiteAPI {
   column_type(stmt: number, i: number): number;
 
   /**
-   * Create or redefine SQL functions.
+   * Create or redefine SQL functions
    * @see https://sqlite.org/c3ref/create_function.html
    * @param db database pointer
    * @param zFunctionName 
@@ -523,9 +572,8 @@ declare interface SQLiteAPI {
     xFinal?: (context: number) => void): number;
 
   /**
-   * Create a SQLite module for virtual tables.
-   * 
-   * https://www.sqlite.org/c3ref/create_module.html
+   * Create a SQLite module for virtual tables
+   * @see https://www.sqlite.org/c3ref/create_module.html
    * @param db database pointer
    * @param zName 
    * @param module 
@@ -568,7 +616,7 @@ declare interface SQLiteAPI {
   ): Promise<number>;
 
   /**
-   * Destroy a prepared statement object
+   * Destroy a prepared statement object compiled with {@link prepare_v2}
    * @see https://www.sqlite.org/c3ref/finalize.html
    * @param stmt prepared statement pointer
    * @returns Promise resolving to `SQLITE_OK` (rejects on error)
@@ -616,6 +664,9 @@ declare interface SQLiteAPI {
    * pointer to the still uncompiled SQL that can be used with the next
    * call to this function. A Promise containing `null` is returned
    * when no statement remains.
+   * 
+   * Each prepared statement should be destroyed with {@link finalize}
+   * after its usage is complete.
    * 
    * Code using {@link prepare_v2} generally looks like this:
    * ```javascript
@@ -723,7 +774,10 @@ declare interface SQLiteAPI {
   step(stmt: number): Promise<number>;
 
   /**
-   * Create a new dynamic string object
+   * Create a new `sqlite3_str` dynamic string instance
+   * 
+   * The purpose for `sqlite3_str` is to transfer a SQL string in
+   * Javascript to WebAssembly memory for use with {@link prepare_v2}.
    * 
    * An optional initialization argument has been added for convenience
    * which is functionally equivalent to (but slightly more efficient):
@@ -731,37 +785,42 @@ declare interface SQLiteAPI {
    *  const str = sqlite3.str_new(db);
    *  sqlite3.str_appendall(str, s);
    *  ```
+   * 
+   * A `sqlite3_str` instance should always be destroyed with
+   * {@link str_finish} after use to avoid a resource leak.
+   * 
    *  See https://www.sqlite.org/c3ref/str_append.html
    * @param db database pointer
    * @param s optional initialization string
-   * @returns sqlite3_str pointer
+   * @returns `sqlite3_str` pointer
    */
   str_new(db: number, s?:string): number;
 
   /**
-   * Add content to a dynamic string
+   * Add content to a `sqlite3_str` dynamic string
    * 
-   * Not recommended for building strings; prefer using Javascript and
-   * {@link str_new} with initialization.
+   * Not recommended for building strings incrementally; prefer using
+   * Javascript and {@link str_new} with initialization.
    * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str sqlite3_str pointer
+   * @param str `sqlite3_str` pointer
    * @param s string to append
    */
   str_appendall(str: number, s: string): void;
 
   /**
-   * Get pointer to dynamic string content
+   * Get pointer to `sqlite3_str` dynamic string data
    * 
-   * Use as input to {@link prepare_v2}.
-   * @param str sqlite3_str pointer
+   * The returned pointer points to the UTF-8 encoded string in
+   * WebAssembly memory. Use as input with {@link prepare_v2}.
+   * @param str `sqlite3_str` pointer
    * @returns pointer to string data
    */
   str_value(str: number): number;
 
   /**
-   * Finalize a dynamic string
+   * Finalize a `sqlite3_str` dynamic string created with {@link str_new}
    * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str sqlite3_str pointer
+   * @param str `sqlite3_str` pointer
    */
   str_finish(str: number): void;
 

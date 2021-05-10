@@ -202,7 +202,7 @@
 									<p>Bind value to prepared statement</p>
 								</div>
 								<p>This convenience function calls the appropriate <code>bind_*</code> function
-								based on the type of <code>value</code>.</p>
+								based on the type of <code>value</code>. Note that binding indices begin with 1.</p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -241,6 +241,7 @@
 								<div class="lead">
 									<p>Bind blob to prepared statement parameter</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a></p>
@@ -282,8 +283,34 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Bind a collection (array or object) of values to a statement</p>
+									<p>Bind a collection of values to a statement</p>
 								</div>
+								<p>This convenience function binds values from either an array or object
+								to a prepared statement with placeholder parameters.</p>
+								<p>Array example using numbered parameters (numbering is implicit in
+								this example):</p>
+								<pre><code><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">str</span><span style="color: #000000"> = </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_new</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #A31515">`</span>
+<span style="color: #A31515">  INSERT INTO tbl VALUES (?, ?, ?);</span>
+<span style="color: #A31515">`</span><span style="color: #000000">);</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">prepared</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">prepare_v2</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_value</span><span style="color: #000000">(</span><span style="color: #001080">str</span><span style="color: #000000">));</span>
+<span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">bind_collection</span><span style="color: #000000">(</span><span style="color: #001080">prepared</span><span style="color: #000000">.</span><span style="color: #001080">stmt</span><span style="color: #000000">, [</span><span style="color: #098658">42</span><span style="color: #000000">, </span><span style="color: #A31515">&#039;hello&#039;</span><span style="color: #000000">, </span><span style="color: #0000FF">null</span><span style="color: #000000">]);</span>
+<span style="color: #000000">...</span>
+</code></pre>
+								<p>Object example using named parameters (&#39;:&#39;, &#39;@&#39;, or &#39;$&#39; prefixes
+								are allowed):</p>
+								<pre><code><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">str</span><span style="color: #000000"> = </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_new</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #A31515">`</span>
+<span style="color: #A31515">  INSERT INTO tbl VALUES (@foo, @bar, @baz);</span>
+<span style="color: #A31515">`</span><span style="color: #000000">);</span>
+<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">prepared</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">prepare_v2</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_value</span><span style="color: #000000">(</span><span style="color: #001080">str</span><span style="color: #000000">));</span>
+<span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">bind_collection</span><span style="color: #000000">(</span><span style="color: #001080">prepared</span><span style="color: #000000">.</span><span style="color: #001080">stmt</span><span style="color: #000000">, {</span>
+<span style="color: #000000">  </span><span style="color: #A31515">&#039;@foo&#039;</span><span style="color: #001080">:</span><span style="color: #000000"> </span><span style="color: #098658">42</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #A31515">&#039;@bar&#039;</span><span style="color: #001080">:</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;hello&#039;</span><span style="color: #000000">,</span>
+<span style="color: #000000">  </span><span style="color: #A31515">&#039;@baz&#039;</span><span style="color: #001080">:</span><span style="color: #000000"> </span><span style="color: #0000FF">null</span><span style="color: #000000">,</span>
+<span style="color: #000000">});</span>
+<span style="color: #000000">...</span>
+</code></pre>
+								<p>Note that SQLite bindings are indexed beginning with 1, but when
+								binding values from an array <code>a</code> the values begin with <code>a[0]</code>.</p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -316,6 +343,7 @@
 								<div class="lead">
 									<p>Bind number to prepared statement parameter</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a></p>
@@ -359,6 +387,7 @@
 								<div class="lead">
 									<p>Bind number to prepared statement parameter</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a></p>
@@ -402,6 +431,7 @@
 								<div class="lead">
 									<p>Bind null to prepared statement</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a></p>
@@ -473,6 +503,7 @@
 								<div class="lead">
 									<p>Get name of bound parameter</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_parameter_name.html">https://www.sqlite.org/c3ref/bind_parameter_name.html</a></p>
@@ -513,6 +544,7 @@
 								<div class="lead">
 									<p>Bind string to prepared statement</p>
 								</div>
+								<p>Note that binding indices begin with 1.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/bind_blob.html">https://www.sqlite.org/c3ref/bind_blob.html</a></p>
@@ -624,6 +656,8 @@
 								<div class="lead">
 									<p>Call the appropriate <code>column_*</code> function based on the column type</p>
 								</div>
+								<p>The type is determined by calling <a href="sqliteapi.html#column_type">column_type</a>, which may
+								not match the type declared in <code>CREATE TABLE</code>.</p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -960,8 +994,9 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Get column type for a prepared statement.</p>
+									<p>Get column type for a prepared statement</p>
 								</div>
+								<p>Note that this type may not match the type declared in <code>CREATE TABLE</code>.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/column_blob.html">https://www.sqlite.org/c3ref/column_blob.html</a></p>
@@ -1000,7 +1035,7 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Create or redefine SQL functions.</p>
+									<p>Create or redefine SQL functions</p>
 								</div>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
@@ -1124,9 +1159,13 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Create a SQLite module for virtual tables.</p>
+									<p>Create a SQLite module for virtual tables</p>
 								</div>
-								<p><a href="https://www.sqlite.org/c3ref/create_module.html">https://www.sqlite.org/c3ref/create_module.html</a></p>
+								<dl class="tsd-comment-tags">
+									<dt>see</dt>
+									<dd><p><a href="https://www.sqlite.org/c3ref/create_module.html">https://www.sqlite.org/c3ref/create_module.html</a></p>
+									</dd>
+								</dl>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -1306,7 +1345,7 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Destroy a prepared statement object</p>
+									<p>Destroy a prepared statement object compiled with <a href="sqliteapi.html#prepare_v2">prepare_v2</a></p>
 								</div>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
@@ -1444,6 +1483,8 @@
 									pointer to the still uncompiled SQL that can be used with the next
 									call to this function. A Promise containing <code>null</code> is returned
 								when no statement remains.</p>
+								<p>Each prepared statement should be destroyed with <a href="sqliteapi.html#finalize">finalize</a>
+								after its usage is complete.</p>
 								<p>Code using <a href="sqliteapi.html#prepare_v2">prepare_v2</a> generally looks like this:</p>
 								<pre><code class="language-javascript"><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">str</span><span style="color: #000000"> = </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_new</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sql</span><span style="color: #000000">);</span>
 <span style="color: #AF00DB">try</span><span style="color: #000000"> {</span>
@@ -1847,10 +1888,10 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Add content to a dynamic string</p>
+									<p>Add content to a <code>sqlite3_str</code> dynamic string</p>
 								</div>
-								<p>Not recommended for building strings; prefer using Javascript and
-								<a href="sqliteapi.html#str_new">str_new</a> with initialization.</p>
+								<p>Not recommended for building strings incrementally; prefer using
+								Javascript and <a href="sqliteapi.html#str_new">str_new</a> with initialization.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/str_append.html">https://www.sqlite.org/c3ref/str_append.html</a></p>
@@ -1862,7 +1903,7 @@
 								<li>
 									<h5>str: <span class="tsd-signature-type">number</span></h5>
 									<div class="tsd-comment tsd-typography">
-										<p>sqlite3_str pointer</p>
+										<p><code>sqlite3_str</code> pointer</p>
 									</div>
 								</li>
 								<li>
@@ -1888,7 +1929,7 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Finalize a dynamic string</p>
+									<p>Finalize a <code>sqlite3_str</code> dynamic string created with <a href="sqliteapi.html#str_new">str_new</a></p>
 								</div>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
@@ -1901,7 +1942,7 @@
 								<li>
 									<h5>str: <span class="tsd-signature-type">number</span></h5>
 									<div class="tsd-comment tsd-typography">
-										<p>sqlite3_str pointer</p>
+										<p><code>sqlite3_str</code> pointer</p>
 									</div>
 								</li>
 							</ul>
@@ -1921,13 +1962,17 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Create a new dynamic string object</p>
+									<p>Create a new <code>sqlite3_str</code> dynamic string instance</p>
 								</div>
+								<p>The purpose for <code>sqlite3_str</code> is to transfer a SQL string in
+								Javascript to WebAssembly memory for use with <a href="sqliteapi.html#prepare_v2">prepare_v2</a>.</p>
 								<p>An optional initialization argument has been added for convenience
 								which is functionally equivalent to (but slightly more efficient):</p>
 								<pre><code class="language-javascript"><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">str</span><span style="color: #000000"> = </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_new</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">);</span>
 <span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_appendall</span><span style="color: #000000">(</span><span style="color: #001080">str</span><span style="color: #000000">, </span><span style="color: #001080">s</span><span style="color: #000000">);</span>
 </code></pre>
+								<p>A <code>sqlite3_str</code> instance should always be destroyed with
+								<a href="sqliteapi.html#str_finish">str_finish</a> after use to avoid a resource leak.</p>
 								<p> See <a href="https://www.sqlite.org/c3ref/str_append.html">https://www.sqlite.org/c3ref/str_append.html</a></p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
@@ -1946,7 +1991,7 @@
 								</li>
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4>
-							<p>sqlite3_str pointer</p>
+							<p><code>sqlite3_str</code> pointer</p>
 						</li>
 					</ul>
 				</section>
@@ -1962,16 +2007,17 @@
 							</aside>
 							<div class="tsd-comment tsd-typography">
 								<div class="lead">
-									<p>Get pointer to dynamic string content</p>
+									<p>Get pointer to <code>sqlite3_str</code> dynamic string data</p>
 								</div>
-								<p>Use as input to <a href="sqliteapi.html#prepare_v2">prepare_v2</a>.</p>
+								<p>The returned pointer points to the UTF-8 encoded string in
+								WebAssembly memory. Use as input with <a href="sqliteapi.html#prepare_v2">prepare_v2</a>.</p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
 								<li>
 									<h5>str: <span class="tsd-signature-type">number</span></h5>
 									<div class="tsd-comment tsd-typography">
-										<p>sqlite3_str pointer</p>
+										<p><code>sqlite3_str</code> pointer</p>
 									</div>
 								</li>
 							</ul>
