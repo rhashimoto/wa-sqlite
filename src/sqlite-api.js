@@ -136,7 +136,9 @@ export function Factory(Module) {
     for (let i = 1; i <= nBindings; ++i) {
       const key = isArray ? i - 1 : api.bind_parameter_name(stmt, i);
       const value = bindings[key];
-      api.bind(stmt, i, value);
+      if (value !== undefined) {
+        api.bind(stmt, i, value);
+      }
     }
     return SQLITE_OK;
   };
