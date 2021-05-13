@@ -72,7 +72,8 @@ export class IndexedDbVFS extends VFS.Base {
         metaKey,
         flags,
         lockType: VFS.SQLITE_LOCK_NONE,
-        cache: new Map()
+        cache: new Map(),
+        needsSync: true
       });
       pOutFlags.set(flags);
       return VFS.SQLITE_OK;
@@ -83,8 +84,9 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-        const file = this.mapIdToFile.get(fileId);
         await this._delete(file.metaKey);
+      } else if (file.needsSync) {
+        await this._sync(file);
       }
       this.mapIdToFile.delete(fileId);
       return VFS.SQLITE_OK;
@@ -184,6 +186,7 @@ export class IndexedDbVFS extends VFS.Base {
       const file = this.mapIdToFile.get(fileId);
       const meta = file.meta;
       meta.size = Math.min(meta.size, iSize);
+      file.needsSync = true;
 
       // Remove blocks past EOF from the cache.
       const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
@@ -200,19 +203,10 @@ export class IndexedDbVFS extends VFS.Base {
 
   xSync(fileId, flags) {
     return this.handleAsync(async () => {
-      // Write blocks before updating file size metadata.
       const file = this.mapIdToFile.get(fileId);
-      const meta = file.meta;
-      const store = this._getStore();
-      await this._flushCache(store, file);
-
-      meta.syncs = ++meta.syncs >>> 0;
-      await idb(store.put(meta, file.metaKey));
-
-      // Remove blocks past EOF from IndexedDB.
-      const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
-      this._delete(this._blockKey(meta.name, nBlocks), file.metaKey);
-
+      if (file.needsSync) {
+        await this._sync(file);
+      }
       return VFS.SQLITE_OK;
     });
   }
@@ -352,6 +346,7 @@ export class IndexedDbVFS extends VFS.Base {
     const key = this._blockKey(file.meta.name, index);
     file.cache.delete(key);
     file.cache.set(key, { data: blockData, dirty: true });
+    file.needsSync = true;
     this._purgeCache(store, file);
   }
 
@@ -373,6 +368,22 @@ export class IndexedDbVFS extends VFS.Base {
         block.dirty = false;
       }
     }
+  }
+
+  async _sync(file) {
+    // Write blocks before updating file size metadata.
+    const meta = file.meta;
+    const store = this._getStore();
+    await this._flushCache(store, file);
+
+    meta.syncs = ++meta.syncs >>> 0;
+    await idb(store.put(meta, file.metaKey));
+
+    // Remove blocks past EOF from IndexedDB.
+    const nBlocks = Math.floor((meta.size + meta.blockSize - 1) / meta.blockSize);
+    this._delete(this._blockKey(meta.name, nBlocks), file.metaKey);
+
+    file.needsSync = false;
   }
 
   /**
