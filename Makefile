@@ -2,11 +2,11 @@
 
 SQLITE_AMALGAMATION = sqlite-amalgamation-3350500
 SQLITE_AMALGAMATION_ZIP_URL = https://www.sqlite.org/2021/${SQLITE_AMALGAMATION}.zip
-SQLITE_AMALGAMATION_ZIP_SHA3 = 8175cba8e28c2274aa6f8305076116622a4ecb7829673b92290dc047fba9bba6
+SQLITE_AMALGAMATION_ZIP_SHA = b49409ef123e193e719e2536f9b795482a69e61a9cc728933739b9024f035061
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
-EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd4814807faabfa
+EXTENSION_FUNCTIONS_SHA = 991b40fe8b2799edc215f7260b890f14a833512c9d9896aa080891330ffe4052
 
 # source files
 
@@ -25,7 +25,7 @@ BITCODE_FILES = \
 
 # build options
 
-EMCC ?= emcc
+EMCC ?= EMCC_CLOSURE_ARGS="--externs externs.js" emcc
 
 CFLAGS = \
 	-O3 \
@@ -121,17 +121,17 @@ deps: deps/$(SQLITE_AMALGAMATION) deps/$(EXTENSION_FUNCTIONS) deps/$(EXPORTED_FU
 
 deps/$(SQLITE_AMALGAMATION): cache/$(SQLITE_AMALGAMATION).zip
 	mkdir -p deps
-	openssl dgst -sha3-256 -r cache/$(SQLITE_AMALGAMATION).zip | sed -e 's/\s.*//' > deps/sha3
-	echo $(SQLITE_AMALGAMATION_ZIP_SHA3) | cmp deps/sha3
-	rm -rf deps/sha3 $@
+	openssl dgst -sha256 -r cache/$(SQLITE_AMALGAMATION).zip | awk '{print $$1}' > deps/sha
+	echo $(SQLITE_AMALGAMATION_ZIP_SHA) | cmp deps/sha
+	rm -rf deps/sha $@
 	unzip 'cache/$(SQLITE_AMALGAMATION).zip' -d deps/
 	touch $@
 
 deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 	mkdir -p deps
-	openssl dgst -sha3-256 -r cache/$(EXTENSION_FUNCTIONS) | sed -e 's/\s.*//' > deps/sha3
-	echo $(EXTENSION_FUNCTIONS_SHA3) | cmp deps/sha3
-	rm -rf deps/sha3 $@
+	openssl dgst -sha256 -r cache/$(EXTENSION_FUNCTIONS) | awk '{print $$1}' > deps/sha
+	echo $(EXTENSION_FUNCTIONS_SHA) | cmp deps/sha
+	rm -rf deps/sha $@
 	cp 'cache/$(EXTENSION_FUNCTIONS)' $@
 
 ## tmp
