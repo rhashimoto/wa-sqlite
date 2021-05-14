@@ -129,7 +129,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       if (arrayOffset !== pData.size) {
         // Zero unused area of read buffer.
-        pData.value.subarray(arrayOffset).fill(0, pData.size - arrayOffset);
+        pData.value.fill(0, arrayOffset);
         return VFS.SQLITE_IOERR_SHORT_READ;
       }
       return VFS.SQLITE_OK;

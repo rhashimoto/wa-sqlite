@@ -80,7 +80,13 @@ export class MemoryVFS extends VFS.Base {
     if (nBytes) {
       pData.value.set(new Int8Array(file.data, bgn, nBytes));
     }
-    return nBytes === pData.size ? VFS.SQLITE_OK : VFS.SQLITE_IOERR_SHORT_READ;
+
+    if (nBytes < pData.size) {
+      // Zero unused area of read buffer.
+      pData.value.fill(0, nBytes);
+      return VFS.SQLITE_IOERR_SHORT_READ;
+    }
+    return VFS.SQLITE_OK;
   }
 
   /**
