@@ -26,6 +26,7 @@ export class ArrayModule {
    * @param {Array<string>} argv 
    * @param {number} pVTab 
    * @param {{ set: function(string): void}} pzErr 
+   * @returns {number|Promise<number>}
    */
   xCreate(db, appData, argv, pVTab, pzErr) {
     return this.xConnect(db, appData, argv, pVTab, pzErr);
@@ -37,6 +38,7 @@ export class ArrayModule {
    * @param {Array<string>} argv 
    * @param {number} pVTab 
    * @param {{ set: function(string): void}} pzErr 
+   * @returns {number|Promise<number>}
    */
   xConnect(db, appData, argv, pVTab, pzErr) {
     // All virtual tables in this module will use the same array. If
@@ -50,6 +52,7 @@ export class ArrayModule {
   /**
    * @param {number} pVTab 
    * @param {SQLiteModuleIndexInfo} indexInfo 
+   * @returns {number|Promise<number>}
    */
   xBestIndex(pVTab, indexInfo) {
     // A module capable of returning subsets rows based on constraints
@@ -60,6 +63,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pVTab 
+   * @returns {number|Promise<number>}
    */
   xDisconnect(pVTab) {
     return SQLite.SQLITE_OK;
@@ -67,6 +71,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pVTab 
+   * @returns {number|Promise<number>}
    */
   xDestroy(pVTab) {
     return SQLite.SQLITE_OK;
@@ -75,6 +80,7 @@ export class ArrayModule {
   /**
    * @param {number} pVTab 
    * @param {number} pCursor 
+   * @returns {number|Promise<number>}
    */
   xOpen(pVTab, pCursor) {
     this.mapCursorToState.set(pCursor, {});
@@ -83,6 +89,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
+   * @returns {number|Promise<number>}
    */
   xClose(pCursor) {
     this.mapCursorToState.delete(pCursor);
@@ -94,6 +101,7 @@ export class ArrayModule {
    * @param {number} idxNum 
    * @param {string?} idxStr 
    * @param {Array<number>} values 
+   * @returns {number|Promise<number>}
    */
   xFilter(pCursor, idxNum, idxStr, values) {
     // If we had set idxNum or idxStr in indexInfo in xBestIndex(),
@@ -110,6 +118,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
+   * @returns {number|Promise<number>}
    */
   xNext(pCursor) {
     // Advance to the next valid row or EOF.
@@ -122,6 +131,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
+   * @returns {number|Promise<number>}
    */
   xEof(pCursor) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -132,6 +142,7 @@ export class ArrayModule {
    * @param {number} pCursor 
    * @param {number} pContext 
    * @param {number} iCol 
+   * @returns {number|Promise<number>}
    */
   xColumn(pCursor, pContext, iCol) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -143,6 +154,7 @@ export class ArrayModule {
   /**
    * @param {number} pCursor 
    * @param {{ set: function(number): void}} pRowid 
+   * @returns {number|Promise<number>}
    */
   xRowid(pCursor, pRowid) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -156,6 +168,7 @@ export class ArrayModule {
    * @param {number} pVTab 
    * @param {Array<number>} values sqlite3_value pointers
    * @param {{ set: function(number): void}} pRowid 
+   * @returns {number|Promise<number>}
    */
   xUpdate(pVTab, values, pRowid) {
     let index = this.sqlite3.value_type(values[0]) === SQLite.SQLITE_NULL ?
