@@ -10,6 +10,7 @@ import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
+import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
 
 import { tag } from '../src/examples/tag.js';
 import GOOG from '../test/GOOG.js';
@@ -62,6 +63,14 @@ SELECT y * y FROM tbl WHERE x = 'bar';
     // Add an example module with an array back-end.
     // @ts-ignore
     sqlite3.create_module(db, 'array', new ArrayModule(sqlite3, db, GOOG.rows, GOOG.columns));
+    if (sqlite3 === sqlite3a) {
+      // @ts-ignore
+      sqlite3.create_module(
+        db,
+        'arrayasync',
+        // @ts-ignore
+        new ArrayAsyncModule(sqlite3, db, GOOG.rows, GOOG.columns));
+    }
   }
   await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
