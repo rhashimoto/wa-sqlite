@@ -9,6 +9,9 @@ const mod_methods = {
     const mapVTabToModule = new Map();
     const mapCursorToModule = new Map();
 
+    const closedVTabs = hasAsyncify ? new Set() : null;
+    const closedCursors = hasAsyncify ? new Set() : null;
+
     class Value {
       constructor(ptr, type) {
         this.ptr = ptr;
@@ -171,6 +174,12 @@ const mod_methods = {
     _modCreate = function(db, pModuleId, argc, argv, pVTab, pzErr) {
       const m = mapIdToModule.get(pModuleId);
       mapVTabToModule.set(pVTab, m);
+      if (hasAsyncify) {
+        closedVTabs.delete(pVTab);
+        for (const vTab of closedVTabs) {
+          mapVTabToModule.delete(vTab);
+        }
+      }
       argv = Array.from(new Uint32Array(HEAP8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
       return m.module['xCreate'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
@@ -179,6 +188,12 @@ const mod_methods = {
     _modConnect = function(db, pModuleId, argc, argv, pVTab, pzErr) {
       const m = mapIdToModule.get(pModuleId);
       mapVTabToModule.set(pVTab, m);
+      if (hasAsyncify) {
+        closedVTabs.delete(pVTab);
+        for (const vTab of closedVTabs) {
+          mapVTabToModule.delete(vTab);
+        }
+      }
       argv = Array.from(new Uint32Array(HEAP8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
       return m.module['xConnect'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
@@ -194,25 +209,43 @@ const mod_methods = {
 
     _modDisconnect = function(pVTab) {
       const m = mapVTabToModule.get(pVTab);
-      mapVTabToModule.delete(pVTab);
+      if (hasAsyncify) {
+        closedVTabs.add(pVTab);
+      } else {
+        mapVTabToModule.delete(pVTab);
+      }
       return m.module['xDisconnect'](pVTab);
     };
 
     _modDestroy = function(pVTab) {
       const m = mapVTabToModule.get(pVTab);
-      mapVTabToModule.delete(pVTab);
+      if (hasAsyncify) {
+        closedVTabs.add(pVTab);
+      } else {
+        mapVTabToModule.delete(pVTab);
+      }
       return m.module['xDestroy'](pVTab);
     };
 
     _modOpen = function(pVTab, pCursor) {
       const m = mapVTabToModule.get(pVTab);
       mapCursorToModule.set(pCursor, m);
+      if (hasAsyncify) {
+        closedCursors.delete(pCursor);
+        for (const cursor of closedCursors) {
+          mapCursorToModule.delete(cursor);
+        }
+      }
       return m.module['xOpen'](pVTab, pCursor);
     };
 
     _modClose = function(pCursor) {
       const m = mapCursorToModule.get(pCursor);
-      mapCursorToModule.delete(pCursor);
+      if (hasAsyncify) {
+        closedCursors.add(pCursor);
+      } else {
+        mapCursorToModule.delete(pCursor);
+      }
       return m.module['xClose'](pCursor);
     };
 

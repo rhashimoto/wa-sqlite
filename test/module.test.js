@@ -1,25 +1,14 @@
-import { getSQLite } from './api-instances.js';
-import * as SQLite from '../src/sqlite-api.js';
+import { getSQLite, getSQLiteAsync } from './api-instances.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
+import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
 import GOOG from './GOOG.js';
 
-describe('module', function() {
-  /** @type {SQLiteAPI} */ let sqlite3;
-  beforeAll(async function() {
-    sqlite3 = await getSQLite();
-  });
+function common(ModuleClass, setup) {
+  it('create/read', async function() {
+    /** @type {SQLiteAPI} */ const sqlite3 = setup.sqlite3;
+    const db = setup.db;
 
-  let db;
-  beforeEach(async function() {
-    db = await sqlite3.open_v2('module');
-  });
-
-  afterEach(async function() {
-    await sqlite3.close(db);
-  });
-
-  it('ArrayModule', async function() {
-    const module = new ArrayModule(
+    const module = new ModuleClass(
       sqlite3, db,
       GOOG.rows, GOOG.columns.map(column => column.toString()));
     sqlite3.create_module(db, 'GOOG', module);
@@ -34,9 +23,12 @@ describe('module', function() {
     expect(results[0][1]).toBeGreaterThan(0);
   });
 
-  it('xUpdate', async function() {
+  it('mutate', async function() {
+    /** @type {SQLiteAPI} */ const sqlite3 = setup.sqlite3;
+    const db = setup.db;
+    
     const array = [['existing', Math.PI]];
-    const module = new ArrayModule(
+    const module = new ModuleClass(
       sqlite3, db,
       array, ['x', 'y']);
     sqlite3.create_module(db, 'imod', module);
@@ -61,4 +53,38 @@ describe('module', function() {
     expect(array.length).toBe(3);
     expect(array[1]).toBe(null);
   });
+}
+
+describe('ArrayModule', function() {
+  const setup = {};
+  beforeAll(async function() {
+    setup.sqlite3 = await getSQLite();
+  });
+
+  beforeEach(async function() {
+    setup.db = await setup.sqlite3.open_v2('module');
+  });
+
+  afterEach(async function() {
+    await setup.sqlite3.close(setup.db);
+  });
+
+  common(ArrayModule, setup);
+});
+
+describe('ArrayAsyncModule', function() {
+  const setup = {};
+  beforeAll(async function() {
+    setup.sqlite3 = await getSQLiteAsync();
+  });
+
+  beforeEach(async function() {
+    setup.db = await setup.sqlite3.open_v2('module');
+  });
+
+  afterEach(async function() {
+    await setup.sqlite3.close(setup.db);
+  });
+
+  common(ArrayAsyncModule, setup);
 });
