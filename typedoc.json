@@ -1,6 +1,6 @@
 {
   "disableSources": true,
-  "entryPoints": ["src/types/sqlite-api.d.ts"],
+  "entryPoints": ["src/types/index.d.ts"],
   "out": "docs",
   "readme": "none",
   "tsconfig": "src/types/tsconfig.json"
