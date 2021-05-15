@@ -4,8 +4,6 @@
  * in Javascript. Also see the
  * [GitHub repository](https://github.com/rhashimoto/wa-sqlite) and the
  * [online demo](https://rhashimoto.github.io/wa-sqlite/demo/).
- * 
- * @module
  */
 
 /**
@@ -903,4 +901,94 @@ declare interface SQLiteAPI {
    * @returns `SQLITE_OK` (throws exception on error)
    */
   vfs_register(vfs: SQLiteVFS, makeDefault?: boolean): number;
+}
+
+/** @ignore */
+declare module 'wa-sqlite' {
+  /**
+   * Builds a Javascript API from the Emscripten module. This API is still
+   * low-level and closely corresponds to the C API exported by the module,
+   * but differs in some specifics like throwing exceptions on errors.
+   * @param {*} Module SQLite module
+   * @returns {SQLiteAPI}
+   */
+  export function Factory(Module: any): SQLiteAPI;
+  export const SQLITE_OK: 0;
+  export const SQLITE_ERROR: 1;
+  export const SQLITE_BUSY: 5;
+  export const SQLITE_NOMEM: 7;
+  export const SQLITE_READONLY: 8;
+  export const SQLITE_IOERR: 10;
+  export const SQLITE_IOERR_SHORT_READ: 522;
+  export const SQLITE_NOTFOUND: 12;
+  export const SQLITE_CANTOPEN: 14;
+  export const SQLITE_MISUSE: 21;
+  export const SQLITE_NOTADB: 26;
+  export const SQLITE_NOTICE: 27;
+  export const SQLITE_WARNING: 28;
+  export const SQLITE_ROW: 100;
+  export const SQLITE_DONE: 101;
+  export const SQLITE_OPEN_READONLY: 1;
+  export const SQLITE_OPEN_READWRITE: 2;
+  export const SQLITE_OPEN_CREATE: 4;
+  export const SQLITE_OPEN_DELETEONCLOSE: 8;
+  export const SQLITE_OPEN_EXCLUSIVE: 16;
+  export const SQLITE_OPEN_AUTOPROXY: 32;
+  export const SQLITE_OPEN_URI: 64;
+  export const SQLITE_OPEN_MEMORY: 128;
+  export const SQLITE_OPEN_MAIN_DB: 256;
+  export const SQLITE_OPEN_TEMP_DB: 512;
+  export const SQLITE_OPEN_TRANSIENT_DB: 1024;
+  export const SQLITE_OPEN_MAIN_JOURNAL: 2048;
+  export const SQLITE_OPEN_TEMP_JOURNAL: 4096;
+  export const SQLITE_OPEN_SUBJOURNAL: 8192;
+  export const SQLITE_OPEN_SUPER_JOURNAL: 16384;
+  export const SQLITE_OPEN_NOMUTEX: 32768;
+  export const SQLITE_OPEN_FULLMUTEX: 65536;
+  export const SQLITE_OPEN_SHAREDCACHE: 131072;
+  export const SQLITE_OPEN_PRIVATECACHE: 262144;
+  export const SQLITE_OPEN_WAL: 524288;
+  export const SQLITE_OPEN_NOFOLLOW: 16777216;
+  export const SQLITE_IOCAP_ATOMIC: 1;
+  export const SQLITE_IOCAP_ATOMIC512: 2;
+  export const SQLITE_IOCAP_ATOMIC1K: 4;
+  export const SQLITE_IOCAP_ATOMIC2K: 8;
+  export const SQLITE_IOCAP_ATOMIC4K: 16;
+  export const SQLITE_IOCAP_ATOMIC8K: 32;
+  export const SQLITE_IOCAP_ATOMIC16K: 64;
+  export const SQLITE_IOCAP_ATOMIC32K: 128;
+  export const SQLITE_IOCAP_ATOMIC64K: 256;
+  export const SQLITE_IOCAP_SAFE_APPEND: 512;
+  export const SQLITE_IOCAP_SEQUENTIAL: 1024;
+  export const SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN: 2048;
+  export const SQLITE_IOCAP_POWERSAFE_OVERWRITE: 4096;
+  export const SQLITE_IOCAP_IMMUTABLE: 8192;
+  export const SQLITE_IOCAP_BATCH_ATOMIC: 16384;
+  export const SQLITE_INTEGER: 1;
+  export const SQLITE_FLOAT: 2;
+  export const SQLITE_TEXT: 3;
+  export const SQLITE_BLOB: 4;
+  export const SQLITE_NULL: 5;
+  export const SQLITE_STATIC: 0;
+  export const SQLITE_TRANSIENT: -1;
+  export const SQLITE_UTF8: 1;
+  export const SQLITE_UTF16LE: 2;
+  export const SQLITE_UTF16BE: 3;
+  export const SQLITE_UTF16: 4;
+  export class SQLiteError extends Error {
+      constructor(message: any, code: any);
+      code: any;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
+  function ModuleFactory(): Promise<any>;
+  export = ModuleFactory;
+}
+
+/** @ignore */
+declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
+  function ModuleFactory(): Promise<any>;
+  export = ModuleFactory;
 }

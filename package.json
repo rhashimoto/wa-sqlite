@@ -3,10 +3,10 @@
   "version": "0.5.2",
   "type": "module",
   "main": "src/sqlite-api.js",
-  "types": "src/types/sqlite-api.d.ts",
+  "types": "src/types/index.d.ts",
   "files": [
     "src/sqlite-api.js",
-    "src/types/sqlite-api.d.ts",
+    "src/types/*",
     "src/VFS.js",
     "src/examples/*",
     "dist/*"
