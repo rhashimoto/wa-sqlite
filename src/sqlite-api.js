@@ -93,7 +93,7 @@ const async = true;
  * Builds a Javascript API from the Emscripten module. This API is still
  * low-level and closely corresponds to the C API exported by the module,
  * but differs in some specifics like throwing exceptions on errors.
- * @param {*} Module SQLite module
+ * @param {*} Module SQLite Emscripten module
  * @returns {SQLiteAPI}
  */
 export function Factory(Module) {
