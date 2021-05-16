@@ -992,3 +992,394 @@ declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
   function ModuleFactory(): Promise<any>;
   export = ModuleFactory;
 }
+
+/** @ignore */
+declare module 'wa-sqlite/src/VFS.js' {
+  export const SQLITE_OK: 0;
+  export const SQLITE_ERROR: 1;
+  export const SQLITE_BUSY: 5;
+  export const SQLITE_NOMEM: 7;
+  export const SQLITE_READONLY: 8;
+  export const SQLITE_IOERR: 10;
+  export const SQLITE_IOERR_SHORT_READ: 522;
+  export const SQLITE_NOTFOUND: 12;
+  export const SQLITE_CANTOPEN: 14;
+  export const SQLITE_NOTADB: 26;
+  export const SQLITE_ROW: 100;
+  export const SQLITE_DONE: 101;
+  export const SQLITE_OPEN_READONLY: 1;
+  export const SQLITE_OPEN_READWRITE: 2;
+  export const SQLITE_OPEN_CREATE: 4;
+  export const SQLITE_OPEN_DELETEONCLOSE: 8;
+  export const SQLITE_OPEN_EXCLUSIVE: 16;
+  export const SQLITE_OPEN_AUTOPROXY: 32;
+  export const SQLITE_OPEN_URI: 64;
+  export const SQLITE_OPEN_MEMORY: 128;
+  export const SQLITE_OPEN_MAIN_DB: 256;
+  export const SQLITE_OPEN_TEMP_DB: 512;
+  export const SQLITE_OPEN_TRANSIENT_DB: 1024;
+  export const SQLITE_OPEN_MAIN_JOURNAL: 2048;
+  export const SQLITE_OPEN_TEMP_JOURNAL: 4096;
+  export const SQLITE_OPEN_SUBJOURNAL: 8192;
+  export const SQLITE_OPEN_SUPER_JOURNAL: 16384;
+  export const SQLITE_OPEN_NOMUTEX: 32768;
+  export const SQLITE_OPEN_FULLMUTEX: 65536;
+  export const SQLITE_OPEN_SHAREDCACHE: 131072;
+  export const SQLITE_OPEN_PRIVATECACHE: 262144;
+  export const SQLITE_OPEN_WAL: 524288;
+  export const SQLITE_OPEN_NOFOLLOW: 16777216;
+  export const SQLITE_LOCK_NONE: 0;
+  export const SQLITE_LOCK_SHARED: 1;
+  export const SQLITE_LOCK_RESERVED: 2;
+  export const SQLITE_LOCK_PENDING: 3;
+  export const SQLITE_LOCK_EXCLUSIVE: 4;
+  export const SQLITE_IOCAP_ATOMIC: 1;
+  export const SQLITE_IOCAP_ATOMIC512: 2;
+  export const SQLITE_IOCAP_ATOMIC1K: 4;
+  export const SQLITE_IOCAP_ATOMIC2K: 8;
+  export const SQLITE_IOCAP_ATOMIC4K: 16;
+  export const SQLITE_IOCAP_ATOMIC8K: 32;
+  export const SQLITE_IOCAP_ATOMIC16K: 64;
+  export const SQLITE_IOCAP_ATOMIC32K: 128;
+  export const SQLITE_IOCAP_ATOMIC64K: 256;
+  export const SQLITE_IOCAP_SAFE_APPEND: 512;
+  export const SQLITE_IOCAP_SEQUENTIAL: 1024;
+  export const SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN: 2048;
+  export const SQLITE_IOCAP_POWERSAFE_OVERWRITE: 4096;
+  export const SQLITE_IOCAP_IMMUTABLE: 8192;
+  export const SQLITE_IOCAP_BATCH_ATOMIC: 16384;
+  export class Base {
+    mxPathName: number;
+    /**
+     * @param {number} fileId
+     * @returns {number|Promise<number>}
+     */
+    xClose(fileId: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {{ size: number, value: Int8Array }} pData
+     * @param {number} iOffset
+     * @returns {number|Promise<number>}
+     */
+    xRead(fileId: number, pData: {
+        size: number;
+        value: Int8Array;
+    }, iOffset: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {{ size: number, value: Int8Array }} pData
+     * @param {number} iOffset
+     * @returns {number|Promise<number>}
+     */
+    xWrite(fileId: number, pData: {
+        size: number;
+        value: Int8Array;
+    }, iOffset: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {number} iSize
+     * @returns {number|Promise<number>}
+     */
+    xTruncate(fileId: number, iSize: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {*} flags
+     * @returns {number|Promise<number>}
+     */
+    xSync(fileId: number, flags: any): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {{ set: function(number): void }} pSize64
+     * @returns {number|Promise<number>}
+     */
+    xFileSize(fileId: number, pSize64: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {number} flags
+     * @returns {number|Promise<number>}
+     */
+    xLock(fileId: number, flags: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {number} flags
+     * @returns {number|Promise<number>}
+     */
+    xUnlock(fileId: number, flags: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {{ set: function(number): void }} pResOut
+     * @returns {number|Promise<number>}
+     */
+    xCheckReservedLock(fileId: number, pResOut: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @param {number} flags
+     * @param {{ value: Int8Array }} pOut
+     * @returns {number|Promise<number>}
+     */
+    xFileControl(fileId: number, flags: number, pOut: {
+        value: Int8Array;
+    }): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @returns {number|Promise<number>}
+     */
+    xSectorSize(fileId: number): number | Promise<number>;
+    /**
+     * @param {number} fileId
+     * @returns {number|Promise<number>}
+     */
+    xDeviceCharacteristics(fileId: number): number | Promise<number>;
+    /**
+     * @param {string?} name
+     * @param {number} fileId
+     * @param {number} flags
+     * @param {{ set: function(number): void }} pOutFlags
+     * @returns {number|Promise<number>}
+     */
+    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+    /**
+     *
+     * @param {string} name
+     * @param {number} syncDir
+     * @returns {number|Promise<number>}
+     */
+    xDelete(name: string, syncDir: number): number | Promise<number>;
+    /**
+     * @param {string} name
+     * @param {number} flags
+     * @param {{ set: function(number): void }} pResOut
+     * @returns {number|Promise<number>}
+     */
+    xAccess(name: string, flags: number, pResOut: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+    /**
+     * Handle asynchronous operation. This implementation will be overriden on
+     * registration by an Asyncify build.
+     * @param {function(): Promise<number>} f
+     * @returns {Promise<number>}
+     */
+    handleAsync(f: () => Promise<number>): Promise<number>;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/ArrayModule.js' {
+  export class ArrayModule {
+    /**
+     * @param {SQLiteAPI} sqlite3
+     * @param {number} db
+     * @param {Array<Array>} rows Table data.
+     * @param {Array<string>} columns Column names.
+     */
+    constructor(sqlite3: any, db: number, rows: Array<any[]>, columns: Array<string>);
+    mapCursorToState: Map<any, any>;
+    sqlite3: any;
+    db: number;
+    rows: any[][];
+    columns: string[];
+    /**
+     * @param {number} db
+     * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
+     * @param {Array<string>} argv
+     * @param {number} pVTab
+     * @param {{ set: function(string): void}} pzErr
+     * @returns {number|Promise<number>}
+     */
+    xCreate(db: number, appData: any, argv: Array<string>, pVTab: number, pzErr: {
+        set: (arg0: string) => void;
+    }): number | Promise<number>;
+    /**
+     * @param {number} db
+     * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
+     * @param {Array<string>} argv
+     * @param {number} pVTab
+     * @param {{ set: function(string): void}} pzErr
+     * @returns {number|Promise<number>}
+     */
+    xConnect(db: number, appData: any, argv: Array<string>, pVTab: number, pzErr: {
+        set: (arg0: string) => void;
+    }): number | Promise<number>;
+    /**
+     * @param {number} pVTab
+     * @param {SQLiteModuleIndexInfo} indexInfo
+     * @returns {number|Promise<number>}
+     */
+    xBestIndex(pVTab: number, indexInfo: any): number | Promise<number>;
+    /**
+     * @param {number} pVTab
+     * @returns {number|Promise<number>}
+     */
+    xDisconnect(pVTab: number): number | Promise<number>;
+    /**
+     * @param {number} pVTab
+     * @returns {number|Promise<number>}
+     */
+    xDestroy(pVTab: number): number | Promise<number>;
+    /**
+     * @param {number} pVTab
+     * @param {number} pCursor
+     * @returns {number|Promise<number>}
+     */
+    xOpen(pVTab: number, pCursor: number): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @returns {number|Promise<number>}
+     */
+    xClose(pCursor: number): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @param {number} idxNum
+     * @param {string?} idxStr
+     * @param {Array<number>} values
+     * @returns {number|Promise<number>}
+     */
+    xFilter(pCursor: number, idxNum: number, idxStr: string | null, values: Array<number>): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @returns {number|Promise<number>}
+     */
+    xNext(pCursor: number): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @returns {number|Promise<number>}
+     */
+    xEof(pCursor: number): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @param {number} pContext
+     * @param {number} iCol
+     * @returns {number|Promise<number>}
+     */
+    xColumn(pCursor: number, pContext: number, iCol: number): number | Promise<number>;
+    /**
+     * @param {number} pCursor
+     * @param {{ set: function(number): void}} pRowid
+     * @returns {number|Promise<number>}
+     */
+    xRowid(pCursor: number, pRowid: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+    /**
+     * @param {number} pVTab
+     * @param {Array<number>} values sqlite3_value pointers
+     * @param {{ set: function(number): void}} pRowid
+     * @returns {number|Promise<number>}
+     */
+    xUpdate(pVTab: number, values: Array<number>, pRowid: {
+        set: (arg0: number) => void;
+    }): number | Promise<number>;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/ArrayAsyncModule.js' {
+  import { ArrayModule } from "wa-sqlite/src/examples/ArrayModule.js";
+  export class ArrayAsyncModule extends ArrayModule {
+    /**
+     * @param {function} f
+     * @returns {Promise<number>}
+     */
+    handleAsync(f: Function): Promise<number>;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
+  import * as VFS from "wa-sqlite/src/VFS.js";
+  export class IndexedDbVFS extends VFS.Base {
+    /**
+     * @param {string} idbName Name of IndexedDB database.
+     */
+    constructor(idbName?: string);
+    name: string;
+    mapIdToFile: Map<any, any>;
+    cacheSize: number;
+    db: any;
+    close(): Promise<void>;
+    /**
+     * Delete a file from IndexedDB.
+     * @param {string} name
+     */
+    deleteFile(name: string): Promise<void>;
+    /**
+     * Forcibly clear an orphaned file lock.
+     * @param {string} name
+     */
+    forceClearLock(name: string): Promise<void>;
+    _getStore(mode?: string): any;
+    /**
+     * Returns the key for file metadata.
+     * @param {string} name
+     * @returns
+     */
+    _metaKey(name: string): string;
+    /**
+     * Returns the key for file block data.
+     * @param {string} name
+     * @param {number} index
+     * @returns
+     */
+    _blockKey(name: string, index: number): string;
+    _getBlock(store: any, file: any, index: any): Promise<any>;
+    _putBlock(store: any, file: any, index: any, blockData: any): void;
+    _purgeCache(store: any, file: any, size?: number): void;
+    _flushCache(store: any, file: any): Promise<void>;
+    _sync(file: any): Promise<void>;
+    /**
+     * Helper function that deletes all keys greater or equal to `key`
+     * provided they start with `prefix`.
+     * @param {string} key
+     * @param {string} [prefix]
+     * @returns
+     */
+    _delete(key: string, prefix?: string): Promise<any>;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
+  import * as VFS from "wa-sqlite/src/VFS.js";
+  export class MemoryVFS extends VFS.Base {
+    name: string;
+    mapNameToFile: Map<any, any>;
+    mapIdToFile: Map<any, any>;
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/MemoryAsyncVFS.js' {
+  import { MemoryVFS } from "wa-sqlite/src/examples/MemoryVFS.js";
+  export class MemoryAsyncVFS extends MemoryVFS {
+  }
+}
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/tag.js' {
+  /**
+   * Template tag builder. This function creates a tag with an API and
+   * database from the same module, then the tag can be used like this:
+   * ```
+   * const sql = tag(sqlite3, db);
+   * const results = await sql`
+   *   SELECT 1 + 1;
+   *   SELECT 6 * 7;
+   * `;
+   * ```
+   * The returned Promise value contains an array of results for each
+   * SQL statement that produces output. Each result is an object with
+   * properties `columns` (array of names) and `rows` (array of array
+   * of values).
+   * @param {SQLiteAPI} sqlite3
+   * @param {number} db
+   * @returns {function(TemplateStringsArray, ...any): Promise<object[]>}
+   */
+  export function tag(sqlite3: any, db: number): (arg0: TemplateStringsArray, ...args: any[]) => Promise<object[]>;
+}
