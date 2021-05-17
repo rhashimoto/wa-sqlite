@@ -130,7 +130,10 @@ declare interface SQLiteModuleIndexInfo {
   idxNum: number,
   idxStr: string|null,
   orderByConsumed: boolean,
-  estimatedCost: number
+  estimatedCost: number,
+  estimatedRows: number,
+  idxFlags: number,
+  colUsed: number
 }
 
 /**
@@ -975,6 +978,22 @@ declare module 'wa-sqlite' {
   export const SQLITE_UTF16LE: 2;
   export const SQLITE_UTF16BE: 3;
   export const SQLITE_UTF16: 4;
+  export const SQLITE_INDEX_CONSTRAINT_EQ : 2;
+  export const SQLITE_INDEX_CONSTRAINT_GT : 4;
+  export const SQLITE_INDEX_CONSTRAINT_LE : 8;
+  export const SQLITE_INDEX_CONSTRAINT_LT : 16;
+  export const SQLITE_INDEX_CONSTRAINT_GE : 32;
+  export const SQLITE_INDEX_CONSTRAINT_MATCH : 64;
+  export const SQLITE_INDEX_CONSTRAINT_LIKE : 65;
+  export const SQLITE_INDEX_CONSTRAINT_GLOB : 66;
+  export const SQLITE_INDEX_CONSTRAINT_REGEXP : 67;
+  export const SQLITE_INDEX_CONSTRAINT_NE : 68;
+  export const SQLITE_INDEX_CONSTRAINT_ISNOT : 69;
+  export const SQLITE_INDEX_CONSTRAINT_ISNOTNULL : 70;
+  export const SQLITE_INDEX_CONSTRAINT_ISNULL : 71;
+  export const SQLITE_INDEX_CONSTRAINT_IS : 72;
+  export const SQLITE_INDEX_CONSTRAINT_FUNCTION : 150;
+  export const SQLITE_INDEX_SCAN_UNIQUE : 1;
   export class SQLiteError extends Error {
       constructor(message: any, code: any);
       code: any;
