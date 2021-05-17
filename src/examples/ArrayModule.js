@@ -55,9 +55,52 @@ export class ArrayModule {
    * @returns {number|Promise<number>}
    */
   xBestIndex(pVTab, indexInfo) {
-    // A module capable of returning subsets rows based on constraints
-    // would read the input fields of indexInfo and write the appropriate
-    // output fields.
+    // All the code here is for an optional optimization. If we simply
+    // returned SQLITE_OK instead then we would traverse all the array
+    // data and SQLite would ignore whatever it doesn't need.
+
+    // SQLite's implicit ROWID column maps to the array index. Constraints
+    // on ROWID can be used to restrict the range of the table traversal.
+
+    // Tag constraints with their index so we can associate them with
+    // the corresponding aConstraintUsage element.
+    indexInfo.aConstraint.forEach((constraint, i) => {
+      // @ts-ignore
+      constraint.index = i;
+    });
+
+    // We're only interested in ROWID constraints, so extract them in a
+    // well-defined order.
+    const rowidConstraints = indexInfo.aConstraint.filter(constraint => {
+      if (!constraint.usable) return false;
+      if (constraint.iColumn !== -1) return false;
+      switch (constraint.op) {
+        case SQLite.SQLITE_INDEX_CONSTRAINT_EQ:
+        case SQLite.SQLITE_INDEX_CONSTRAINT_GT:
+        case SQLite.SQLITE_INDEX_CONSTRAINT_LE:
+        case SQLite.SQLITE_INDEX_CONSTRAINT_LT:
+        case SQLite.SQLITE_INDEX_CONSTRAINT_GE:
+          return true;
+        default:
+          return false;
+      }
+    });
+    rowidConstraints.sort((a, b) => a.op - b.op);
+
+    // Encode which ROWID constraints were present and request their
+    // values for xFilter.
+    indexInfo.idxNum = 0x0;
+    let valueIndex = 0;
+    rowidConstraints.forEach(constraint => {
+      indexInfo.idxNum |= constraint.op;
+      // @ts-ignore
+      indexInfo.aConstraintUsage[constraint.index].argvIndex = ++valueIndex;
+
+      if (constraint.op === SQLite.SQLITE_INDEX_CONSTRAINT_EQ) {
+        // Optional optimization tells SQLite at most one row matches.
+        indexInfo.idxFlags = SQLite.SQLITE_INDEX_SCAN_UNIQUE;
+      }
+    });
     return SQLite.SQLITE_OK;
   }
 
@@ -104,15 +147,34 @@ export class ArrayModule {
    * @returns {number|Promise<number>}
    */
   xFilter(pCursor, idxNum, idxStr, values) {
-    // If we had set idxNum or idxStr in indexInfo in xBestIndex(),
-    // we would get them back here. If we had expressed interest in
-    // constraint values by setting argvIndex in indexInfo.aConstraintUsage,
-    // values would contain sqlite3_value pointers.
-
-    // The cursor should always be at a valid row or EOF, so start with
-    // the first non-null row.
     const cursorState = this.mapCursorToState.get(pCursor);
-    cursorState.index = this.rows.findIndex(element => element);
+    cursorState.index = 0;
+    cursorState.endIndex = this.rows.length;
+
+    // Process the constraints. This is an optional optimization prepared
+    // by xBestIndex that uses ROWID constraints to limit cursor range.
+    let valueIndex = 0;
+    if (idxNum & SQLite.SQLITE_INDEX_CONSTRAINT_EQ) {
+      cursorState.index = this.sqlite3.value_int(values[valueIndex++]);
+      cursorState.endIndex = cursorState.index + 1;
+    }
+    if (idxNum & SQLite.SQLITE_INDEX_CONSTRAINT_GT) {
+      cursorState.index = this.sqlite3.value_int(values[valueIndex++]) + 1;
+    }
+    if (idxNum & SQLite.SQLITE_INDEX_CONSTRAINT_LE) {
+      cursorState.endIndex = this.sqlite3.value_int(values[valueIndex++]) + 1;
+    }
+    if (idxNum & SQLite.SQLITE_INDEX_CONSTRAINT_LT) {
+      cursorState.endIndex = this.sqlite3.value_int(values[valueIndex++]);
+    }
+    if (idxNum & SQLite.SQLITE_INDEX_CONSTRAINT_GE) {
+      cursorState.index = this.sqlite3.value_int(values[valueIndex++]);
+    }
+
+    // Clip bounds to array size.
+    cursorState.index = Math.max(cursorState.index, 0);
+    cursorState.endIndex = Math.min(cursorState.endIndex, this.rows.length);
+    this._adjustCursorIfInvalid(cursorState);
     return SQLite.SQLITE_OK;
   }
 
@@ -123,9 +185,8 @@ export class ArrayModule {
   xNext(pCursor) {
     // Advance to the next valid row or EOF.
     const cursorState = this.mapCursorToState.get(pCursor);
-    while (++cursorState.index < this.rows.length && !this.rows[cursorState.index]) {
-      // intentionally empty
-    }
+    ++cursorState.index;
+    this._adjustCursorIfInvalid(cursorState);
     return SQLite.SQLITE_OK;
   }
 
@@ -135,7 +196,7 @@ export class ArrayModule {
    */
   xEof(pCursor) {
     const cursorState = this.mapCursorToState.get(pCursor);
-    return this.rows[cursorState.index] ? 0 : 1;
+    return cursorState.index < cursorState.endIndex ? 0 : 1;
   }
 
   /**
@@ -202,4 +263,14 @@ export class ArrayModule {
   // xCommit(pVTab) { return SQLite.SQLITE_OK; }
   // xRollback(pVTab) { return SQLite.SQLITE_OK; }
   // xRename(pVTab, zNew) { return SQLite.SQLITE_OK; }
+
+  /**
+   * Ensure cursor index references either a valid (non-null) row or EOF.
+   * Rows become invalid by deletion.
+   */
+  _adjustCursorIfInvalid(cursorState) {
+    while (cursorState.index < cursorState.endIndex && !this.rows[cursorState.index]) {
+      ++cursorState.index;
+    }
+  }
 }

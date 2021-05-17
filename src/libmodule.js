@@ -68,14 +68,17 @@ const mod_methods = {
       struct['aConstraintUsage'] = [];
       for (let i = 0; i < struct['nConstraint']; ++i) {
         struct['aConstraintUsage'].push({
-          argvIndex: 0,
-          omit: false
+          'argvIndex': 0,
+          'omit': false
         });
       }
       struct['idxNum'] = getValue(p + offset[5], 'i32');
       struct['idxStr'] = null;
       struct['orderByConsumed'] = !!getValue(p + offset[8], 'i8');
       struct['estimatedCost'] = getValue(p + offset[9], 'double');
+      struct['estimatedRows'] = getValue(p + offset[10], 'i64');
+      struct['idxFlags'] = getValue(p + offset[11], 'i32');
+      struct['colUsed'] = getValue(p + offset[12], 'i64');
       return struct;
     }
 
@@ -120,7 +123,6 @@ const mod_methods = {
       setValue(p + offset[9], struct['estimatedCost'], 'double');
       setValue(p + offset[10], struct['estimatedRows'], 'i64');
       setValue(p + offset[11], struct['idxFlags'], 'i32');
-      setValue(p + offset[12], struct['colUsed'], 'i64');
     }
 
     function pack_sqlite_index_constraint_usage(p, struct) {

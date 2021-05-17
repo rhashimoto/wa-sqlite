@@ -75,10 +75,28 @@ export const SQLITE_TRANSIENT = -1;
 
 // Text encodings.
 // https://sqlite.org/c3ref/c_any.html
-export const SQLITE_UTF8 = 1     /* IMP: R-37514-35566 */
-export const SQLITE_UTF16LE = 2  /* IMP: R-03371-37637 */
-export const SQLITE_UTF16BE = 3  /* IMP: R-51971-34154 */
-export const SQLITE_UTF16 = 4    /* Use native byte order */
+export const SQLITE_UTF8 = 1;     /* IMP: R-37514-35566 */
+export const SQLITE_UTF16LE = 2;  /* IMP: R-03371-37637 */
+export const SQLITE_UTF16BE = 3;  /* IMP: R-51971-34154 */
+export const SQLITE_UTF16 = 4;    /* Use native byte order */
+
+// Module constraint ops.
+export const SQLITE_INDEX_CONSTRAINT_EQ        = 2;
+export const SQLITE_INDEX_CONSTRAINT_GT        = 4;
+export const SQLITE_INDEX_CONSTRAINT_LE        = 8;
+export const SQLITE_INDEX_CONSTRAINT_LT        = 16;
+export const SQLITE_INDEX_CONSTRAINT_GE        = 32;
+export const SQLITE_INDEX_CONSTRAINT_MATCH     = 64;
+export const SQLITE_INDEX_CONSTRAINT_LIKE      = 65;
+export const SQLITE_INDEX_CONSTRAINT_GLOB      = 66;
+export const SQLITE_INDEX_CONSTRAINT_REGEXP    = 67;
+export const SQLITE_INDEX_CONSTRAINT_NE        = 68;
+export const SQLITE_INDEX_CONSTRAINT_ISNOT     = 69;
+export const SQLITE_INDEX_CONSTRAINT_ISNOTNULL = 70;
+export const SQLITE_INDEX_CONSTRAINT_ISNULL    = 71;
+export const SQLITE_INDEX_CONSTRAINT_IS        = 72;
+export const SQLITE_INDEX_CONSTRAINT_FUNCTION  = 150;
+export const SQLITE_INDEX_SCAN_UNIQUE          = 1;  /* Scan visits at most = 1 row */
 
 export class SQLiteError extends Error {
   constructor(message, code) {
