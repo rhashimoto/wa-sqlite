@@ -229,7 +229,7 @@ declare interface SQLiteModule {
   /**
    * @see https://sqlite.org/vtab.html#the_xupdate_method
    */
-  xUpdate(
+  xUpdate?(
     pVTab: number,
     values: number[],
     pRowId: { set(value: number): void }): number|Promise<number>;
