@@ -148,7 +148,7 @@ int EMSCRIPTEN_KEEPALIVE create_module(
   module->xEof = modEof;
   module->xColumn = modColumn;
   module->xRowid = modRowid;
-  module->xUpdate = modUpdate;
+  if (flags & (1 << 12)) module->xUpdate = modUpdate;
   if (flags & (1 << 13)) module->xBegin = modBegin;
   if (flags & (1 << 14)) module->xSync = modSync;
   if (flags & (1 << 15)) module->xCommit = modCommit;
