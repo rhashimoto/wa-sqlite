@@ -774,24 +774,28 @@ declare interface SQLiteAPI {
    * 
    * This is a convenience function that manages statement compilation,
    * replacing boilerplate code associated with calling {@link prepare_v2}
-   * directly. It is typically called with a `for await` loop (in an
+   * directly. It is typically used with a `for await` loop (in an
    * async function), like this:
    * ```javascript
    * // Compile one statement on each iteration of this loop.
    * for await (const stmt of sqlite3.statements(db, sql)) {
    *   // Bind parameters here if using SQLite placeholders.
    * 
-   *   // Execute statement with this loop.
+   *   // Execute the statement with this loop.
    *   while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
    *     // Collect row data here.
    *   }
+   *
+   *   // Change bindings, reset, and execute again if desired.
    * }
    * ```
    * 
    * {@link finalize} should *not* be called on a statement provided
    * by the iterator; the statement resources will be released
    * automatically at the end of each iteration. This also means
-   * that the statement is only valid within the scope of the loop.
+   * that the statement is only valid within the scope of the loop -
+   * Use {@link prepare_v2} directly to compile a statement with an
+   * application-specified lifetime.
    * 
    * If using the iterator manually, i.e. by calling its `next`
    * method, be sure to call the `return` method if iteration
