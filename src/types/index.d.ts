@@ -689,6 +689,9 @@ declare interface SQLiteAPI {
    *   sqlite3.str_finish(str);
    * }
    * ```
+   * 
+   * The {@link statements} convenience function can be used to
+   * avoid the boilerplate of calling {@link prepare_v2} directly.
    * @see https://www.sqlite.org/c3ref/prepare.html
    * @param db database pointer
    * @param sql SQL pointer
@@ -765,6 +768,40 @@ declare interface SQLiteAPI {
    * @returns SQL
    */
   sql(stmt: number): string;
+
+  /**
+   * SQL statement iterator
+   * 
+   * This is a convenience function that manages statement compilation,
+   * replacing boilerplate code associated with calling {@link prepare_v2}
+   * directly. It is typically called with a `for await` loop (in an
+   * async function), like this:
+   * ```javascript
+   * // Compile one statement on each iteration of this loop.
+   * for await (const stmt of sqlite3.statements(db, sql)) {
+   *   // Bind parameters here if using SQLite placeholders.
+   * 
+   *   // Execute statement with this loop.
+   *   while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+   *     // Collect row data here.
+   *   }
+   * }
+   * ```
+   * 
+   * {@link finalize} should *not* be called on a statement provided
+   * by the iterator; the statement resources will be released
+   * automatically at the end of each iteration. This also means
+   * that the statement is only valid within the scope of the loop.
+   * 
+   * If using the iterator manually, i.e. by calling its `next`
+   * method, be sure to call the `return` method if iteration
+   * is abandoned before completion (`for await` and other implicit
+   * traversals provided by Javascript do this automatically)
+   * to ensure that all allocated resources are released.
+   * @param db 
+   * @param sql 
+   */
+  statements(db: number, sql: string): AsyncIterable<number>;
 
   /**
    * Evaluate an SQL statement

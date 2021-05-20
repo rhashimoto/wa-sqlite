@@ -643,6 +643,39 @@ export function Factory(Module) {
     };
   })();
 
+  api.statements = function(db, sql) {
+    let str = api.str_new(db, sql);
+    let prepared = { stmt: null, sql: api.str_value(str) };
+    return {
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            if (prepared.stmt) {
+              api.finalize(prepared.stmt);
+            }
+            prepared = await api.prepare_v2(db, prepared.sql)
+            if (prepared) {
+              return { value: prepared.stmt, done: false };
+            }
+            return this.return();
+          },
+    
+          async return(value) {
+            if (prepared?.stmt) {
+              api.finalize(prepared.stmt);
+              prepared = null;
+            }
+            if (str) {
+              api.str_finish(str);
+              str = null;
+            }
+            return { value, done: true };
+          }
+        };
+      }
+    };
+  };
+
   api.step = (function() {
     const fname = 'sqlite3_step';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
