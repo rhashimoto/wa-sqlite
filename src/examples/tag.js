@@ -28,13 +28,12 @@ import * as SQLite from '../sqlite-api.js';
     const sql = interleaved.join('');
 
     // Loop over the SQL statements. sqlite3.statements is an API
-    // convenience function (not in the C API) that manages the
-    // resource used for successive statement compilation. Be aware
-    // that statements are not valid outside the scope of this loop.
+    // convenience function (not in the C API) that iterates over
+    // compiled statements, automatically managing resources.
     const results = [];
     for await (const stmt of sqlite3.statements(db, sql)) {
       const rows = [];
-      const columns = sqlite3.column_names(stmt)
+      const columns = sqlite3.column_names(stmt);
       while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
         // Collect row elements. sqlite3.row is an API convenience
         // function (not in the C API) that extracts values for all

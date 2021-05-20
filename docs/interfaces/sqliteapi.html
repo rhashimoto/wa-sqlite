@@ -1861,22 +1861,26 @@
 								</div>
 								<p>This is a convenience function that manages statement compilation,
 									replacing boilerplate code associated with calling <a href="sqliteapi.html#prepare_v2">prepare_v2</a>
-									directly. It is typically called with a <code>for await</code> loop (in an
+									directly. It is typically used with a <code>for await</code> loop (in an
 								async function), like this:</p>
 								<pre><code class="language-javascript"><span style="color: #008000">// Compile one statement on each iteration of this loop.</span>
 <span style="color: #AF00DB">for</span><span style="color: #000000"> </span><span style="color: #AF00DB">await</span><span style="color: #000000"> (</span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">stmt</span><span style="color: #000000"> </span><span style="color: #0000FF">of</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">statements</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sql</span><span style="color: #000000">)) {</span>
 <span style="color: #000000">  </span><span style="color: #008000">// Bind parameters here if using SQLite placeholders.</span>
 
-<span style="color: #000000">  </span><span style="color: #008000">// Execute statement with this loop.</span>
+<span style="color: #000000">  </span><span style="color: #008000">// Execute the statement with this loop.</span>
 <span style="color: #000000">  </span><span style="color: #AF00DB">while</span><span style="color: #000000"> (</span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">step</span><span style="color: #000000">(</span><span style="color: #001080">stmt</span><span style="color: #000000">) === </span><span style="color: #001080">SQLite</span><span style="color: #000000">.</span><span style="color: #0070C1">SQLITE_ROW</span><span style="color: #000000">) {</span>
 <span style="color: #000000">    </span><span style="color: #008000">// Collect row data here.</span>
 <span style="color: #000000">  }</span>
+
+<span style="color: #000000">  </span><span style="color: #008000">// Change bindings, reset, and execute again if desired.</span>
 <span style="color: #000000">}</span>
 </code></pre>
 								<p><a href="sqliteapi.html#finalize">finalize</a> should <em>not</em> be called on a statement provided
 									by the iterator; the statement resources will be released
 									automatically at the end of each iteration. This also means
-								that the statement is only valid within the scope of the loop.</p>
+									that the statement is only valid within the scope of the loop -
+									Use <a href="sqliteapi.html#prepare_v2">prepare_v2</a> directly to compile a statement with an
+								application-specified lifetime.</p>
 								<p>If using the iterator manually, i.e. by calling its <code>next</code>
 									method, be sure to call the <code>return</code> method if iteration
 									is abandoned before completion (<code>for await</code> and other implicit
