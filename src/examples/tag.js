@@ -27,36 +27,24 @@ import * as SQLite from '../sqlite-api.js';
     });
     const sql = interleaved.join('');
 
-    // Transfer the SQL to WASM memory. We set up a try-finally block
-    // to ensure that the memory is always freed.
+    // Loop over the SQL statements. sqlite3.statements is an API
+    // convenience function (not in the C API) that manages the
+    // resource used for successive statement compilation. Be aware
+    // that statements are not valid outside the scope of this loop.
     const results = [];
-    const str = sqlite3.str_new(db, sql);
-    try {
-      // Traverse and prepare the SQL, statement by statement.
-      /** @type {object} */ let prepared = { sql: sqlite3.str_value(str) };
-      while ((prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
-        // Another try-finally goes here to ensure that each prepared
-        // statement is finalized.
-        try {
-          // Step through the rows produced by the statement.
-          const rows = [];
-          const columns = sqlite3.column_names(prepared.stmt)
-          while (await sqlite3.step(prepared.stmt) === SQLite.SQLITE_ROW) {
-            // Collect row elements. sqlite3.row is an API convenience
-            // function (not in the C API) that extracts values for all
-            // the columns of the row.
-            const row = sqlite3.row(prepared.stmt);
-            rows.push(row);
-          }
-          if (columns.length) {
-            results.push({ columns, rows });
-          }
-        } finally {
-          sqlite3.finalize(prepared.stmt);
-        }
+    for await (const stmt of sqlite3.statements(db, sql)) {
+      const rows = [];
+      const columns = sqlite3.column_names(stmt)
+      while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+        // Collect row elements. sqlite3.row is an API convenience
+        // function (not in the C API) that extracts values for all
+        // the columns of the row.
+        const row = sqlite3.row(stmt);
+        rows.push(row);
       }
-    } finally {
-      sqlite3.str_finish(str);
+      if (columns.length) {
+        results.push({ columns, rows });
+      }
     }
     return results;
   }

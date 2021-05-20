@@ -166,6 +166,7 @@
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#result_text" class="tsd-kind-icon">result_<wbr>text</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#row" class="tsd-kind-icon">row</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#sql" class="tsd-kind-icon">sql</a></li>
+								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#statements" class="tsd-kind-icon">statements</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#step" class="tsd-kind-icon">step</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#str_appendall" class="tsd-kind-icon">str_<wbr>appendall</a></li>
 								<li class="tsd-kind-method tsd-parent-kind-interface"><a href="sqliteapi.html#str_finish" class="tsd-kind-icon">str_<wbr>finish</a></li>
@@ -1504,6 +1505,8 @@
 <span style="color: #000000">  </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">str_finish</span><span style="color: #000000">(</span><span style="color: #001080">str</span><span style="color: #000000">);</span>
 <span style="color: #000000">}</span>
 </code></pre>
+								<p>The <a href="sqliteapi.html#statements">statements</a> convenience function can be used to
+								avoid the boilerplate of calling <a href="sqliteapi.html#prepare_v2">prepare_v2</a> directly.</p>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
 									<dd><p><a href="https://www.sqlite.org/c3ref/prepare.html">https://www.sqlite.org/c3ref/prepare.html</a></p>
@@ -1839,6 +1842,59 @@
 							</ul>
 							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4>
 							<p>SQL</p>
+						</li>
+					</ul>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-interface">
+					<a name="statements" class="tsd-anchor"></a>
+					<h3>statements</h3>
+					<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-interface">
+						<li class="tsd-signature tsd-kind-icon">statements<span class="tsd-signature-symbol">(</span>db<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span>, sql<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">AsyncIterable</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></li>
+					</ul>
+					<ul class="tsd-descriptions">
+						<li class="tsd-description">
+							<aside class="tsd-sources">
+							</aside>
+							<div class="tsd-comment tsd-typography">
+								<div class="lead">
+									<p>SQL statement iterator</p>
+								</div>
+								<p>This is a convenience function that manages statement compilation,
+									replacing boilerplate code associated with calling <a href="sqliteapi.html#prepare_v2">prepare_v2</a>
+									directly. It is typically called with a <code>for await</code> loop (in an
+								async function), like this:</p>
+								<pre><code class="language-javascript"><span style="color: #008000">// Compile one statement on each iteration of this loop.</span>
+<span style="color: #AF00DB">for</span><span style="color: #000000"> </span><span style="color: #AF00DB">await</span><span style="color: #000000"> (</span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">stmt</span><span style="color: #000000"> </span><span style="color: #0000FF">of</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">statements</span><span style="color: #000000">(</span><span style="color: #001080">db</span><span style="color: #000000">, </span><span style="color: #001080">sql</span><span style="color: #000000">)) {</span>
+<span style="color: #000000">  </span><span style="color: #008000">// Bind parameters here if using SQLite placeholders.</span>
+
+<span style="color: #000000">  </span><span style="color: #008000">// Execute statement with this loop.</span>
+<span style="color: #000000">  </span><span style="color: #AF00DB">while</span><span style="color: #000000"> (</span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">step</span><span style="color: #000000">(</span><span style="color: #001080">stmt</span><span style="color: #000000">) === </span><span style="color: #001080">SQLite</span><span style="color: #000000">.</span><span style="color: #0070C1">SQLITE_ROW</span><span style="color: #000000">) {</span>
+<span style="color: #000000">    </span><span style="color: #008000">// Collect row data here.</span>
+<span style="color: #000000">  }</span>
+<span style="color: #000000">}</span>
+</code></pre>
+								<p><a href="sqliteapi.html#finalize">finalize</a> should <em>not</em> be called on a statement provided
+									by the iterator; the statement resources will be released
+									automatically at the end of each iteration. This also means
+								that the statement is only valid within the scope of the loop.</p>
+								<p>If using the iterator manually, i.e. by calling its <code>next</code>
+									method, be sure to call the <code>return</code> method if iteration
+									is abandoned before completion (<code>for await</code> and other implicit
+									traversals provided by Javascript do this automatically)
+								to ensure that all allocated resources are released.</p>
+							</div>
+							<h4 class="tsd-parameters-title">Parameters</h4>
+							<ul class="tsd-parameters">
+								<li>
+									<h5>db: <span class="tsd-signature-type">number</span></h5>
+								</li>
+								<li>
+									<h5>sql: <span class="tsd-signature-type">string</span></h5>
+									<div class="tsd-comment tsd-typography">
+									</div>
+								</li>
+							</ul>
+							<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">AsyncIterable</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">&gt;</span></h4>
 						</li>
 					</ul>
 				</section>
@@ -2471,6 +2527,9 @@
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
 								<a href="sqliteapi.html#sql" class="tsd-kind-icon">sql</a>
+							</li>
+							<li class=" tsd-kind-method tsd-parent-kind-interface">
+								<a href="sqliteapi.html#statements" class="tsd-kind-icon">statements</a>
 							</li>
 							<li class=" tsd-kind-method tsd-parent-kind-interface">
 								<a href="sqliteapi.html#step" class="tsd-kind-icon">step</a>
