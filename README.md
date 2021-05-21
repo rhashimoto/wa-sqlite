@@ -25,7 +25,24 @@ Here are the build steps:
 The default build produces ES6 modules + WASM, [synchronous and asynchronous](https://github.com/rhashimoto/wa-sqlite/issues/7) (using Asyncify) in `dist/`.
 
 ## API
-Javascript wrappers for core SQLITE C API functions (and some others) are provided. Some convenience functions are also provided to reduce boilerplate.
+Javascript wrappers for core SQLITE C API functions (and some others) are provided. Some convenience functions are also provided to reduce boilerplate. Here's sample code to load the library and call the API:
+
+```javascript
+  import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
+  import * as SQLite from 'wa-sqlite';
+
+  async function hello() {
+    const module = await SQLiteESMFactory();
+    const sqlite3 = SQLite.Factory(module);
+    const db = await sqlite3.open_v2('myDB');
+    await sqlite3.exec(db, `SELECT 'Hello, world!'`, (row, columns) => {
+      console.log(row);
+    });
+    await sqlite3.close(db);
+  }
+
+  hello();
+```
 
 The [demo page](https://github.com/rhashimoto/wa-sqlite/tree/master/demo) uses a [simple tagged template function](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/tag.js) for its SQL queries that may be useful as a coding example.
 
