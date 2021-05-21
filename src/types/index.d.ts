@@ -282,21 +282,20 @@ declare interface SQLiteModule {
  * // asynchronous VFS or module.
  * import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
  * 
- * // Import the API.
+ * // Import the Javascript API wrappers.
  * import * as SQLite from 'wa-sqlite';
  * 
- * // Invoke the ES6 module factory to create the SQLite
- * // Emscripten module. This will fetch and compile the
- * // .wasm file.
- * const apiPromise = SQLiteESMFactory().then(module => {
- *   // Use the module to build the API instance. 
- *   return SQLite.Factory(module);
- * });
- * 
- * // Resolve the API instance in the Promise and use it
- * // inside an async function like this:
+ * // Use an async function to simplify Promise handling.
  * (async function() {
- *   const sqlite3 = await apiPromise;
+ *   // Invoke the ES6 module factory to create the SQLite
+ *   // Emscripten module. This will fetch and compile the
+ *   // .wasm file.
+ *   const module = await SQLiteESMFactory();
+ * 
+ *   // Use the module to build the API instance.
+ *   const sqlite3 = SQLite.Factory(module);
+ * 
+ *   // Use the API to open and access a database.
  *   const db = await sqlite3.open_v2('myDB');
  *   ...
  * })();
@@ -524,6 +523,9 @@ declare interface SQLiteAPI {
 
   /**
    * Get names for all columns of a prepared statement
+   * 
+   * This is a convenience function that calls {@link column_count} and
+   * {@link column_name}.
    * @param stmt 
    * @returns array of column names
    */
@@ -764,6 +766,7 @@ declare interface SQLiteAPI {
 
   /**
    * Get statement SQL
+   * @see https://www.sqlite.org/c3ref/expanded_sql.html
    * @param stmt prepared statement pointer
    * @returns SQL
    */
@@ -794,7 +797,7 @@ declare interface SQLiteAPI {
    * by the iterator; the statement resources will be released
    * automatically at the end of each iteration. This also means
    * that the statement is only valid within the scope of the loop -
-   * Use {@link prepare_v2} directly to compile a statement with an
+   * use {@link prepare_v2} directly to compile a statement with an
    * application-specified lifetime.
    * 
    * If using the iterator manually, i.e. by calling its `next`
@@ -831,7 +834,7 @@ declare interface SQLiteAPI {
    * A `sqlite3_str` instance should always be destroyed with
    * {@link str_finish} after use to avoid a resource leak.
    * 
-   *  See https://www.sqlite.org/c3ref/str_append.html
+   * @see https://www.sqlite.org/c3ref/str_append.html
    * @param db database pointer
    * @param s optional initialization string
    * @returns `sqlite3_str` pointer
@@ -854,6 +857,7 @@ declare interface SQLiteAPI {
    * 
    * The returned pointer points to the UTF-8 encoded string in
    * WebAssembly memory. Use as input with {@link prepare_v2}.
+   * @see https://www.sqlite.org/c3ref/str_errcode.html
    * @param str `sqlite3_str` pointer
    * @returns pointer to string data
    */
@@ -939,7 +943,7 @@ declare interface SQLiteAPI {
   /**
    * Register a new Virtual File System.
    * 
-   * @see https://www.sqlite.org/c3ref/str_append.html
+   * @see https://www.sqlite.org/c3ref/vfs_find.html
    * @param vfs VFS object
    * @param makeDefault 
    * @returns `SQLITE_OK` (throws exception on error)

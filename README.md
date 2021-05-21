@@ -44,7 +44,7 @@ Javascript wrappers for core SQLITE C API functions (and some others) are provid
   hello();
 ```
 
-The [demo page](https://github.com/rhashimoto/wa-sqlite/tree/master/demo) uses a [simple tagged template function](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/tag.js) for its SQL queries that may be useful as a coding example.
+The [implementation of `sqlite3.exec`](https://github.com/rhashimoto/wa-sqlite/blob/1ef383a4267ecce773c558f059bfd055c3c16dde/src/sqlite-api.js#L451-L462) may be of interest to anyone wanting more fine-grained use of SQLite statement objects (e.g. for binding parameters, explicit column datatypes, etc.).
 
 [API reference](https://rhashimoto.github.io/wa-sqlite/docs/)
 

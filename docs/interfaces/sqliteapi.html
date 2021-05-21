@@ -85,21 +85,20 @@
 <span style="color: #008000">// asynchronous VFS or module.</span>
 <span style="color: #AF00DB">import</span><span style="color: #000000"> </span><span style="color: #001080">SQLiteESMFactory</span><span style="color: #000000"> </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;wa-sqlite/dist/wa-sqlite.mjs&#039;</span><span style="color: #000000">;</span>
 
-<span style="color: #008000">// Import the API.</span>
+<span style="color: #008000">// Import the Javascript API wrappers.</span>
 <span style="color: #AF00DB">import</span><span style="color: #000000"> </span><span style="color: #0000FF">*</span><span style="color: #000000"> </span><span style="color: #AF00DB">as</span><span style="color: #000000"> </span><span style="color: #001080">SQLite</span><span style="color: #000000"> </span><span style="color: #AF00DB">from</span><span style="color: #000000"> </span><span style="color: #A31515">&#039;wa-sqlite&#039;</span><span style="color: #000000">;</span>
 
-<span style="color: #008000">// Invoke the ES6 module factory to create the SQLite</span>
-<span style="color: #008000">// Emscripten module. This will fetch and compile the</span>
-<span style="color: #008000">// .wasm file.</span>
-<span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">apiPromise</span><span style="color: #000000"> = </span><span style="color: #795E26">SQLiteESMFactory</span><span style="color: #000000">().</span><span style="color: #795E26">then</span><span style="color: #000000">(</span><span style="color: #001080">module</span><span style="color: #000000"> </span><span style="color: #0000FF">=&gt;</span><span style="color: #000000"> {</span>
-<span style="color: #000000">  </span><span style="color: #008000">// Use the module to build the API instance. </span>
-<span style="color: #000000">  </span><span style="color: #AF00DB">return</span><span style="color: #000000"> </span><span style="color: #001080">SQLite</span><span style="color: #000000">.</span><span style="color: #795E26">Factory</span><span style="color: #000000">(</span><span style="color: #267F99">module</span><span style="color: #000000">);</span>
-<span style="color: #000000">});</span>
-
-<span style="color: #008000">// Resolve the API instance in the Promise and use it</span>
-<span style="color: #008000">// inside an async function like this:</span>
+<span style="color: #008000">// Use an async function to simplify Promise handling.</span>
 <span style="color: #000000">(</span><span style="color: #0000FF">async</span><span style="color: #000000"> </span><span style="color: #0000FF">function</span><span style="color: #000000">() {</span>
-<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">sqlite3</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">apiPromise</span><span style="color: #000000">;</span>
+<span style="color: #000000">  </span><span style="color: #008000">// Invoke the ES6 module factory to create the SQLite</span>
+<span style="color: #000000">  </span><span style="color: #008000">// Emscripten module. This will fetch and compile the</span>
+<span style="color: #000000">  </span><span style="color: #008000">// .wasm file.</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">module</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #795E26">SQLiteESMFactory</span><span style="color: #000000">();</span>
+
+<span style="color: #000000">  </span><span style="color: #008000">// Use the module to build the API instance.</span>
+<span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">sqlite3</span><span style="color: #000000"> = </span><span style="color: #001080">SQLite</span><span style="color: #000000">.</span><span style="color: #795E26">Factory</span><span style="color: #000000">(</span><span style="color: #267F99">module</span><span style="color: #000000">);</span>
+
+<span style="color: #000000">  </span><span style="color: #008000">// Use the API to open and access a database.</span>
 <span style="color: #000000">  </span><span style="color: #0000FF">const</span><span style="color: #000000"> </span><span style="color: #0070C1">db</span><span style="color: #000000"> = </span><span style="color: #AF00DB">await</span><span style="color: #000000"> </span><span style="color: #001080">sqlite3</span><span style="color: #000000">.</span><span style="color: #795E26">open_v2</span><span style="color: #000000">(</span><span style="color: #A31515">&#039;myDB&#039;</span><span style="color: #000000">);</span>
 <span style="color: #000000">  ...</span>
 <span style="color: #000000">})();</span>
@@ -931,6 +930,8 @@
 								<div class="lead">
 									<p>Get names for all columns of a prepared statement</p>
 								</div>
+								<p>This is a convenience function that calls <a href="sqliteapi.html#column_count">column_count</a> and
+								<a href="sqliteapi.html#column_name">column_name</a>.</p>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -1830,6 +1831,11 @@
 								<div class="lead">
 									<p>Get statement SQL</p>
 								</div>
+								<dl class="tsd-comment-tags">
+									<dt>see</dt>
+									<dd><p><a href="https://www.sqlite.org/c3ref/expanded_sql.html">https://www.sqlite.org/c3ref/expanded_sql.html</a></p>
+									</dd>
+								</dl>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -1879,7 +1885,7 @@
 									by the iterator; the statement resources will be released
 									automatically at the end of each iteration. This also means
 									that the statement is only valid within the scope of the loop -
-									Use <a href="sqliteapi.html#prepare_v2">prepare_v2</a> directly to compile a statement with an
+									use <a href="sqliteapi.html#prepare_v2">prepare_v2</a> directly to compile a statement with an
 								application-specified lifetime.</p>
 								<p>If using the iterator manually, i.e. by calling its <code>next</code>
 									method, be sure to call the <code>return</code> method if iteration
@@ -2033,7 +2039,11 @@
 </code></pre>
 								<p>A <code>sqlite3_str</code> instance should always be destroyed with
 								<a href="sqliteapi.html#str_finish">str_finish</a> after use to avoid a resource leak.</p>
-								<p> See <a href="https://www.sqlite.org/c3ref/str_append.html">https://www.sqlite.org/c3ref/str_append.html</a></p>
+								<dl class="tsd-comment-tags">
+									<dt>see</dt>
+									<dd><p><a href="https://www.sqlite.org/c3ref/str_append.html">https://www.sqlite.org/c3ref/str_append.html</a></p>
+									</dd>
+								</dl>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -2071,6 +2081,11 @@
 								</div>
 								<p>The returned pointer points to the UTF-8 encoded string in
 								WebAssembly memory. Use as input with <a href="sqliteapi.html#prepare_v2">prepare_v2</a>.</p>
+								<dl class="tsd-comment-tags">
+									<dt>see</dt>
+									<dd><p><a href="https://www.sqlite.org/c3ref/str_errcode.html">https://www.sqlite.org/c3ref/str_errcode.html</a></p>
+									</dd>
+								</dl>
 							</div>
 							<h4 class="tsd-parameters-title">Parameters</h4>
 							<ul class="tsd-parameters">
@@ -2374,7 +2389,7 @@
 								</div>
 								<dl class="tsd-comment-tags">
 									<dt>see</dt>
-									<dd><p><a href="https://www.sqlite.org/c3ref/str_append.html">https://www.sqlite.org/c3ref/str_append.html</a></p>
+									<dd><p><a href="https://www.sqlite.org/c3ref/vfs_find.html">https://www.sqlite.org/c3ref/vfs_find.html</a></p>
 									</dd>
 								</dl>
 							</div>
