@@ -814,7 +814,8 @@ declare interface SQLiteAPI {
    * Evaluate an SQL statement
    * @see https://www.sqlite.org/c3ref/step.html
    * @param stmt prepared statement pointer
-   * @returns Promise resolving to `SQLITE_OK` (rejects on error)
+   * @returns Promise resolving to `SQLITE_ROW` or `SQLITE_DONE`
+   * (rejects on error)
    */
   step(stmt: number): Promise<number>;
 
