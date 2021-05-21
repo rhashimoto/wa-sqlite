@@ -449,32 +449,14 @@ export function Factory(Module) {
   })();
 
   api.exec = async function(db, sql, callback) {
-    const str = api.str_new(db, sql);
-    try {
-      // Initialize the prepared statement state that will evolve
-      // as we progress through the SQL.
-      /** @type {*} */ let prepared = { sql: api.str_value(str) };
-      while (true) {
-        // Prepare the next statement. Another try-finally goes here
-        // to ensure that each prepared statement is finalized.
-        if (!(prepared = await api.prepare_v2(db, prepared.sql))) {
-          break;
-        }
-        try {
-          // Step through the rows.
-          const columns = callback ? api.column_names(prepared.stmt) : null;
-          while (await api.step(prepared.stmt) === SQLITE_ROW) {
-            if (callback) {
-              const row = api.row(prepared.stmt);
-              await callback(row, columns);
-            }
-          }
-        } finally {
-          api.finalize(prepared.stmt);
+    for await (const stmt of api.statements(db, sql)) {
+      const columns = callback ? api.column_names(stmt) : null;
+      while (await api.step(stmt) === SQLITE_ROW) {
+        if (callback) {
+          const row = api.row(stmt);
+          await callback(row, columns);
         }
       }
-    } finally {
-      api.str_finish(str);
     }
     return SQLITE_OK;
   };
