@@ -115,7 +115,7 @@ const async = true;
  * @returns {SQLiteAPI}
  */
 export function Factory(Module) {
-  /** @type {SQLiteAPI} */ const api = {};
+  /** @type {SQLiteAPI} */ const sqlite3 = {};
 
   const sqliteFreeAddress = Module._getSqliteFree();
 
@@ -147,47 +147,47 @@ export function Factory(Module) {
     }
   }
 
-  api.bind_collection = function(stmt, bindings) {
+  sqlite3.bind_collection = function(stmt, bindings) {
     verifyStatement(stmt);
     const isArray = Array.isArray(bindings);
-    const nBindings = api.bind_parameter_count(stmt);
+    const nBindings = sqlite3.bind_parameter_count(stmt);
     for (let i = 1; i <= nBindings; ++i) {
-      const key = isArray ? i - 1 : api.bind_parameter_name(stmt, i);
+      const key = isArray ? i - 1 : sqlite3.bind_parameter_name(stmt, i);
       const value = bindings[key];
       if (value !== undefined) {
-        api.bind(stmt, i, value);
+        sqlite3.bind(stmt, i, value);
       }
     }
     return SQLITE_OK;
   };
 
-  api.bind = function(stmt, i, value) {
+  sqlite3.bind = function(stmt, i, value) {
     verifyStatement(stmt);
     switch (typeof value) {
       case 'number':
         if (value === (value | 0)) {
-          return api.bind_int(stmt, i, value);
+          return sqlite3.bind_int(stmt, i, value);
         } else {
-          return api.bind_double(stmt, i, value);
+          return sqlite3.bind_double(stmt, i, value);
         }
       case 'string':
-        return api.bind_text(stmt, i, value);
+        return sqlite3.bind_text(stmt, i, value);
       default:
         if (value instanceof Int8Array || Array.isArray(value)) {
-          return api.bind_blob(stmt, i, value);
+          return sqlite3.bind_blob(stmt, i, value);
         } else if (value === null) {
-          return api.bind_null(stmt, i);
+          return sqlite3.bind_null(stmt, i);
         } else if (value === undefined) {
           // Existing binding (or NULL) will be used.
           return SQLITE_NOTICE;
         } else {
           console.warn('unknown binding converted to null', value);
-          return api.bind_null(stmt, i);
+          return sqlite3.bind_null(stmt, i);
         }
     }
   };
 
-  api.bind_blob = (function() {
+  sqlite3.bind_blob = (function() {
     const fname = 'sqlite3_bind_blob';
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
@@ -200,7 +200,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_parameter_count = (function() {
+  sqlite3.bind_parameter_count = (function() {
     const fname = 'sqlite3_bind_parameter_count';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(stmt) {
@@ -211,7 +211,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_double = (function() {
+  sqlite3.bind_double = (function() {
     const fname = 'sqlite3_bind_double';
     const f = Module.cwrap(fname, ...decl('nnn:n'));
     return function(stmt, i, value) {
@@ -222,7 +222,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_int = (function() {
+  sqlite3.bind_int = (function() {
     const fname = 'sqlite3_bind_int';
     const f = Module.cwrap(fname, ...decl('nnn:n'));
     return function(stmt, i, value) {
@@ -233,7 +233,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_null = (function() {
+  sqlite3.bind_null = (function() {
     const fname = 'sqlite3_bind_null';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, i) {
@@ -244,7 +244,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_parameter_name = (function() {
+  sqlite3.bind_parameter_name = (function() {
     const fname = 'sqlite3_bind_parameter_name';
     const f = Module.cwrap(fname, ...decl('n:s'));
     return function(stmt, i) {
@@ -255,7 +255,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.bind_text = (function() {
+  sqlite3.bind_text = (function() {
     const fname = 'sqlite3_bind_text';
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
@@ -267,7 +267,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.changes = (function() {
+  sqlite3.changes = (function() {
     const fname = 'sqlite3_changes';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(db) {
@@ -278,7 +278,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.close = (function() {
+  sqlite3.close = (function() {
     const fname = 'sqlite3_close';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(db) {
@@ -289,31 +289,31 @@ export function Factory(Module) {
     };
   })();
 
-  api.column = function(stmt, iCol) {
+  sqlite3.column = function(stmt, iCol) {
     verifyStatement(stmt);
-    const type = api.column_type(stmt, iCol);
+    const type = sqlite3.column_type(stmt, iCol);
     switch (type) {
       case SQLITE_BLOB:
-        return api.column_blob(stmt, iCol);
+        return sqlite3.column_blob(stmt, iCol);
       case SQLITE_FLOAT:
-        return api.column_double(stmt, iCol);
+        return sqlite3.column_double(stmt, iCol);
       case SQLITE_INTEGER:
-        return api.column_int(stmt, iCol);
+        return sqlite3.column_int(stmt, iCol);
       case SQLITE_NULL:
         return null;
       case SQLITE_TEXT:
-        return api.column_text(stmt, iCol);
+        return sqlite3.column_text(stmt, iCol);
       default:
         throw new SQLiteError('unknown type', type);
     }
   };
 
-  api.column_blob = (function() {
+  sqlite3.column_blob = (function() {
     const fname = 'sqlite3_column_blob';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
       verifyStatement(stmt);
-      const nBytes = api.column_bytes(stmt, iCol);
+      const nBytes = sqlite3.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
       const result = Module.HEAP8.subarray(address, address + nBytes);
       // trace(fname, result);
@@ -321,7 +321,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_bytes = (function() {
+  sqlite3.column_bytes = (function() {
     const fname = 'sqlite3_column_bytes';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
@@ -332,7 +332,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_count = (function() {
+  sqlite3.column_count = (function() {
     const fname = 'sqlite3_column_count';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(stmt) {
@@ -343,7 +343,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_double = (function() {
+  sqlite3.column_double = (function() {
     const fname = 'sqlite3_column_double';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
@@ -354,7 +354,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_int = (function() {
+  sqlite3.column_int = (function() {
     const fname = 'sqlite3_column_int';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
@@ -365,7 +365,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_name = (function() {
+  sqlite3.column_name = (function() {
     const fname = 'sqlite3_column_name';
     const f = Module.cwrap(fname, ...decl('nn:s'));
     return function(stmt, iCol) {
@@ -376,16 +376,16 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_names = function(stmt) {
+  sqlite3.column_names = function(stmt) {
     const columns = [];
-    const nColumns = api.column_count(stmt);
+    const nColumns = sqlite3.column_count(stmt);
     for (let i = 0; i < nColumns; ++i) {
-      columns.push(api.column_name(stmt, i));
+      columns.push(sqlite3.column_name(stmt, i));
     }
     return columns;
   };
 
-  api.column_text = (function() {
+  sqlite3.column_text = (function() {
     const fname = 'sqlite3_column_text';
     const f = Module.cwrap(fname, ...decl('nn:s'));
     return function(stmt, iCol) {
@@ -396,7 +396,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.column_type = (function() {
+  sqlite3.column_type = (function() {
     const fname = 'sqlite3_column_type';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
@@ -407,7 +407,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
+  sqlite3.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
     verifyDatabase(db);
     if (xFunc && !xStep && !xFinal) {
       const result = Module.createFunction(db, zFunctionName, nArg, eTextRep, pApp, xFunc);
@@ -422,13 +422,13 @@ export function Factory(Module) {
     throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
   };
 
-  api.create_module = function(db, zName, module, appData) {
+  sqlite3.create_module = function(db, zName, module, appData) {
     verifyDatabase(db);
     const result = Module.createModule(db, zName, module, appData);
     return check('sqlite3_create_module', result, db);
   };
 
-  api.data_count = (function() {
+  sqlite3.data_count = (function() {
     const fname = 'sqlite3_data_count';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(stmt) {
@@ -439,7 +439,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.declare_vtab = (function() {
+  sqlite3.declare_vtab = (function() {
     const fname = 'sqlite3_declare_vtab';
     const f = Module.cwrap(fname, ...decl('ns:n'));
     return function(pVTab, zSQL) {
@@ -448,12 +448,12 @@ export function Factory(Module) {
     }
   })();
 
-  api.exec = async function(db, sql, callback) {
-    for await (const stmt of api.statements(db, sql)) {
-      const columns = callback ? api.column_names(stmt) : null;
-      while (await api.step(stmt) === SQLITE_ROW) {
+  sqlite3.exec = async function(db, sql, callback) {
+    for await (const stmt of sqlite3.statements(db, sql)) {
+      const columns = callback ? sqlite3.column_names(stmt) : null;
+      while (await sqlite3.step(stmt) === SQLITE_ROW) {
         if (callback) {
-          const row = api.row(stmt);
+          const row = sqlite3.row(stmt);
           await callback(row, columns);
         }
       }
@@ -461,7 +461,7 @@ export function Factory(Module) {
     return SQLITE_OK;
   };
 
-  api.finalize = (function() {
+  sqlite3.finalize = (function() {
     const fname = 'sqlite3_finalize';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
@@ -474,7 +474,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.libversion = (function() {
+  sqlite3.libversion = (function() {
     const fname = 'sqlite3_libversion';
     const f = Module.cwrap(fname, ...decl(':s'));
     return function() {
@@ -483,7 +483,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.libversion_number = (function() {
+  sqlite3.libversion_number = (function() {
     const fname = 'sqlite3_libversion_number';
     const f = Module.cwrap(fname, ...decl(':n'));
     return function() {
@@ -492,7 +492,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.open_v2 = (function() {
+  sqlite3.open_v2 = (function() {
     const fname = 'sqlite3_open_v2';
     const f = Module.cwrap(fname, ...decl('snnn:n'), { async });
     return async function(zFilename, flags, zVfs) {
@@ -510,7 +510,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.prepare_v2 = (function() {
+  sqlite3.prepare_v2 = (function() {
     const fname = 'sqlite3_prepare_v2';
     const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
     return async function(db, sql) {
@@ -526,7 +526,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.reset = (function() {
+  sqlite3.reset = (function() {
     const fname = 'sqlite3_reset';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(stmt) {
@@ -536,33 +536,33 @@ export function Factory(Module) {
     };
   })();
 
-  api.result = function(context, value) {
+  sqlite3.result = function(context, value) {
     switch (typeof value) {
       case 'number':
         if (value === (value | 0)) {
-          api.result_int(context, value);
+          sqlite3.result_int(context, value);
         } else {
-          api.result_double(context, value);
+          sqlite3.result_double(context, value);
         }
         break;
       case 'string':
-        api.result_text(context, value);
+        sqlite3.result_text(context, value);
         break;
       default:
         if (value instanceof Int8Array || Array.isArray(value)) {
-          api.result_blob(context, value);
+          sqlite3.result_blob(context, value);
         } else if (value === null) {
-          api.result_null(context);
+          sqlite3.result_null(context);
         } else {
           console.warn('unknown result converted to null', value);
-          api.result_null(context);
+          sqlite3.result_null(context);
         }
         break;
     }
 
   };
 
-  api.result_blob = (function() {
+  sqlite3.result_blob = (function() {
     const fname = 'sqlite3_result_blob';
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(context, value) {
@@ -572,7 +572,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.result_double = (function() {
+  sqlite3.result_double = (function() {
     const fname = 'sqlite3_result_double';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(context, value) {
@@ -580,7 +580,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.result_int = (function() {
+  sqlite3.result_int = (function() {
     const fname = 'sqlite3_result_int';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(context, value) {
@@ -588,7 +588,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.result_null = (function() {
+  sqlite3.result_null = (function() {
     const fname = 'sqlite3_result_null';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(context) {
@@ -596,7 +596,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.result_text = (function() {
+  sqlite3.result_text = (function() {
     const fname = 'sqlite3_result_text';
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(context, value) {
@@ -605,16 +605,16 @@ export function Factory(Module) {
     };
   })();
 
-  api.row = function(stmt) {
+  sqlite3.row = function(stmt) {
     const row = [];
-    const nColumns = api.data_count(stmt);
+    const nColumns = sqlite3.data_count(stmt);
     for (let i = 0; i < nColumns; ++i) {
-      row.push(api.column(stmt, i));
+      row.push(sqlite3.column(stmt, i));
     }
     return row;
   };
 
-  api.sql = (function() {
+  sqlite3.sql = (function() {
     const fname = 'sqlite3_sql';
     const f = Module.cwrap(fname, ...decl('n:s'));
     return function(stmt) {
@@ -625,26 +625,26 @@ export function Factory(Module) {
     };
   })();
 
-  api.statements = function(db, sql) {
+  sqlite3.statements = function(db, sql) {
     return (async function*() {
-      const str = api.str_new(db, sql);
-      let prepared = { stmt: null, sql: api.str_value(str) };
+      const str = sqlite3.str_new(db, sql);
+      let prepared = { stmt: null, sql: sqlite3.str_value(str) };
       try {
-        while (prepared = await api.prepare_v2(db, prepared.sql)) {
+        while (prepared = await sqlite3.prepare_v2(db, prepared.sql)) {
           yield prepared.stmt;
-          api.finalize(prepared.stmt);
+          sqlite3.finalize(prepared.stmt);
           prepared.stmt = null;
         }
       } finally {
         if (prepared?.stmt) {
-          api.finalize(prepared.stmt);
+          sqlite3.finalize(prepared.stmt);
         }
-        api.str_finish(str);
+        sqlite3.str_finish(str);
       }
     })();
   };
 
-  api.step = (function() {
+  sqlite3.step = (function() {
     const fname = 'sqlite3_step';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
@@ -661,7 +661,7 @@ export function Factory(Module) {
   let stringId = 0;
   const strings = new Map();
 
-  api.str_new = function(db, s = '') {
+  sqlite3.str_new = function(db, s = '') {
     const sBytes = Module.lengthBytesUTF8(s);
     const str = stringId++ & 0xffffffff;
     const data = {
@@ -673,7 +673,7 @@ export function Factory(Module) {
     return str;
   };
 
-  api.str_appendall = function(str, s) {
+  sqlite3.str_appendall = function(str, s) {
     if (!strings.has(str)) {
       throw new SQLiteError('not a string', SQLITE_MISUSE);
     }
@@ -692,7 +692,7 @@ export function Factory(Module) {
     strings.set(str, data);
   };
 
-  api.str_finish = function(str) {
+  sqlite3.str_finish = function(str) {
     if (!strings.has(str)) {
       throw new SQLiteError('not a string', SQLITE_MISUSE);
     }
@@ -701,40 +701,40 @@ export function Factory(Module) {
     Module._sqlite3_free(data.offset);
   };
 
-  api.str_value = function(str) {
+  sqlite3.str_value = function(str) {
     if (!strings.has(str)) {
       throw new SQLiteError('not a string', SQLITE_MISUSE);
     }
     return strings.get(str).offset;
   };
 
-  api.user_data = function(context) {
+  sqlite3.user_data = function(context) {
     return Module.getFunctionUserData(context);
   };
 
-  api.value = function(pValue) {
-    const type = api.value_type(pValue);
+  sqlite3.value = function(pValue) {
+    const type = sqlite3.value_type(pValue);
     switch (type) {
       case SQLITE_BLOB:
-        return api.value_blob(pValue);
+        return sqlite3.value_blob(pValue);
       case SQLITE_FLOAT:
-        return api.value_double(pValue);
+        return sqlite3.value_double(pValue);
       case SQLITE_INTEGER:
-        return api.value_int(pValue);
+        return sqlite3.value_int(pValue);
       case SQLITE_NULL:
         return null;
       case SQLITE_TEXT:
-        return api.value_text(pValue);
+        return sqlite3.value_text(pValue);
       default:
         throw new SQLiteError('unknown type', type);
     }
   };
 
-  api.value_blob = (function() {
+  sqlite3.value_blob = (function() {
     const fname = 'sqlite3_value_blob';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
-      const nBytes = api.value_bytes(pValue);
+      const nBytes = sqlite3.value_bytes(pValue);
       const address = f(pValue);
       const result = Module.HEAP8.subarray(address, address + nBytes);
       // trace(fname, result);
@@ -742,7 +742,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.value_bytes = (function() {
+  sqlite3.value_bytes = (function() {
     const fname = 'sqlite3_value_bytes';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
@@ -752,7 +752,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.value_double = (function() {
+  sqlite3.value_double = (function() {
     const fname = 'sqlite3_value_double';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
@@ -762,7 +762,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.value_int = (function() {
+  sqlite3.value_int = (function() {
     const fname = 'sqlite3_value_int';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
@@ -772,7 +772,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.value_text = (function() {
+  sqlite3.value_text = (function() {
     const fname = 'sqlite3_value_text';
     const f = Module.cwrap(fname, ...decl('n:s'));
     return function(pValue) {
@@ -782,7 +782,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.value_type = (function() {
+  sqlite3.value_type = (function() {
     const fname = 'sqlite3_value_type';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
@@ -792,7 +792,7 @@ export function Factory(Module) {
     };
   })();
 
-  api.vfs_register = function(vfs, makeDefault) {
+  sqlite3.vfs_register = function(vfs, makeDefault) {
     const result = Module.registerVFS(vfs, makeDefault);
     return check('sqlite3_vfs_register', result);
   };
@@ -806,7 +806,7 @@ export function Factory(Module) {
     throw new SQLiteError(message, result);
   }
 
-  return api;
+  return sqlite3;
 }
 
 function trace(...args) {
