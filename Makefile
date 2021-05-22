@@ -68,7 +68,8 @@ EMFLAGS_LIBRARIES = \
 
 EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
-	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json
+	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json \
+	-s ASYNCIFY_IGNORE_INDIRECT -s ASYNCIFY_ADD=@src/asyncify_add.json
 
 EMFLAGS_ASYNCIFY_DEBUG = \
 	$(EMFLAGS_ASYNCIFY_COMMON) \
@@ -202,7 +203,7 @@ debug/wa-sqlite.mjs: $(BITCODE_FILES_DEBUG) $(LIBRARY_FILES) $(EXPORTED_FUNCTION
 	  $(EMFLAGS_LIBRARIES) \
 	  $(BITCODE_FILES_DEBUG) -o $@
 
-debug/wa-sqlite-async.mjs: $(BITCODE_FILES_DEBUG) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXTRA_EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+debug/wa-sqlite-async.mjs: $(BITCODE_FILES_DEBUG) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXTRA_EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) src/asyncify_add.json
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
@@ -225,10 +226,19 @@ dist/wa-sqlite.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS)
 	  $(EMFLAGS_LIBRARIES) \
 	  $(BITCODE_FILES_DIST) -o $@
 
-dist/wa-sqlite-async.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXTRA_EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+dist/wa-sqlite-async.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXTRA_EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) src/asyncify_add.json
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(BITCODE_FILES_DIST) -o $@
+
+## Static analysis for Asyncify optimization.
+tmp/callgraph: deps/$(SQLITE_AMALGAMATION)
+	mkdir -p tmp
+	clang -S -emit-llvm $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^/sqlite3.c -o - \
+	  | opt -analyze -print-callgraph >$@ 2>&1
+
+src/asyncify_add.json: tmp/callgraph
+	node src/tools/process_callgraph.cjs <$^ >$@
