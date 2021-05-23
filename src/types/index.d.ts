@@ -707,9 +707,9 @@ declare interface SQLiteAPI {
    * Reset a prepared statement object
    * @see https://www.sqlite.org/c3ref/reset.html
    * @param stmt prepared statement pointer
-   * @returns `SQLITE_OK` (throws exception on error)
+   * @returns Promise-wrapped `SQLITE_OK` (rejects on error)
    */
-  reset(stmt: number): number;
+  reset(stmt: number): Promise<number>;
 
   /**
    * Convenience function to call `result_*` based of the type of `value`

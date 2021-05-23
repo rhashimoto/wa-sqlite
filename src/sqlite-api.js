@@ -528,10 +528,10 @@ export function Factory(Module) {
 
   sqlite3.reset = (function() {
     const fname = 'sqlite3_reset';
-    const f = Module.cwrap(fname, ...decl('n:n'));
-    return function(stmt) {
+    const f = Module.cwrap(fname, ...decl('n:n'), { async });
+    return async function(stmt) {
       verifyStatement(stmt);
-      const result = f(stmt);
+      const result = await f(stmt);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
