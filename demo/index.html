@@ -46,6 +46,7 @@
         <option value="mem">memory / standard</option>
         <option value="mem-async">memory / asyncify</option>
         <option value="idb" selected>IndexedDB / asyncify</option>
+        <option value="webtorrent" selected>WebTorrent / asyncify</option>
       </select>
     </div>
     <div><button id="execute">Execute</button></div>
@@ -61,6 +62,7 @@
     </div>
     <div id="output"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/webtorrent/0.118.0/webtorrent.min.js" integrity="sha512-NCEPRmx7SgelB/5rX6r514yCqz+r/OGfqUs1u4gHkJLFClUBxJTKqQeJlvddpINGenZz6Gq8ew9hqT6URubjLQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="module" src="index.js"></script>
 
     <a href="https://github.com/rhashimoto/wa-sqlite" class="github-corner" aria-label="View source on GitHub">

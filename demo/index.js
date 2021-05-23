@@ -9,6 +9,7 @@ import * as SQLite from '../src/sqlite-api.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { WebTorrentVFS } from '../src/examples/WebTorrentVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
 import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
 
@@ -49,6 +50,21 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IndexedDbVFS());
 
+  const webseedUrl = new URL("./GOOG.db", document.URL).toString();
+
+  // ws is not used without peers, because meta (piece info) is missing
+  // instead we have to use a full torrent file
+  const magnetUri = `magnet:?xt=urn:btih:a40d817caba3681fe50022b0dda5fbf5d31f3ca9&dn=GOOG.db&ws=${encodeURIComponent(webseedUrl)}&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com`;
+
+  const b64toBlob = (base64, type = "application/octet-stream") => fetch(`data:${type};base64,${base64}`).then(res => res.blob())
+  const torrentBase64 = "ZDg6YW5ub3VuY2U0MDp1ZHA6Ly90cmFja2VyLmxlZWNoZXJzLXBhcmFkaXNlLm9yZzo2OTY5MTM6YW5ub3VuY2UtbGlzdGxsNDA6dWRwOi8vdHJhY2tlci5sZWVjaGVycy1wYXJhZGlzZS5vcmc6Njk2OWVsMzQ6dWRwOi8vdHJhY2tlci5jb3BwZXJzdXJmZXIudGs6Njk2OWVsMzM6dWRwOi8vdHJhY2tlci5vcGVudHJhY2tyLm9yZzoxMzM3ZWwyMzp1ZHA6Ly9leHBsb2RpZS5vcmc6Njk2OWVsMzE6dWRwOi8vdHJhY2tlci5lbXBpcmUtanMudXM6MTMzN2VsMjY6d3NzOi8vdHJhY2tlci5idG9ycmVudC54eXplbDMyOndzczovL3RyYWNrZXIub3BlbndlYnRvcnJlbnQuY29tZWUxMDpjcmVhdGVkIGJ5MzQ6V2ViVG9ycmVudCA8aHR0cHM6Ly93ZWJ0b3JyZW50LmlvPjEzOmNyZWF0aW9uIGRhdGVpMTYyMTc3OTU3N2U4OmVuY29kaW5nNTpVVEYtODQ6aW5mb2Q2Omxlbmd0aGk5NDIwOGU0Om5hbWU3OkdPT0cuZGIxMjpwaWVjZSBsZW5ndGhpMTYzODRlNjpwaWVjZXMxMjA63UmSQ5U1eLDJpHHzQ9cXWV4+ldkUiJV5VCL4UX5xyXgvbFMlW0hxtAosaxG1T5FNTIBwTmyeAXG+kc51XgtE4XFwZ5flrqZ9GZUp1LxOGRxqECW95MIA82jEsuRrjpYxXVvXGpgVpGqhFiLJgYWf797sguFdeQB5Nzpwcml2YXRlaTBlZWU=";
+  const torrentBlob = await b64toBlob(torrentBase64);
+
+  // cut off last endmarker & add the dynamic webseed url
+  const torrent = new Blob([torrentBlob.slice(0, -1), `8:url-listl${webseedUrl.length}:${webseedUrl}ee`], {type:"application/x-bittorrent"});
+
+  sqlite3a.vfs_register(new WebTorrentVFS(torrent));
+
   // Create the set of databases with respective runtime and VFS. For
   // each database we generate a template tag function that is used
   // to submit SQL queries. The tag is an example of an application-level
@@ -56,7 +72,11 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   const mapNameToTag = new Map();
 
   async function addTag(key, /** @type {SQLiteAPI}*/sqlite3, vfs) {
-    const db = await sqlite3.open_v2(vfs, undefined, vfs);
+    let name = vfs;
+    if (vfs === "webtorrent") {
+      name = "GOOG.db";
+    }
+    const db = await sqlite3.open_v2(name, undefined, vfs);
     const t = tag(sqlite3, db);
     mapNameToTag.set(key, t);
 
@@ -76,6 +96,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
   await addTag('idb', sqlite3a, 'idb');
+  await addTag('webtorrent', sqlite3a, 'webtorrent');
 
   // The selector widget determines the active template tag function.
   // It is also attached to the window so SQL queries can be easily
