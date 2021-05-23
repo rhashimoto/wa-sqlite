@@ -71,7 +71,7 @@ function shared(sqlite3Ready) {
     expect(result).toBe(SQLite.SQLITE_OK);
     result = await sqlite3.step(prepared.stmt);
     expect(result).toBe(SQLite.SQLITE_DONE);
-    result = sqlite3.reset(prepared.stmt);
+    result = await sqlite3.reset(prepared.stmt);
     expect(result).toBe(SQLite.SQLITE_OK);
 
     result = sqlite3.bind_collection(prepared.stmt, {
@@ -85,7 +85,7 @@ function shared(sqlite3Ready) {
     expect(result).toBe(SQLite.SQLITE_OK);
     result = await sqlite3.step(prepared.stmt);
     expect(result).toBe(SQLite.SQLITE_DONE);
-    result = sqlite3.reset(prepared.stmt);
+    result = await sqlite3.reset(prepared.stmt);
     expect(result).toBe(SQLite.SQLITE_OK);
 
     result = await sqlite3.finalize(prepared.stmt);
@@ -164,7 +164,7 @@ function shared(sqlite3Ready) {
     await sqlite3.step(prepared.stmt);
     expect(sqlite3.column(prepared.stmt, 0)).toBe('b');
 
-    sqlite3.reset(prepared.stmt);
+    await sqlite3.reset(prepared.stmt);
     await sqlite3.step(prepared.stmt);
     expect(sqlite3.column(prepared.stmt, 0)).toBe('a');
 
