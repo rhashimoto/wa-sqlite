@@ -18,6 +18,7 @@
     "test-watch": "karma start karma.conf.cjs"
   },
   "devDependencies": {
+    "@types/webtorrent": "^0.109.0",
     "@web/dev-server": "^0.1.13",
     "jasmine-core": "^3.7.1",
     "karma": "^6.3.2",
