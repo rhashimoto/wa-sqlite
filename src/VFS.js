@@ -63,6 +63,12 @@ export const SQLITE_IOCAP_POWERSAFE_OVERWRITE = 0x00001000;
 export const SQLITE_IOCAP_IMMUTABLE = 0x00002000;
 export const SQLITE_IOCAP_BATCH_ATOMIC = 0x00004000;
 
+// xAccess flags.
+// https://www.sqlite.org/c3ref/c_access_exists.html
+export const SQLITE_ACCESS_EXISTS = 0;
+export const SQLITE_ACCESS_READWRITE = 1;
+export const SQLITE_ACCESS_READ = 2;
+
 // Base class for a VFS.
 export class Base {
   mxPathName = 64;
