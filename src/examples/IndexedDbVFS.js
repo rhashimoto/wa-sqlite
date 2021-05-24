@@ -300,6 +300,13 @@ export class IndexedDbVFS extends VFS.Base {
     const meta = await idb(store.get(key));
     meta.isLocked = false;
     await idb(store.put(meta, key));
+
+    // Sync metadata if the file is open.
+    for (const file of this.mapIdToFile.values()) {
+      if (file.meta.name === name) {
+        file.meta = meta;
+      }
+    }
   }
 
   _getStore(mode = 'readwrite') {
