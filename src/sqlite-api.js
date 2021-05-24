@@ -1,102 +1,7 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 
-// Useful result codes.
-// https://www.sqlite.org/rescode.html
-export const SQLITE_OK = 0;
-export const SQLITE_ERROR = 1;
-export const SQLITE_BUSY = 5;
-export const SQLITE_NOMEM = 7;
-export const SQLITE_READONLY = 8;
-export const SQLITE_IOERR = 10;
-export const SQLITE_IOERR_SHORT_READ = 522;
-export const SQLITE_NOTFOUND = 12;
-export const SQLITE_CANTOPEN = 14;
-export const SQLITE_MISUSE = 21;
-export const SQLITE_NOTADB = 26;
-export const SQLITE_NOTICE = 27;
-export const SQLITE_WARNING = 28;
-export const SQLITE_ROW = 100;
-export const SQLITE_DONE = 101;
-
-// Open flags.
-// https://www.sqlite.org/c3ref/c_open_autoproxy.html
-export const SQLITE_OPEN_READONLY = 0x00000001;
-export const SQLITE_OPEN_READWRITE = 0x00000002;
-export const SQLITE_OPEN_CREATE = 0x00000004;
-export const SQLITE_OPEN_DELETEONCLOSE = 0x00000008;
-export const SQLITE_OPEN_EXCLUSIVE = 0x00000010;
-export const SQLITE_OPEN_AUTOPROXY = 0x00000020;
-export const SQLITE_OPEN_URI = 0x00000040;
-export const SQLITE_OPEN_MEMORY = 0x00000080;
-export const SQLITE_OPEN_MAIN_DB = 0x00000100;
-export const SQLITE_OPEN_TEMP_DB = 0x00000200;
-export const SQLITE_OPEN_TRANSIENT_DB = 0x00000400;
-export const SQLITE_OPEN_MAIN_JOURNAL = 0x00000800;
-export const SQLITE_OPEN_TEMP_JOURNAL = 0x00001000;
-export const SQLITE_OPEN_SUBJOURNAL = 0x00002000;
-export const SQLITE_OPEN_SUPER_JOURNAL = 0x00004000;
-export const SQLITE_OPEN_NOMUTEX = 0x00008000;
-export const SQLITE_OPEN_FULLMUTEX = 0x00010000;
-export const SQLITE_OPEN_SHAREDCACHE = 0x00020000;
-export const SQLITE_OPEN_PRIVATECACHE = 0x00040000;
-export const SQLITE_OPEN_WAL = 0x00080000;
-export const SQLITE_OPEN_NOFOLLOW = 0x01000000;
-
-// Device characteristics.
-// https://www.sqlite.org/c3ref/c_iocap_atomic.html
-export const SQLITE_IOCAP_ATOMIC = 0x00000001;
-export const SQLITE_IOCAP_ATOMIC512 = 0x00000002;
-export const SQLITE_IOCAP_ATOMIC1K = 0x00000004;
-export const SQLITE_IOCAP_ATOMIC2K = 0x00000008;
-export const SQLITE_IOCAP_ATOMIC4K = 0x00000010;
-export const SQLITE_IOCAP_ATOMIC8K = 0x00000020;
-export const SQLITE_IOCAP_ATOMIC16K = 0x00000040;
-export const SQLITE_IOCAP_ATOMIC32K = 0x00000080;
-export const SQLITE_IOCAP_ATOMIC64K = 0x00000100;
-export const SQLITE_IOCAP_SAFE_APPEND = 0x00000200;
-export const SQLITE_IOCAP_SEQUENTIAL = 0x00000400;
-export const SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN = 0x00000800;
-export const SQLITE_IOCAP_POWERSAFE_OVERWRITE = 0x00001000;
-export const SQLITE_IOCAP_IMMUTABLE = 0x00002000;
-export const SQLITE_IOCAP_BATCH_ATOMIC = 0x00004000;
-
-// Fundamental datatypes.
-// https://www.sqlite.org/c3ref/c_blob.html
-export const SQLITE_INTEGER = 1;
-export const SQLITE_FLOAT = 2;
-export const SQLITE_TEXT = 3;
-export const SQLITE_BLOB = 4;
-export const SQLITE_NULL = 5;
-
-// Special destructor behavior.
-// https://www.sqlite.org/c3ref/c_static.html
-export const SQLITE_STATIC = 0;
-export const SQLITE_TRANSIENT = -1;
-
-// Text encodings.
-// https://sqlite.org/c3ref/c_any.html
-export const SQLITE_UTF8 = 1;     /* IMP: R-37514-35566 */
-export const SQLITE_UTF16LE = 2;  /* IMP: R-03371-37637 */
-export const SQLITE_UTF16BE = 3;  /* IMP: R-51971-34154 */
-export const SQLITE_UTF16 = 4;    /* Use native byte order */
-
-// Module constraint ops.
-export const SQLITE_INDEX_CONSTRAINT_EQ        = 2;
-export const SQLITE_INDEX_CONSTRAINT_GT        = 4;
-export const SQLITE_INDEX_CONSTRAINT_LE        = 8;
-export const SQLITE_INDEX_CONSTRAINT_LT        = 16;
-export const SQLITE_INDEX_CONSTRAINT_GE        = 32;
-export const SQLITE_INDEX_CONSTRAINT_MATCH     = 64;
-export const SQLITE_INDEX_CONSTRAINT_LIKE      = 65;
-export const SQLITE_INDEX_CONSTRAINT_GLOB      = 66;
-export const SQLITE_INDEX_CONSTRAINT_REGEXP    = 67;
-export const SQLITE_INDEX_CONSTRAINT_NE        = 68;
-export const SQLITE_INDEX_CONSTRAINT_ISNOT     = 69;
-export const SQLITE_INDEX_CONSTRAINT_ISNOTNULL = 70;
-export const SQLITE_INDEX_CONSTRAINT_ISNULL    = 71;
-export const SQLITE_INDEX_CONSTRAINT_IS        = 72;
-export const SQLITE_INDEX_CONSTRAINT_FUNCTION  = 150;
-export const SQLITE_INDEX_SCAN_UNIQUE          = 1;  /* Scan visits at most = 1 row */
+import * as SQLite from './sqlite-constants.js';
+export * from './sqlite-constants.js';
 
 export class SQLiteError extends Error {
   constructor(message, code) {
@@ -136,14 +41,14 @@ export function Factory(Module) {
   const databases = new Set();
   function verifyDatabase(db) {
     if (!databases.has(db)) {
-      throw new SQLiteError('not a database', SQLITE_MISUSE);
+      throw new SQLiteError('not a database', SQLite.SQLITE_MISUSE);
     }
   }
 
   const mapStmtToDB = new Map();
   function verifyStatement(stmt) {
     if (!mapStmtToDB.has(stmt)) {
-      throw new SQLiteError('not a statement', SQLITE_MISUSE);
+      throw new SQLiteError('not a statement', SQLite.SQLITE_MISUSE);
     }
   }
 
@@ -158,7 +63,7 @@ export function Factory(Module) {
         sqlite3.bind(stmt, i, value);
       }
     }
-    return SQLITE_OK;
+    return SQLite.SQLITE_OK;
   };
 
   sqlite3.bind = function(stmt, i, value) {
@@ -179,7 +84,7 @@ export function Factory(Module) {
           return sqlite3.bind_null(stmt, i);
         } else if (value === undefined) {
           // Existing binding (or NULL) will be used.
-          return SQLITE_NOTICE;
+          return SQLite.SQLITE_NOTICE;
         } else {
           console.warn('unknown binding converted to null', value);
           return sqlite3.bind_null(stmt, i);
@@ -293,15 +198,15 @@ export function Factory(Module) {
     verifyStatement(stmt);
     const type = sqlite3.column_type(stmt, iCol);
     switch (type) {
-      case SQLITE_BLOB:
+      case SQLite.SQLITE_BLOB:
         return sqlite3.column_blob(stmt, iCol);
-      case SQLITE_FLOAT:
+      case SQLite.SQLITE_FLOAT:
         return sqlite3.column_double(stmt, iCol);
-      case SQLITE_INTEGER:
+      case SQLite.SQLITE_INTEGER:
         return sqlite3.column_int(stmt, iCol);
-      case SQLITE_NULL:
+      case SQLite.SQLITE_NULL:
         return null;
-      case SQLITE_TEXT:
+      case SQLite.SQLITE_TEXT:
         return sqlite3.column_text(stmt, iCol);
       default:
         throw new SQLiteError('unknown type', type);
@@ -419,7 +324,7 @@ export function Factory(Module) {
       return check('sqlite3_create_function', result, db);
     }
 
-    throw new SQLiteError('invalid function combination', SQLITE_MISUSE);
+    throw new SQLiteError('invalid function combination', SQLite.SQLITE_MISUSE);
   };
 
   sqlite3.create_module = function(db, zName, module, appData) {
@@ -451,14 +356,14 @@ export function Factory(Module) {
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       const columns = callback ? sqlite3.column_names(stmt) : null;
-      while (await sqlite3.step(stmt) === SQLITE_ROW) {
+      while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
         if (callback) {
           const row = sqlite3.row(stmt);
           await callback(row, columns);
         }
       }
     }
-    return SQLITE_OK;
+    return SQLite.SQLITE_OK;
   };
 
   sqlite3.finalize = (function() {
@@ -496,7 +401,7 @@ export function Factory(Module) {
     const fname = 'sqlite3_open_v2';
     const f = Module.cwrap(fname, ...decl('snnn:n'), { async });
     return async function(zFilename, flags, zVfs) {
-      flags = flags || SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE;
+      flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
       zVfs = createUTF8(zVfs);
       const result = await f(zFilename, tmpPtr[0], flags, zVfs);
 
@@ -650,7 +555,7 @@ export function Factory(Module) {
     return async function(stmt) {
       verifyStatement(stmt);
       const result = await f(stmt);
-      return check(fname, result, mapStmtToDB.get(stmt), [SQLITE_ROW, SQLITE_DONE]);
+      return check(fname, result, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
     };
   })();
 
@@ -675,7 +580,7 @@ export function Factory(Module) {
 
   sqlite3.str_appendall = function(str, s) {
     if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLITE_MISUSE);
+      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
     }
     const data = strings.get(str);
 
@@ -694,7 +599,7 @@ export function Factory(Module) {
 
   sqlite3.str_finish = function(str) {
     if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLITE_MISUSE);
+      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
     }
     const data = strings.get(str);
     strings.delete(str);
@@ -703,7 +608,7 @@ export function Factory(Module) {
 
   sqlite3.str_value = function(str) {
     if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLITE_MISUSE);
+      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
     }
     return strings.get(str).offset;
   };
@@ -715,15 +620,15 @@ export function Factory(Module) {
   sqlite3.value = function(pValue) {
     const type = sqlite3.value_type(pValue);
     switch (type) {
-      case SQLITE_BLOB:
+      case SQLite.SQLITE_BLOB:
         return sqlite3.value_blob(pValue);
-      case SQLITE_FLOAT:
+      case SQLite.SQLITE_FLOAT:
         return sqlite3.value_double(pValue);
-      case SQLITE_INTEGER:
+      case SQLite.SQLITE_INTEGER:
         return sqlite3.value_int(pValue);
-      case SQLITE_NULL:
+      case SQLite.SQLITE_NULL:
         return null;
-      case SQLITE_TEXT:
+      case SQLite.SQLITE_TEXT:
         return sqlite3.value_text(pValue);
       default:
         throw new SQLiteError('unknown type', type);
@@ -797,7 +702,7 @@ export function Factory(Module) {
     return check('sqlite3_vfs_register', result);
   };
 
-  function check(fname, result, db = null, allowed = [SQLITE_OK]) {
+  function check(fname, result, db = null, allowed = [SQLite.SQLITE_OK]) {
     // trace(fname, result);
     if (allowed.includes(result)) return result;
     const message = db ?
