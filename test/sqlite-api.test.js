@@ -335,6 +335,52 @@ function shared(sqlite3Ready) {
     // @ts-ignore
     sqlite3.finalize.restore();
   });
+
+  it('rollback', async function() {
+    let count;
+    await sqlite3.exec(db, `
+      CREATE TABLE foo (x);
+      INSERT INTO foo VALUES ('foo'), ('bar'), ('baz');
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(3);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      BEGIN TRANSACTION;
+      WITH numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 100)
+        INSERT INTO foo SELECT * FROM numbers;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(103);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      ROLLBACK;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(3);
+  });
+
+  it('vacuum', async function() {
+    let sum;
+    await sqlite3.exec(db, `
+      CREATE TABLE foo (x PRIMARY KEY, y, z);
+      WITH numbers(n) AS
+        (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 100)
+        INSERT INTO foo SELECT n, n + n, n * n FROM numbers;
+      SELECT SUM(x) FROM foo;
+    `, row => sum = row[0]);
+    expect(sum).toBe(100 * 101 / 2);
+
+    sum = undefined;
+    await sqlite3.exec(db, `
+      DELETE FROM foo WHERE x > 5.0;
+      VACUUM;
+      SELECT SUM(x) FROM foo;
+    `, row => sum = row[0]);
+    expect(sum).toBe(5 * 6 / 2);
+  });
 }
 
 describe('sqlite-api', function() {
