@@ -24,6 +24,7 @@
     "karma": "^6.3.2",
     "karma-jasmine": "^4.0.1",
     "monaco-editor": "^0.23.0",
+    "sinon": "^11.0.0",
     "typedoc": "^0.20.36",
     "typescript": "^4.2.4"
   },
@@ -32,6 +33,9 @@
       "unplugged": true
     },
     "monaco-editor@0.23.0": {
+      "unplugged": true
+    },
+    "sinon@11.0.0": {
       "unplugged": true
     }
   }
