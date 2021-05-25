@@ -1,5 +1,6 @@
 import { getSQLite, getSQLiteAsync } from './api-instances.js';
 import * as SQLite from '../src/sqlite-api.js';
+import sinon from '../.yarn/unplugged/sinon-npm-11.0.0-1b596cee10/node_modules/sinon/pkg/sinon-esm.js';
 
 const LIBVERSION = '3.35.5';
 const LIBVERSION_NUMBER = 3035005;
@@ -26,6 +27,7 @@ function shared(sqlite3Ready) {
 
   afterEach(async function() {
     await sqlite3.close(db);
+    sinon.restore();
   });
 
   it('version', async function() {
@@ -157,19 +159,25 @@ function shared(sqlite3Ready) {
     `);
     expect(sqlite3.changes(db)).toBe(3);
 
-    const str = sqlite3.str_new(db, 'SELECT x FROM tbl ORDER BY x');
-    const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
-    await sqlite3.step(prepared.stmt);
-    expect(sqlite3.column(prepared.stmt, 0)).toBe('a');
-    await sqlite3.step(prepared.stmt);
-    expect(sqlite3.column(prepared.stmt, 0)).toBe('b');
+    let count = 0;
+    for await (const stmt of sqlite3.statements(db, 'SELECT x FROM tbl ORDER BY x')) {
+      await sqlite3.step(stmt);
+      expect(sqlite3.column(stmt, 0)).toBe('a');
+      await sqlite3.step(stmt);
+      expect(sqlite3.column(stmt, 0)).toBe('b');
 
-    await sqlite3.reset(prepared.stmt);
-    await sqlite3.step(prepared.stmt);
-    expect(sqlite3.column(prepared.stmt, 0)).toBe('a');
+      await sqlite3.reset(stmt);
+      await sqlite3.step(stmt);
+      expect(sqlite3.column(stmt, 0)).toBe('a');
 
-    sqlite3.finalize(prepared.stmt);
-    sqlite3.str_finish(str);
+      // Reset while rows are still available.
+      await sqlite3.reset(stmt);
+      await sqlite3.step(stmt);
+      expect(sqlite3.column(stmt, 0)).toBe('a');
+
+      ++count;
+    }
+    expect(count).toBe(1);
   });
 
   it('function', async function() {
@@ -247,6 +255,85 @@ function shared(sqlite3Ready) {
       result = row[0];
     });
     expect(result).toBe(10);
+  });
+
+  it('statements', async function() {
+    sinon.spy(sqlite3, 'finalize');
+
+    const stmts = [];
+    const result = [];
+    const iterator = sqlite3.statements(db, `
+      SELECT 'foo';
+      SELECT 'bar';
+      SELECT 'baz';
+    `);
+    for await (const stmt of iterator) {
+      stmts.push(stmt);
+      while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+        result.push(sqlite3.column(stmt, 0));
+      }
+    }
+    expect(result).toEqual(['foo', 'bar', 'baz']);
+    expect(stmts.length).toBe(3);
+    for (const stmt of stmts) {
+      // @ts-ignore
+      expect(sqlite3.finalize.calledWith(stmt)).toBeTrue();
+    }
+
+    // @ts-ignore
+    sqlite3.finalize.restore();
+  });
+
+  it('statements break', async function() {
+    sinon.spy(sqlite3, 'finalize');
+
+    const stmts = [];
+    const iterator = sqlite3.statements(db, `
+      SELECT 'foo';
+      SELECT 'bar';
+      SELECT 'baz';
+    `);
+    for await (const stmt of iterator) {
+      stmts.push(stmt);
+
+      // Loop early exit.
+      break;
+    }
+
+    // The statement should still be finalized.
+    // @ts-ignore
+    expect(sqlite3.finalize.calledWith(stmts[0])).toBeTrue();
+
+    // @ts-ignore
+    sqlite3.finalize.restore();
+  });
+
+  it('statements exception', async function() {
+    sinon.spy(sqlite3, 'finalize');
+
+    const stmts = [];
+    try {
+      const iterator = sqlite3.statements(db, `
+        SELECT 'foo';
+        SELECT 'bar';
+        SELECT 'baz';
+      `);
+      for await (const stmt of iterator) {
+        stmts.push(stmt);
+
+      // Loop early exit.
+      throw new Error();
+      }
+    } catch(e) {
+      // Ignore
+    }
+
+    // The statement should still be finalized.
+    // @ts-ignore
+    expect(sqlite3.finalize.calledWith(stmts[0])).toBeTrue();
+
+    // @ts-ignore
+    sqlite3.finalize.restore();
   });
 }
 
