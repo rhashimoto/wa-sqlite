@@ -79,7 +79,7 @@ EMFLAGS_ASYNCIFY_DIST = \
 	-s ASYNCIFY_STACK_SIZE=12288
 
 # https://www.sqlite.org/compile.html
-SQLITE_DEFINES = \
+WASQLITE_DEFINES ?= \
 	-DSQLITE_DEFAULT_MEMSTATUS=0 \
 	-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1 \
 	-DSQLITE_DQS=0 \
@@ -149,43 +149,43 @@ clean-tmp:
 
 tmp/bc/debug/sqlite3.bc: deps/$(SQLITE_AMALGAMATION)
 	mkdir -p tmp/bc/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^/sqlite3.c -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^/sqlite3.c -c -o $@
 
 tmp/bc/debug/extension-functions.bc: deps/$(EXTENSION_FUNCTIONS)
 	mkdir -p tmp/bc/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/debug/libfunction.bc: src/libfunction.c
 	mkdir -p tmp/bc/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/debug/libmodule.bc: src/libmodule.c
 	mkdir -p tmp/bc/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/debug/libvfs.bc: src/libvfs.c
 	mkdir -p tmp/bc/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/dist/sqlite3.bc: deps/$(SQLITE_AMALGAMATION)
 	mkdir -p tmp/bc/dist
-	$(EMCC) $(CFLAGS_DIST) $(SQLITE_DEFINES) $^/sqlite3.c -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^/sqlite3.c -c -o $@
 
 tmp/bc/dist/extension-functions.bc: deps/$(EXTENSION_FUNCTIONS)
 	mkdir -p tmp/bc/dist
-	$(EMCC) $(CFLAGS_DIST) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/dist/libfunction.bc: src/libfunction.c
 	mkdir -p tmp/bc/dist
-	$(EMCC) $(CFLAGS_DIST) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/dist/libmodule.bc: src/libmodule.c
 	mkdir -p tmp/bc/dist
-	$(EMCC) $(CFLAGS_DIST) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/dist/libvfs.bc: src/libvfs.c
 	mkdir -p tmp/bc/dist
-	$(EMCC) $(CFLAGS_DIST) $(SQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 ## debug
 .PHONY: clean-debug
