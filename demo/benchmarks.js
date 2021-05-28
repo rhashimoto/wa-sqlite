@@ -7,6 +7,7 @@ import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
+import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
 const TESTS = [
@@ -43,12 +44,16 @@ const TESTS = [
   // runtimes; an asynchronous VFS will work only in the asynchronous
   // runtime.
   sqlite3s.vfs_register(new MemoryVFS());
+  sqlite3a.vfs_register(new MemoryVFS());
+  sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IndexedDbVFS());
 
   /** @type {Array<[SQLiteAPI, string]>} */
   const configs = [
     [sqlite3s, undefined],
     [sqlite3s, 'memory'],
+    [sqlite3a, 'memory'],
+    [sqlite3a, 'memory-async'],
     [sqlite3a, 'idb']
   ];
 
