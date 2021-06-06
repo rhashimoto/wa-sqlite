@@ -1151,13 +1151,13 @@ declare module 'wa-sqlite' {
 
 /** @ignore */
 declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
-  function ModuleFactory(): Promise<any>;
+  function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
 declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
-  function ModuleFactory(): Promise<any>;
+  function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
