@@ -12,7 +12,7 @@ If you do want to build - e.g. you want to change build flags or use a specific 
 
 * Building on Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
-* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) - Note that there is a [regression in EMSDK 2.0.14](https://github.com/emscripten-core/emscripten/issues/13858) that prevents building.
+* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 2.0.26+.
 * `curl`, `make`, `openssl`, `sed`, `unzip`
 
 Here are the build steps:
