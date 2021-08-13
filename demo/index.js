@@ -113,27 +113,9 @@ SELECT y * y FROM tbl WHERE x = 'bar';
       // Adjust for browser differences in Error.stack().
       const report = (window['chrome'] ? '' : `${e.message}\n`) + e.stack;
       output.innerHTML = `<pre>${report}</pre>`;
-
-      if (e.code === SQLite.SQLITE_BUSY) {
-        document.getElementById('busy').style.display = 'block';
-      }
     }
     timestamp.textContent += ` ${time / 1000} seconds`;
     button.disabled = false;
-  });
-
-  document.getElementById('unlock').addEventListener('click', async () => {
-    const vfs = new IndexedDbVFS();
-    await vfs.forceClearLock('idb');
-    vfs.close();
-    document.getElementById('busy').style.display = 'none';
-  });
-
-  document.getElementById('delete').addEventListener('click', async () => {
-    const vfs = new IndexedDbVFS();
-    await vfs.deleteFile('idb');
-    vfs.close();
-    window.location.reload();
   });
 
   // Change the button text with selection.

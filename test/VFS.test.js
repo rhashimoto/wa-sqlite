@@ -9,6 +9,8 @@ import GOOG from './GOOG.js';
 
 import sinon from '../.yarn/unplugged/sinon-npm-11.0.0-1b596cee10/node_modules/sinon/pkg/sinon-esm.js';
 
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
+
 /**
  * @param {SQLiteAPI} sqlite3 
  * @param {number} db 
@@ -487,20 +489,6 @@ class ExploreIndexedDbVFS extends IndexedDbVFS {
   }
 }
 
-// Convenience Promisification for IDBRequest.
-function idb(request, listeners = {}) {
-  listeners = Object.assign({
-    'success': () => request.resolve(request.result),
-    'error': () => request.reject('idb error')
-  }, listeners);
-  return new Promise(function(resolve, reject) {
-    Object.assign(request, { resolve, reject });
-    for (const type of Object.keys(listeners)) {
-      request.addEventListener(type, listeners[type]);
-    }
-  });
-}
-
 describe('IndexedDbVFS', function() {
   let resolveReady;
   let ready = new Promise(resolve => {
@@ -536,79 +524,16 @@ describe('IndexedDbVFS', function() {
     await sql`DELETE FROM goog WHERE Close > Open`;
     await sql`VACUUM`;
     await vfs.xLock(fileId, 0x1);
-    // SQLite doesn't always call xSync after xTruncate. The file size is
-    // written to IDB on xUnlock but the extra blocks will remain until
-    // whenever xSync is called. We call it here to delete the blocks
-    // immediately.
-    await vfs.xSync(fileId, VFS.SQLITE_LOCK_EXCLUSIVE);
     await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
     await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
 
-    vfs.xClose(fileId);
     expect(fileSizes[1]).toBeLessThan(fileSizes[0]);
 
-    // Check that the number of IDB blocks is consistent.
-    const nBlocks = Math.floor((fileSizes[1] + 8192 - 1) / 8192);
-    const store = vfs.db.transaction('blocks').objectStore('blocks');
-    const keyRange = IDBKeyRange.bound('foo#0', 'foo#~');
-    const keys = await idb(store.getAllKeys(keyRange));
-    expect(keys.length).toBe(nBlocks);
-  });
-
-  it('force unlock', async function() {
-    const sql = setup.sql;
-
-    // Start a transaction and leave it open.
-    await sql`
-      BEGIN TRANSACTION;
-      CREATE TABLE tbl (x);
-    `;
-
-    // Attempting to lock the file from a second connection should fail.
-    let status;
-    const vfs = new ExploreIndexedDbVFS();
-    const fileId = 0;
-    status = await vfs.xOpen('foo', fileId, 0x6, { set() {} });
-    expect(status).toBe(SQLite.SQLITE_OK);
-    status = await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
-    expect(status).toBe(VFS.SQLITE_BUSY);
-
-    // Forcibly clear the lock.
-    vfs.forceClearLock('foo');
-
-    // Now locking should work.
-    status = await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
-    expect(status).toBe(VFS.SQLITE_OK);
-
-    await vfs.xClose(fileId);
-    await sql`ROLLBACK`;
-  });
-
-  it('delete file', async function() {
-    const sqlite3 = setup.sqlite3;
-    const db = setup.db;
-    const sql = setup.sql;
-
-    // Open a file and write some data.
-    const vfs = new ExploreIndexedDbVFS();
-    const fileId = 0;
-    await vfs.xOpen('raw', fileId, 0x6, { set() {} });
-    await vfs.xWrite(fileId, new Int8Array([1, 2, 3]), 0);
-
-    // Check IDB.
-    let store, keys;
-    const keyRange = IDBKeyRange.bound('raw#', 'raw#~');
-
-    store = vfs.db.transaction('blocks').objectStore('blocks');
-    keys = await idb(store.getAllKeys(keyRange));
-    expect(keys.length).toBeGreaterThan(0);
-
-    // Delete the file.
-    await vfs.deleteFile('raw');
-
-    // Check IDB again.
-    store = vfs.db.transaction('blocks').objectStore('blocks');
-    keys = await idb(store.getAllKeys(keyRange));
-    expect(keys.length).toBe(0);
+    // Check IDB blocks.
+    const file = vfs.mapIdToFile.get(fileId);
+    const nBlocks = Math.floor((fileSizes[1] + file.getBlockSize() - 1) / file.getBlockSize());
+    expect(await file.getBlock(nBlocks - 1)).toBeTruthy();
+    expect(await file.getBlock(nBlocks)).toBeFalsy();
+    vfs.xClose(fileId);
   });
 });
