@@ -531,9 +531,10 @@ describe('IndexedDbVFS', function() {
 
     // Check IDB blocks.
     const file = vfs.mapIdToFile.get(fileId);
-    const nBlocks = Math.floor((fileSizes[1] + file.getBlockSize() - 1) / file.getBlockSize());
-    expect(await file.getBlock(nBlocks - 1)).toBeTruthy();
-    expect(await file.getBlock(nBlocks)).toBeFalsy();
+    const blockSize = file.metadata.blockSize;
+    const nBlocks = Math.floor((fileSizes[1] + blockSize - 1) / blockSize);
+    expect(await vfs._getBlock('foo', nBlocks - 1)).toBeTruthy();
+    expect(await vfs._getBlock('foo', nBlocks)).toBeFalsy();
     vfs.xClose(fileId);
   });
 });
