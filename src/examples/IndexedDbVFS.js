@@ -23,10 +23,21 @@ const KEEPALIVE_DEFAULT = 2;
  * @property {number} flags
  * @property {number} lockType
  * @property {Metadata} metadata
- * @property {boolean} metadataChanged
+ * @property {number} cachedBlockIndex
+ * @property {ArrayBuffer} cachedBlock
+ * @property {boolean} needsSync
  */
 
-console.debug = () => {};
+/**
+ * @typedef Request
+ * @property {(store: IDBObjectStore) => IDBRequest} builder
+ * @property {function} resolve
+ * @property {function} reject
+ */
+
+function log(...args) {
+  // console.debug(...args);
+}
 
 // Use IndexedDB as a block device.
 export class IndexedDbVFS extends VFS.Base {
@@ -39,7 +50,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   /** @type {IDBTransaction} */ tx;
   nKeepAlive = 0;
-  requestQueue = [];
+  /** @type {Request[]} */ requestQueue = [];
   nRequestsActive = 0;
   
   constructor(idbDatabaseName = 'sqlite') {
@@ -56,7 +67,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
-      console.debug(`xOpen ${name} 0x${flags.toString(16)}`);
+      log(`xOpen ${name} 0x${flags.toString(16)}`);
 
       // Generate a random name if requested.
       name = name || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
@@ -66,7 +77,9 @@ export class IndexedDbVFS extends VFS.Base {
         flags,
         lockType: VFS.SQLITE_LOCK_NONE,
         metadata: await this._loadFileMetadata(name),
-        metadataChanged: false
+        cachedBlockIndex: -1,
+        cachedBlock: null,
+        needsSync: false
       }
       if (!file.metadata) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -89,11 +102,11 @@ export class IndexedDbVFS extends VFS.Base {
   xClose(fileId) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      console.debug(`xClose ${file.name}`);
+      log(`xClose ${file.name}`);
 
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         this._deleteFile(file.name);
-      } else if (file.metadataChanged) {
+      } else if (file.needsSync) {
         this._saveFileMetadata(file.name, file.metadata);
       }
       this.mapIdToFile.delete(fileId);
@@ -104,7 +117,7 @@ export class IndexedDbVFS extends VFS.Base {
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      console.debug(`xRead ${file.name} offset 0x${iOffset} len ${pData.size}`);
+      log(`xRead ${file.name} offset 0x${iOffset} len ${pData.size}`);
 
       // Clip the requested read to the file boundary.
       const bgn = Math.min(iOffset, file.metadata.size);
@@ -120,7 +133,7 @@ export class IndexedDbVFS extends VFS.Base {
           const blockOffset = fileOffset % blockSize;
           const blockBytes = Math.min(blockSize - blockOffset, nRemaining);
 
-          let blockData = await this._getBlock(file.name, blockIndex);
+          let blockData = await this._getBlock(file, blockIndex);
           if (!blockData) {
             // This block doesn't exist in spite of being within the file
             // size. This can happen if writes are not purely sequential.
@@ -147,7 +160,7 @@ export class IndexedDbVFS extends VFS.Base {
   xWrite(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      console.debug(`xWrite ${file.name} offset 0x${iOffset} len ${pData.size}`);
+      log(`xWrite ${file.name} offset 0x${iOffset} len ${pData.size}`);
 
       const blockSize = file.metadata.blockSize;
 
@@ -165,7 +178,7 @@ export class IndexedDbVFS extends VFS.Base {
           if (blockIndex < nBlocks && blockBytes < blockSize) {
             // The write is to only part of a block that may have been
             // already written.
-            blockData = await this._getBlock(file.name, blockIndex);
+            blockData = await this._getBlock(file, blockIndex);
           }
           if (!blockData) {
             // We should reach here when:
@@ -177,7 +190,7 @@ export class IndexedDbVFS extends VFS.Base {
 
           new Int8Array(blockData, blockOffset, blockBytes)
             .set(pData.value.subarray(arrayOffset, arrayOffset + blockBytes));
-          this._putBlock(file.name, blockIndex, blockData);
+          this._putBlock(file, blockIndex, blockData);
 
           arrayOffset += blockBytes;
           fileOffset += blockBytes;
@@ -187,7 +200,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       const size = Math.max(file.metadata.size, iOffset + pData.size);
       file.metadata.size = size;
-      file.metadataChanged = true;
+      file.needsSync = true;
       return VFS.SQLITE_OK;
     });
   }
@@ -195,11 +208,11 @@ export class IndexedDbVFS extends VFS.Base {
   xTruncate(fileId, iSize) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      console.debug(`xTruncate ${file.name}`);
+      log(`xTruncate ${file.name}`);
       const blockSize = file.metadata.blockSize;
       const size = Math.min(file.metadata.size, iSize);
       file.metadata.size = size;
-      file.metadataChanged = true;
+      file.needsSync = true;
 
       const nBlocks = Math.floor((size + blockSize - 1) / blockSize);
       this._deleteBlocks(file.name, nBlocks);
@@ -209,7 +222,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   xFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
-    console.debug(`xFileSize ${file.name}`);
+    log(`xFileSize ${file.name}`);
     pSize64.set(file.metadata.size);
     return VFS.SQLITE_OK;
   }
@@ -217,7 +230,7 @@ export class IndexedDbVFS extends VFS.Base {
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.mapIdToFile.get(fileId);
-      console.debug(`xLock ${file.name} ${flags}`);
+      log(`xLock ${file.name} ${flags}`);
       if (flags !== file.lockType && file.lockType === VFS.SQLITE_LOCK_NONE) {
         ++this.nLockedFiles;
         file.metadata = await this._loadFileMetadata(file.name);
@@ -229,12 +242,12 @@ export class IndexedDbVFS extends VFS.Base {
 
   xUnlock(fileId, flags) {
     const file = this.mapIdToFile.get(fileId);
-    console.debug(`xUnlock ${file.name} ${flags}`);
+    log(`xUnlock ${file.name} ${flags}`);
     if (flags !== file.lockType && flags === VFS.SQLITE_LOCK_NONE) {
       --this.nLockedFiles;
-      if (file.metadataChanged) {
+      if (file.needsSync) {
         this._saveFileMetadata(file.name, file.metadata);
-        file.metadataChanged = false;
+        file.needsSync = false;
       }
     }
     file.lockType = flags;
@@ -243,19 +256,19 @@ export class IndexedDbVFS extends VFS.Base {
 
   xSectorSize(fileId) {
     const file = this.mapIdToFile.get(fileId);
-    console.debug(`xSectorSize ${file.name}`);
+    log(`xSectorSize ${file.name}`);
     return file.metadata.blockSize;
   }
 
   xDeviceCharacteristics(fileId) {
-    console.debug(`xDeviceCharacteristics`);
+    log(`xDeviceCharacteristics`);
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
   xDelete(name, syncDir) {
     return this.handleAsync(async () => {
-      console.debug(`xDelete ${name}`);
+      log(`xDelete ${name}`);
       await this._deleteFile(name);
       return VFS.SQLITE_OK;
     });
@@ -263,7 +276,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
-      console.debug(`xAccess ${name}`);
+      log(`xAccess ${name}`);
       pResOut.set(await this._loadFileMetadata(name) ? 1 : 0);
       return VFS.SQLITE_OK;
     });
@@ -277,6 +290,7 @@ export class IndexedDbVFS extends VFS.Base {
         this.database = await this.databaseReady;
       }
       this.tx = this.database.transaction('blocks', 'readwrite');
+      this.txIsNew = true;
       this.tx.oncomplete =
       this.tx.onabort = event => {
         if (this.tx === event.target) {
@@ -292,7 +306,8 @@ export class IndexedDbVFS extends VFS.Base {
   _queueRequest(builder) {
     return new Promise((resolve, reject) => {
       this.requestQueue.push({ builder, resolve, reject });
-      if (!this.nRequestsActive) {
+      if (this.txIsNew) {
+        this.txIsNew = false;
         this._executeRequests();
       }
     });
@@ -316,18 +331,16 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   _finishRequest() {
-    --this.nRequestsActive;
-    if (this.requestQueue.length) {
-      this._executeRequests();
-    } else {
+    if (--this.nRequestsActive === 0 && this.requestQueue.length === 0) {
       // No requests are queued so issue a dummy request to keep the
       // transaction from autoclosing. If any files are locked this is
       // done indefinitely, otherwise a fixed number of times.
       const keepAliveMax = this.nLockedFiles ? Number.POSITIVE_INFINITY : KEEPALIVE_DEFAULT;
-      if (!this.nRequestsActive && ++this.nKeepAlive <= keepAliveMax) {
+      if (++this.nKeepAlive <= keepAliveMax) {
         this._queueRequest(store => store.get(''));
       }
     }
+    this._executeRequests();
   }
 
   /**
@@ -354,26 +367,31 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   /**
-   * @param {string} name 
+   * @param {File} file 
    * @param {number} index 
    * @returns {Promise<ArrayBuffer>}
    */
-  _getBlock(name, index) {
+  _getBlock(file, index) {
+    if (index === file.cachedBlockIndex) {
+      return Promise.resolve(file.cachedBlock);
+    }
     return this._addRequest(store => {
-      const key = this._getBlockKey(name, index);
+      const key = this._getBlockKey(file.name, index);
       return store.get(key);
     });
   }
 
   /**
-   * @param {string} name 
+   * @param {File} file 
    * @param {number} index 
    * @param {ArrayBuffer} data 
    * @returns 
    */
-  _putBlock(name, index, data) {
+  _putBlock(file, index, data) {
+    file.cachedBlockIndex = index;
+    file.cachedBlock = data;
     return this._addRequest(store => {
-      const key = this._getBlockKey(name, index);
+      const key = this._getBlockKey(file.name, index);
       return store.put(data, key);
     });
   }
