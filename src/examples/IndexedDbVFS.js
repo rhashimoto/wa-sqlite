@@ -23,9 +23,7 @@ const KEEPALIVE_DEFAULT = 2;
  * @property {number} flags
  * @property {number} lockType
  * @property {Metadata} metadata
- * @property {number} cachedBlockIndex
- * @property {ArrayBuffer} cachedBlock
- * @property {boolean} needsSync
+ * @property {boolean} metadataChanged
  */
 
 console.debug = () => {};
@@ -68,9 +66,7 @@ export class IndexedDbVFS extends VFS.Base {
         flags,
         lockType: VFS.SQLITE_LOCK_NONE,
         metadata: await this._loadFileMetadata(name),
-        cachedBlockIndex: -1,
-        cachedBlock: null,
-        needsSync: false
+        metadataChanged: false
       }
       if (!file.metadata) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -97,7 +93,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         this._deleteFile(file.name);
-      } else if (file.needsSync) {
+      } else if (file.metadataChanged) {
         this._saveFileMetadata(file.name, file.metadata);
       }
       this.mapIdToFile.delete(fileId);
@@ -124,7 +120,7 @@ export class IndexedDbVFS extends VFS.Base {
           const blockOffset = fileOffset % blockSize;
           const blockBytes = Math.min(blockSize - blockOffset, nRemaining);
 
-          let blockData = await this._getBlock(file, blockIndex);
+          let blockData = await this._getBlock(file.name, blockIndex);
           if (!blockData) {
             // This block doesn't exist in spite of being within the file
             // size. This can happen if writes are not purely sequential.
@@ -169,7 +165,7 @@ export class IndexedDbVFS extends VFS.Base {
           if (blockIndex < nBlocks && blockBytes < blockSize) {
             // The write is to only part of a block that may have been
             // already written.
-            blockData = await this._getBlock(file, blockIndex);
+            blockData = await this._getBlock(file.name, blockIndex);
           }
           if (!blockData) {
             // We should reach here when:
@@ -181,7 +177,7 @@ export class IndexedDbVFS extends VFS.Base {
 
           new Int8Array(blockData, blockOffset, blockBytes)
             .set(pData.value.subarray(arrayOffset, arrayOffset + blockBytes));
-          this._putBlock(file, blockIndex, blockData);
+          this._putBlock(file.name, blockIndex, blockData);
 
           arrayOffset += blockBytes;
           fileOffset += blockBytes;
@@ -191,7 +187,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       const size = Math.max(file.metadata.size, iOffset + pData.size);
       file.metadata.size = size;
-      file.needsSync = true;
+      file.metadataChanged = true;
       return VFS.SQLITE_OK;
     });
   }
@@ -203,7 +199,7 @@ export class IndexedDbVFS extends VFS.Base {
       const blockSize = file.metadata.blockSize;
       const size = Math.min(file.metadata.size, iSize);
       file.metadata.size = size;
-      file.needsSync = true;
+      file.metadataChanged = true;
 
       const nBlocks = Math.floor((size + blockSize - 1) / blockSize);
       this._deleteBlocks(file.name, nBlocks);
@@ -236,9 +232,9 @@ export class IndexedDbVFS extends VFS.Base {
     console.debug(`xUnlock ${file.name} ${flags}`);
     if (flags !== file.lockType && flags === VFS.SQLITE_LOCK_NONE) {
       --this.nLockedFiles;
-      if (file.needsSync) {
+      if (file.metadataChanged) {
         this._saveFileMetadata(file.name, file.metadata);
-        file.needsSync = false;
+        file.metadataChanged = false;
       }
     }
     file.lockType = flags;
@@ -358,31 +354,26 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   /**
-   * @param {File} file 
+   * @param {string} name 
    * @param {number} index 
    * @returns {Promise<ArrayBuffer>}
    */
-  _getBlock(file, index) {
-    if (index === file.cachedBlockIndex) {
-      return Promise.resolve(file.cachedBlock);
-    }
+  _getBlock(name, index) {
     return this._addRequest(store => {
-      const key = this._getBlockKey(file.name, index);
+      const key = this._getBlockKey(name, index);
       return store.get(key);
     });
   }
 
   /**
-   * @param {File} file 
+   * @param {string} name 
    * @param {number} index 
    * @param {ArrayBuffer} data 
    * @returns 
    */
-  _putBlock(file, index, data) {
-    file.cachedBlockIndex = index;
-    file.cachedBlock = data;
+  _putBlock(name, index, data) {
     return this._addRequest(store => {
-      const key = this._getBlockKey(file.name, index);
+      const key = this._getBlockKey(name, index);
       return store.put(data, key);
     });
   }
