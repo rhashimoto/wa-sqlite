@@ -13,24 +13,28 @@ const KEEPALIVE_DEFAULT = 2;
 
 /**
  * @typedef Metadata
- * @property {number} size
- * @property {number} blockSize
+ * @property {number} size file size in bytes
+ * @property {number} blockSize block size in bytes
  */
 
 /**
- * @typedef File
+ * @typedef File opened file state
  * @property {string} name
- * @property {number} flags
- * @property {number} lockType
+ * @property {number} flags xOpen argument
+ * @property {number} lockType SQLITE_LOCK_*
  * @property {Metadata} metadata
+ * @property {boolean} metadataChanged
+ * @property {ArrayBuffer} cachedBlock 1-block write cache
  * @property {number} cachedBlockIndex
- * @property {ArrayBuffer} cachedBlock
- * @property {boolean} needsSync
  */
 
 /**
  * @typedef Request
  * @property {(store: IDBObjectStore) => IDBRequest} builder
+ * Except when an IDBTransaction is opened, new IDB requests aren't issued
+ * until a previous request is completed. A new request is submitted as a
+ * function that creates the IDBRequest to defer the creation until the
+ * appropriate time.
  * @property {function} resolve
  * @property {function} reject
  */
@@ -48,6 +52,12 @@ export class IndexedDbVFS extends VFS.Base {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   nLockedFiles = 0;
 
+  // To minimize opening and closing IndexedDB transactions, which is very
+  // slow, we keep an IDBTransaction open across multiple VFS calls. We
+  // prevent the IDBTransaction from automatically closing by issuing dummy
+  // requests, if necessary. An IDBTransaction is always kept alive when
+  // a VFS lock is held; otherwise it will be kept alive for a few event
+  // loop iterations.
   /** @type {IDBTransaction} */ tx;
   nKeepAlive = 0;
   /** @type {Request[]} */ requestQueue = [];
@@ -77,9 +87,9 @@ export class IndexedDbVFS extends VFS.Base {
         flags,
         lockType: VFS.SQLITE_LOCK_NONE,
         metadata: await this._loadFileMetadata(name),
+        metadataChanged: false,
         cachedBlockIndex: -1,
-        cachedBlock: null,
-        needsSync: false
+        cachedBlock: null
       }
       if (!file.metadata) {
         if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -106,7 +116,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         this._deleteFile(file.name);
-      } else if (file.needsSync) {
+      } else if (file.metadataChanged) {
         this._saveFileMetadata(file.name, file.metadata);
       }
       this.mapIdToFile.delete(fileId);
@@ -200,7 +210,7 @@ export class IndexedDbVFS extends VFS.Base {
 
       const size = Math.max(file.metadata.size, iOffset + pData.size);
       file.metadata.size = size;
-      file.needsSync = true;
+      file.metadataChanged = true;
       return VFS.SQLITE_OK;
     });
   }
@@ -212,12 +222,19 @@ export class IndexedDbVFS extends VFS.Base {
       const blockSize = file.metadata.blockSize;
       const size = Math.min(file.metadata.size, iSize);
       file.metadata.size = size;
-      file.needsSync = true;
+      file.metadataChanged = true;
 
       const nBlocks = Math.floor((size + blockSize - 1) / blockSize);
       this._deleteBlocks(file.name, nBlocks);
       return VFS.SQLITE_OK;
     });
+  }
+
+  xSync(fileId, flags) {
+    const file = this.mapIdToFile.get(fileId);
+    log(`xSync ${file.name}`);
+    this._flush(file);
+    return VFS.SQLITE_OK;
   }
 
   xFileSize(fileId, pSize64) {
@@ -245,9 +262,9 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xUnlock ${file.name} ${flags}`);
     if (flags !== file.lockType && flags === VFS.SQLITE_LOCK_NONE) {
       --this.nLockedFiles;
-      if (file.needsSync) {
+      if (file.metadataChanged) {
         this._saveFileMetadata(file.name, file.metadata);
-        file.needsSync = false;
+        file.metadataChanged = false;
       }
     }
     file.lockType = flags;
@@ -348,8 +365,8 @@ export class IndexedDbVFS extends VFS.Base {
    * @returns {Promise<Metadata>}
    */
   _loadFileMetadata(name) {
+    const key = this._getMetadataKey(name);
     return this._addRequest(store => {
-      const key = this._getMetadataKey(name);
       return store.get(key);
     });
   }
@@ -360,8 +377,8 @@ export class IndexedDbVFS extends VFS.Base {
    * @returns {Promise<void>}
    */
   _saveFileMetadata(name, metadata) {
+    const key = this._getMetadataKey(name);
     return this._addRequest(store => {
-      const key = this._getMetadataKey(name);
       return store.put(metadata, key);
     });
   }
@@ -375,8 +392,8 @@ export class IndexedDbVFS extends VFS.Base {
     if (index === file.cachedBlockIndex) {
       return Promise.resolve(file.cachedBlock);
     }
+    const key = this._getBlockKey(file.name, index);
     return this._addRequest(store => {
-      const key = this._getBlockKey(file.name, index);
       return store.get(key);
     });
   }
@@ -388,12 +405,22 @@ export class IndexedDbVFS extends VFS.Base {
    * @returns 
    */
   _putBlock(file, index, data) {
+    if (file.cachedBlockIndex !== index) {
+      this._flush(file);
+    }
     file.cachedBlockIndex = index;
     file.cachedBlock = data;
-    return this._addRequest(store => {
-      const key = this._getBlockKey(file.name, index);
-      return store.put(data, key);
-    });
+  }
+
+  _flush(file) {
+    if (file.cachedBlockIndex >= 0) {
+      const data = file.cachedBlock;
+      const key = this._getBlockKey(file.name, file.cachedBlockIndex);
+      file.cachedBlockIndex = -1;
+      return this._addRequest(store => {
+        return store.put(data, key);
+      });
+    }
   }
 
   /**
@@ -401,9 +428,9 @@ export class IndexedDbVFS extends VFS.Base {
    * @returns {Promise<void>}
    */
   _deleteFile(name) {
+    const key = this._getMetadataKey(name);
+    const range = IDBKeyRange.bound(key, key + '~', false, true);
     return this._addRequest(store => {
-      const key = this._getMetadataKey(name);
-      const range = IDBKeyRange.bound(key, key + '~', false, true);
       return store.delete(range);
     });
   }
