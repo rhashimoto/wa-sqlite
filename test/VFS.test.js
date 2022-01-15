@@ -511,30 +511,22 @@ describe('IndexedDbVFS', function() {
 
     const vfs = new ExploreIndexedDbVFS();
     const fileId = 0;
-    await vfs.xOpen('foo', fileId, 0x6, { set() {} });
+    const flags = VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
 
     // Load data into the database and record file size.
     const fileSizes = [];
     await loadSampleTable(sqlite3, db);
-    await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
+    await vfs.xOpen('foo', fileId, flags, { set() {} });
     await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
-    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
+    await vfs.xClose(fileId);
 
     // Shrink the database and record file size.
     await sql`DELETE FROM goog WHERE Close > Open`;
     await sql`VACUUM`;
-    await vfs.xLock(fileId, 0x1);
+    await vfs.xOpen('foo', fileId, flags, { set() {} });
     await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
-    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
+    await vfs.xClose(fileId);
 
     expect(fileSizes[1]).toBeLessThan(fileSizes[0]);
-
-    // Check IDB blocks.
-    const file = vfs.mapIdToFile.get(fileId);
-    const blockSize = file.metadata.blockSize;
-    const nBlocks = Math.floor((fileSizes[1] + blockSize - 1) / blockSize);
-    expect(await vfs._getBlock(file, nBlocks - 1)).toBeTruthy();
-    expect(await vfs._getBlock(file, nBlocks)).toBeFalsy();
-    vfs.xClose(fileId);
   });
 });

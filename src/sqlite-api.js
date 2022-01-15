@@ -97,9 +97,11 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      const ptr = Module._sqlite3_malloc(value.byteLength);
+      // @ts-ignore
+      const byteLength = value.byteLength ?? value.length;
+      const ptr = Module._sqlite3_malloc(byteLength);
       Module.HEAP8.subarray(ptr).set(value);
-      const result = f(stmt, i, ptr, value.byteLength, sqliteFreeAddress);
+      const result = f(stmt, i, ptr, byteLength, sqliteFreeAddress);
       // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
@@ -471,9 +473,11 @@ export function Factory(Module) {
     const fname = 'sqlite3_result_blob';
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(context, value) {
-      const ptr = Module._sqlite3_malloc(value.byteLength);
+      // @ts-ignore
+      const byteLength = value.byteLength ?? value.length;
+      const ptr = Module._sqlite3_malloc(byteLength);
       Module.HEAP8.subarray(ptr).set(value);
-      f(context, ptr, value.byteLength, sqliteFreeAddress); // void return
+      f(context, ptr, byteLength, sqliteFreeAddress); // void return
     };
   })();
 
@@ -536,6 +540,7 @@ export function Factory(Module) {
       let prepared = { stmt: null, sql: sqlite3.str_value(str) };
       try {
         while (prepared = await sqlite3.prepare_v2(db, prepared.sql)) {
+          // console.log(sqlite3.sql(prepared.stmt));
           yield prepared.stmt;
           sqlite3.finalize(prepared.stmt);
           prepared.stmt = null;
