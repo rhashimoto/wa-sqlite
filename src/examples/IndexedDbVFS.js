@@ -5,7 +5,7 @@ import { IDBDatabaseFile } from './IDBDatabaseFile.js';
 import * as IDBUtils from './IDBUtils.js';
 
 function log(...args) {
-  // console.debug(...args);
+  console.debug(...args);
 }
 
 // Use IndexedDB as a block device.
@@ -21,7 +21,7 @@ export class IndexedDbVFS extends VFS.Base {
     super();
 
     // Open IDB database.
-    this.dbReady = IDBUtils.promisify(globalThis.indexedDB.open(idbDatabaseName, 2), {
+    this.dbReady = IDBUtils.promisify(globalThis.indexedDB.open(idbDatabaseName, 3), {
       async upgradeneeded(event) {
       // Most of this function handles migrating a now obsolete IndexedDB
       // schema, to make sure that users of newly updated pages (e.g. the
@@ -71,6 +71,13 @@ export class IndexedDbVFS extends VFS.Base {
               });
             });
             db.deleteObjectStore('blocks');
+          case 2:
+            db.createObjectStore('spill', {
+              keyPath: ['name', 'index']
+            });
+            db.createObjectStore('journal', {
+              keyPath: ['name', 'address', 'order']
+            });
             break;
         }
       },
@@ -91,6 +98,12 @@ export class IndexedDbVFS extends VFS.Base {
           this.mapIdToFile.set(fileId, file);
           return file.xOpen(name, fileId, flags, pOutFlags);
         });
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
+        this.mapIdToFile.set(fileId, {
+          name,
+          type: VFS.SQLITE_OPEN_MAIN_JOURNAL
+        });
+        return this.fallback.xOpen(name, fileId, flags, pOutFlags);
     }
     return this.fallback.xOpen(name, fileId, flags, pOutFlags);
   }
@@ -102,6 +115,9 @@ export class IndexedDbVFS extends VFS.Base {
       case VFS.SQLITE_OPEN_MAIN_DB:
         this.mapIdToFile.delete(fileId)
         return file.xClose();
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
+        this.mapIdToFile.delete(fileId)
+        return this.fallback.xClose(fileId);
     }
     return this.fallback.xClose(fileId);
   }
@@ -114,6 +130,15 @@ export class IndexedDbVFS extends VFS.Base {
         return this.handleAsync(() => {
           return file.xRead(fileId, pData, iOffset);
         });
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
+        const result = this.fallback.xRead(fileId, pData, iOffset);
+        // TODO: delete this
+        if (((iOffset - 8192) % (8192 + 8)) === 0) {
+          const view = new DataView(pData.value.buffer, pData.value.byteOffset);
+          const index = view.getUint32(0);
+          console.log(`journal index ${index}`);
+        }
+        return result;
     }
     return this.fallback.xRead(fileId, pData, iOffset);
   }

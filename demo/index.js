@@ -29,6 +29,17 @@ SELECT y * y FROM tbl WHERE x = 'bar';
 `.trim();
 
 (async function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('clear')) {
+    const dbNames = indexedDB.databases
+      ? (await indexedDB.databases()).map(database => database.name)
+      : ['sqlite'];
+    await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
+    console.log('IndexedDB cleared by URL parameter');
+  }
+})();
+
+(async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
   const [SQLiteModule, SQLiteAsyncModule, editor] = await Promise.all([
     SQLiteESMFactory(),
