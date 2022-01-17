@@ -1,6 +1,8 @@
 [
   "_RegisterExtensionFunctions",
   "_main",
+  "_malloc",
+  "_free",
   "_sqlite3_bind_blob",
   "_sqlite3_bind_double",
   "_sqlite3_bind_int",
