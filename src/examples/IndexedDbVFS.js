@@ -2,6 +2,7 @@
 import * as VFS from '../VFS.js';
 import { MemoryVFS } from './MemoryVFS.js';
 import { WebLocksMixin } from './WebLocksMixin.js';
+import * as IDBUtils from './IDBUtils.js';
 
 // Default block size for new databases.
 const BLOCK_SIZE = 8192;
@@ -17,7 +18,7 @@ const FILE_TYPE_MASK = [
 ].reduce((mask, element) => mask | element);
 
 function log(...args) {
-  // console.debug(...args);
+  console.debug(...args);
 }
 
 // Use IndexedDB as a block device.
@@ -33,7 +34,7 @@ export class IndexedDbVFS extends VFS.Base {
     super();
 
     // Open IDB database.
-    this.dbReady = idb(globalThis.indexedDB.open(idbDatabaseName, 2), {
+    this.dbReady = IDBUtils.promisify(globalThis.indexedDB.open(idbDatabaseName, 2), {
       async upgradeneeded(event) {
       // Most of this function handles migrating a now obsolete IndexedDB
       // schema, to make sure that users of newly updated pages (e.g. the
@@ -235,7 +236,7 @@ class DatabaseFile extends WebLocksMixin() {
 
   constructor(db) {
     super();
-    /** @type {IDBDatabase} */ this.db = db;
+    this.store = new IDBUtils.StoreManager(db, 'database');
   }
 
   // @ts-ignore
@@ -246,9 +247,7 @@ class DatabaseFile extends WebLocksMixin() {
     this.flags = flags;
 
     // Fetch metadata.
-    const tx = this.db.transaction('database', 'readwrite');
-    const store = tx.objectStore('database');
-    this.metadata = await idb(store.get([name, 'metadata']));
+    this.metadata = await this.store.get([name, 'metadata']);
     if (!this.metadata) {
       // Files doesn't exist, create if requested.
       if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -258,7 +257,7 @@ class DatabaseFile extends WebLocksMixin() {
           fileSize: 0,
           blockSize: BLOCK_SIZE
         };
-        store.put(this.metadata);
+        this.store.put(this.metadata);
       } else {
         return VFS.SQLITE_CANTOPEN;
       }
@@ -339,10 +338,8 @@ class DatabaseFile extends WebLocksMixin() {
 
   async xUnlock(fileId, flags) {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE && this.writeCache.size) {
-      const tx = this.db.transaction('database', 'readwrite');
-      const store = tx.objectStore('database');
       for (const block of this.writeCache.values()) {
-        store.put(block);
+        this.store.put(block);
       }
       this.writeCache.clear();
   
@@ -350,12 +347,7 @@ class DatabaseFile extends WebLocksMixin() {
       const range = IDBKeyRange.bound(
         [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
         [this.name, Number.MAX_VALUE])
-      store.delete(range);
-
-      await new Promise(resolve => {
-        tx.addEventListener('complete', resolve);
-        tx.commit();
-      });
+      await this.store.delete(range);
     }
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }
@@ -372,40 +364,6 @@ class DatabaseFile extends WebLocksMixin() {
   getBlock(index) {
     const block = this.writeCache.get(index);
     if (block) return block;
-
-    // Reuse read transaction if possible. There is no API to determine
-    // whether a transaction is active, so just use it and retry if it
-    // fails.
-    for (let i = 0; i < 2; ++i) {
-      if (!this.tx) {
-        this.tx = this.db.transaction('database');
-        this.tx.oncomplete = ({ target }) => {
-          if (this.tx === target) {
-            this.tx = null;
-          }
-        };
-      }
-
-      try {
-        return idb(this.tx.objectStore('database').get([this.name, index]));
-      } catch (e) {
-        if (i) throw e;
-        log(`new transaction (${e.message})`);
-        this.tx = null;
-      }
-    }
+    return this.store.get([this.name, index]);
   }
-}
-
-// Convenience Promisification for IDBRequest.
-function idb(request, listeners = {}) {
-  return new Promise(function(resolve, reject) {
-    listeners = Object.assign({
-      'success': () => resolve(request.result),
-      'error': () => reject(request.error)
-    }, listeners);
-    for (const [key, listener] of Object.entries(listeners)) {
-      request.addEventListener(key, listener);
-    }
-  });
 }
