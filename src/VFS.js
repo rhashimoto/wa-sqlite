@@ -155,3 +155,13 @@ export class Base {
     throw new Error('No Asyncify runtime');
   }
 }
+
+export const FILE_TYPE_MASK = [
+  VFS.SQLITE_OPEN_MAIN_DB,
+  VFS.SQLITE_OPEN_MAIN_JOURNAL,
+  VFS.SQLITE_OPEN_TEMP_DB,
+  VFS.SQLITE_OPEN_TEMP_JOURNAL,
+  VFS.SQLITE_OPEN_TRANSIENT_DB,
+  VFS.SQLITE_OPEN_SUBJOURNAL,
+  VFS.SQLITE_OPEN_SUPER_JOURNAL
+].reduce((mask, element) => mask | element);

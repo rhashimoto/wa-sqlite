@@ -18,7 +18,7 @@ export function promisify(request, listeners = {}) {
  * Convenience class to cache and reuse transactions for a single object store.
  */
 export class StoreManager {
-  /** @type {IDBTransaction} */ tx = null;
+  /** @type {?IDBTransaction} */ tx = null;
 
   /**
    * @param {IDBDatabase} db 
@@ -27,6 +27,10 @@ export class StoreManager {
   constructor(db, storeName) {
     this.db = db;
     this.storeName = storeName;
+  }
+
+  reset() {
+    this.tx = null;
   }
 
   writable() {
@@ -75,7 +79,7 @@ export class StoreManager {
         return promisify(request);
       } catch (e) {
         if (i) throw e;
-        console.log(`new transaction (${e.message})`);
+        // console.log(`new transaction (${e.message})`);
         this.tx = null;
       }
     }
