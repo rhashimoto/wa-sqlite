@@ -112,7 +112,10 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   async xUnlock(fileId, flags) {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE && this.writeCache.size) {
       for (const block of this.writeCache.values()) {
-        this.store.put(block);
+        // Skip blocks past EOF. Be careful: metadata has index 'metadata'.
+        if (!(block.index * this.metadata.blockSize >= this.metadata.fileSize)) {
+          this.store.put(block);
+        }
       }
       this.writeCache.clear();
   
