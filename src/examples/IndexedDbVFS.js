@@ -2,6 +2,7 @@
 import * as VFS from '../VFS.js';
 import { MemoryVFS } from './MemoryVFS.js';
 import { IDBDatabaseFile } from './IDBDatabaseFile.js';
+import { IDBJournalFile } from './IDBJournalFile.js';
 import * as IDBUtils from './IDBUtils.js';
 
 function log(...args) {
@@ -99,11 +100,12 @@ export class IndexedDbVFS extends VFS.Base {
           return file.xOpen(name, fileId, flags, pOutFlags);
         });
       case VFS.SQLITE_OPEN_MAIN_JOURNAL:
-        this.mapIdToFile.set(fileId, {
-          name,
-          type: VFS.SQLITE_OPEN_MAIN_JOURNAL
+        return this.handleAsync(async () => {
+          const db = await this.dbReady;
+          const file = new IDBJournalFile(db);
+          this.mapIdToFile.set(fileId, file);
+          return file.xOpen(name, fileId, flags, pOutFlags);
         });
-        return this.fallback.xOpen(name, fileId, flags, pOutFlags);
     }
     return this.fallback.xOpen(name, fileId, flags, pOutFlags);
   }
@@ -113,11 +115,9 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xClose ${file?.name ?? fileId}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
-        this.mapIdToFile.delete(fileId)
-        return file.xClose();
       case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         this.mapIdToFile.delete(fileId)
-        return this.fallback.xClose(fileId);
+        return file.xClose();
     }
     return this.fallback.xClose(fileId);
   }
@@ -127,18 +127,10 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xRead ${file?.name ?? fileId} ${pData.size} ${iOffset}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return this.handleAsync(() => {
           return file.xRead(fileId, pData, iOffset);
         });
-      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
-        const result = this.fallback.xRead(fileId, pData, iOffset);
-        // TODO: delete this
-        if (((iOffset - 8192) % (8192 + 8)) === 0) {
-          const view = new DataView(pData.value.buffer, pData.value.byteOffset);
-          const index = view.getUint32(0);
-          console.log(`journal index ${index}`);
-        }
-        return result;
     }
     return this.fallback.xRead(fileId, pData, iOffset);
   }
@@ -148,6 +140,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xWrite ${file?.name ?? fileId} ${pData.size} ${iOffset}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xWrite(fileId, pData, iOffset);
     }
     return this.fallback.xWrite(fileId, pData, iOffset);
@@ -158,6 +151,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xTruncate ${file?.name ?? fileId} ${iSize}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xTruncate(fileId, iSize);
     }
     return this.fallback.xTruncate(fileId, iSize);
@@ -168,6 +162,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xSync ${file?.name ?? fileId} ${flags}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xSync(fileId, flags);
     }
     return this.fallback.xSync(fileId, flags);
@@ -178,6 +173,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xFileSize ${file?.name ?? fileId}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xFileSize(fileId, pSize64);
     }
     return this.fallback.xFileSize(fileId, pSize64);
@@ -191,6 +187,8 @@ export class IndexedDbVFS extends VFS.Base {
         return this.handleAsync(async () => {
           return file.xLock(fileId, flags);
         });
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
+        console.assert(false);
     }
     return this.fallback.xLock(fileId, flags);
   }
@@ -203,6 +201,8 @@ export class IndexedDbVFS extends VFS.Base {
         return this.handleAsync(async () => {
           return file.xUnlock(fileId, flags);
         });
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
+        console.assert(false);
     }
     return this.fallback.xUnlock(fileId, flags);
   }
@@ -212,6 +212,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xSectorSize ${file?.name ?? fileId}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xSectorSize(fileId);
     }
     return this.fallback.xSectorSize(fileId);
@@ -222,6 +223,7 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xDeviceCharacteristics ${file?.name ?? fileId}`);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
+      case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return file.xDeviceCharacteristics(fileId);
     }
     return this.fallback.xDeviceCharacteristics(fileId);
@@ -229,16 +231,20 @@ export class IndexedDbVFS extends VFS.Base {
 
   xDelete(name, syncDir) {
     log(`xDelete ${name} ${syncDir}`);
-    // This is only used for journal files.
+    if (name.endsWith('-journal') || name.endsWith('-wal')) {
+      // IDBDatabaseFile is always consistent in IndexedDB so
+      // not deleting journal data is safe.
+      return VFS.SQLITE_OK
+    }
     return this.fallback.xDelete(name, syncDir);
   }
 
   xAccess(name, flags, pResOut) {
     log(`xAccess ${name} ${flags}`);
-    // This is only used to detect journal files left by an unexpected
-    // termination, which currently can't happen because journal files
-    // aren't persistent.
-    pResOut.set(0);
-    return VFS.SQLITE_OK;
+    if (name.endsWith('-journal') || name.endsWith('-wal')) {
+      // Journal files aren't considered persistent in this VFS.
+      pResOut.set(0);
+    }
+    return this.fallback.xAccess(name, flags, pResOut);
   }
 }
