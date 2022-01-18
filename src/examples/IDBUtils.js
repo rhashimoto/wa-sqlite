@@ -10,7 +10,7 @@ export function promisify(request, listeners = {}) {
       request.addEventListener(key, listener);
     }
     request.addEventListener('success', () => resolve(request.result), { once: true });
-    request.addEventListener('error', () => reject(request.result), { once: true });
+    request.addEventListener('error', () => reject(request.error), { once: true });
   });
 }
 

@@ -7,8 +7,11 @@ export class IDBJournalFile extends VFS.Base {
   nWrites = 0;
   maxWriteBytes = 0;
 
+  tx = null;
+
   constructor(/** @type {IDBDatabase} */ db) {
     super();
+    this.db = db;
     this.journalStore = new IDBUtils.StoreManager(db, 'journal');
   }
 
@@ -29,7 +32,13 @@ export class IDBJournalFile extends VFS.Base {
   }
 
   xClose() {
-    this.clearJournalContents();
+    try {
+      if (this.tx?.mode === 'readwrite') {
+        this.tx.abort();
+      }
+    } catch (e) {
+      // Ignore exception.
+    }
     return VFS.SQLITE_OK;
   }
 
@@ -70,14 +79,31 @@ export class IDBJournalFile extends VFS.Base {
       this.metadata.fileSize = iOffset + pData.size;
     }
 
+    this.maxWriteBytes = Math.max(this.maxWriteBytes, pData.size);
     const block = {
       name: this.name,
       address: iOffset,
       order: this.nWrites++,
       data: pData.value.slice().buffer
     }
-    this.journalStore.put(block);
-    this.maxWriteBytes = Math.max(this.maxWriteBytes, pData.size);
+
+    for (let i = 0; i < 2; ++i) {
+      if (!this.tx) {
+        this.tx = this.db.transaction('journal', 'readwrite');
+        this.tx.oncomplete = ({ target }) => {
+          if (this.tx === target) {
+            this.tx = null;
+          }
+        };
+      }
+
+      try {
+        this.tx.objectStore('journal').put(block);
+      } catch (e) {
+        if (i) throw e;
+        this.tx = null;
+      }
+    }
     return VFS.SQLITE_OK;
   }
 
