@@ -5,7 +5,7 @@ import * as IDBUtils from './IDBUtils.js';
 // Default block size for new databases.
 const BLOCK_SIZE = 8192;
 
-const CACHE_SIZE = 4;
+const CACHE_SIZE = 2048;
 
 export class IDBDatabaseFile extends WebLocksMixin() {
   writeCache = new Map();
