@@ -5,7 +5,7 @@ import { IDBDatabaseFile } from './IDBDatabaseFile.js';
 import * as IDBUtils from './IDBUtils.js';
 
 function log(...args) {
-  console.debug(...args);
+  // console.debug(...args);
 }
 
 // Use IndexedDB as a block device.

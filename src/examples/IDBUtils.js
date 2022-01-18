@@ -35,38 +35,38 @@ export class StoreManager {
 
   writable() {
     if (this.tx?.mode !== 'readwrite') {
-      console.log(`transaction ${this.storeName} readwrite`);
+      log(`transaction ${this.storeName} readwrite`);
       this.tx = this.db.transaction(this.storeName, 'readwrite');
     }
   }
 
   get(key) {
-    console.log(`get`, key);
+    log(`get ${this.storeName}`, key);
     return this.#call(store => store.get(key));
   }
 
   getAll(key) {
-    console.log(`getAll`, key);
+    log(`getAll ${this.storeName}`, key);
     return this.#call(store => store.getAll(key));
   }
 
   add(value, key) {
-    console.log(`add`, value, key);
+    log(`add ${this.storeName}`, value, key);
     return this.#call(store => store.add(value, key), 'readwrite');
   }
 
   put(value, key) {
-    console.log(`put`, value, key);
+    log(`put ${this.storeName}`, value, key);
     return this.#call(store => store.put(value, key), 'readwrite');
   }
 
   delete(key) {
-    console.log(`delete`, key);
+    log(`delete ${this.storeName}`, key);
     return this.#call(store => store.delete(key), 'readwrite');
   }
 
   clear() {
-    console.log(`clear`);
+    log(`clear ${this.storeName}`);
     return this.#call(store => store.clear(), 'readwrite');
   }
 
@@ -81,7 +81,7 @@ export class StoreManager {
     for (let i = 0; i < 2; ++i) {
       // Create a new transaction if the current mode doesn't match.
       if (!this.tx || (mode && this.tx.mode !== mode)) {
-        console.log(`transaction ${this.storeName} ${mode}`);
+        log(`transaction ${this.storeName} ${mode}`);
         this.tx = this.db.transaction(this.storeName, mode);
         this.tx.oncomplete = ({ target }) => {
           if (this.tx === target) {
@@ -95,9 +95,13 @@ export class StoreManager {
         return promisify(request);
       } catch (e) {
         if (i) throw e;
-        console.log(`new transaction (${e.message})`);
+        log(`new transaction ${this.storeName} (${e.message})`);
         this.tx = null;
       }
     }
   }
+}
+
+function log(...args) {
+  // console.log(...args);
 }

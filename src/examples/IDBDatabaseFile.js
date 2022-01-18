@@ -120,7 +120,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       for (const block of this.writeCache.values()) {
         // Skip blocks past EOF.
         if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
-          console.log(`writeCache to database ${block.index}`, block);
           tx.objectStore('database').put(block);
         }
       }
@@ -140,7 +139,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
             // been overridden by a new write cache entry.
             const block = cursor.value;
             if (this.spilled.has(block.index)) {
-              console.log(`spill to database ${block.index}`);
               tx.objectStore('database').put(block);
             }
             cursor.continue();
@@ -172,20 +170,16 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   getBlock(index) {
-    console.log(`getBlock ${index}`);
     const block = this.writeCache.get(index);
     if (block) return block;
 
     if (this.spilled.has(index)) {
-      console.log(`spill fetch ${index}`)
       return this.spillStore.get([this.name, index]);
     }
-    console.log(`database fetch ${index}`);
     return this.databaseStore.get([this.name, index]);
   }
 
   putBlock(index, block) {
-    console.log(`putBlock ${index}`, block);
     // Replace or insert at the end of the write cache.
     this.writeCache.delete(index);
     this.writeCache.set(index, block);
@@ -202,7 +196,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
       // Keep block 0 in the cache.
       if (candidate.index > 0) {
-        console.log(`spilling ${candidate.index}`, candidate);
         this.spillStore.put(candidate);
         this.spilled.add(candidate.index);
         this.writeCache.delete(candidate.index);
