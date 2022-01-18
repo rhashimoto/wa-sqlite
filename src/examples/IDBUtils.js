@@ -35,24 +35,39 @@ export class StoreManager {
 
   writable() {
     if (this.tx?.mode !== 'readwrite') {
+      log(`transaction ${this.storeName} readwrite`);
       this.tx = this.db.transaction(this.storeName, 'readwrite');
     }
   }
 
   get(key) {
+    log(`get ${this.storeName}`, key);
     return this.#call(store => store.get(key));
   }
 
   getAll(key) {
+    log(`getAll ${this.storeName}`, key);
     return this.#call(store => store.getAll(key));
   }
 
+  add(value, key) {
+    log(`add ${this.storeName}`, value, key);
+    return this.#call(store => store.add(value, key), 'readwrite');
+  }
+
   put(value, key) {
+    log(`put ${this.storeName}`, value, key);
     return this.#call(store => store.put(value, key), 'readwrite');
   }
 
   delete(key) {
+    log(`delete ${this.storeName}`, key);
     return this.#call(store => store.delete(key), 'readwrite');
+  }
+
+  clear() {
+    log(`clear ${this.storeName}`);
+    return this.#call(store => store.clear(), 'readwrite');
   }
 
   /**
@@ -66,7 +81,8 @@ export class StoreManager {
     for (let i = 0; i < 2; ++i) {
       // Create a new transaction if the current mode doesn't match.
       if (!this.tx || (mode && this.tx.mode !== mode)) {
-        this.tx = this.db.transaction('database', mode);
+        log(`transaction ${this.storeName} ${mode}`);
+        this.tx = this.db.transaction(this.storeName, mode);
         this.tx.oncomplete = ({ target }) => {
           if (this.tx === target) {
             this.tx = null;
@@ -75,13 +91,17 @@ export class StoreManager {
       }
 
       try {
-        const request = f(this.tx.objectStore('database'));
+        const request = f(this.tx.objectStore(this.storeName));
         return promisify(request);
       } catch (e) {
         if (i) throw e;
-        // console.log(`new transaction (${e.message})`);
+        log(`new transaction ${this.storeName} (${e.message})`);
         this.tx = null;
       }
     }
   }
+}
+
+function log(...args) {
+  // console.log(...args);
 }

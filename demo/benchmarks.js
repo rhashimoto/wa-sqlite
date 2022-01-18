@@ -30,6 +30,17 @@ const TESTS = [
 ];
 
 (async function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('clear')) {
+    const dbNames = indexedDB.databases
+      ? (await indexedDB.databases()).map(database => database.name)
+      : ['benchmark'];
+    await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
+    console.log('IndexedDB cleared by URL parameter');
+  }
+})();
+
+(async function() {
   const [SQLiteModule, SQLiteAsyncModule] = await Promise.all([
     SQLiteESMFactory(),
     SQLiteAsyncESMFactory()
