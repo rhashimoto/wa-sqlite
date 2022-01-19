@@ -2,7 +2,7 @@
 import * as VFS from '../VFS.js';
 import { MemoryVFS } from './MemoryVFS.js';
 import { IDBDatabaseFile } from './IDBDatabaseFile.js';
-import { IDBJournalFile } from './IDBJournalFile.js';
+import { IDBNoJournalFile } from './IDBNoJournalFile.js';
 import * as IDBUtils from './IDBUtils.js';
 
 function log(...args) {
@@ -102,7 +102,7 @@ export class IndexedDbVFS extends VFS.Base {
       case VFS.SQLITE_OPEN_MAIN_JOURNAL:
         return this.handleAsync(async () => {
           const db = await this.dbReady;
-          const file = new IDBJournalFile(db);
+          const file = new IDBNoJournalFile(name, this.mapIdToFile);
           this.mapIdToFile.set(fileId, file);
           return file.xOpen(name, fileId, flags, pOutFlags);
         });
