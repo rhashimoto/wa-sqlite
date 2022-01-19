@@ -50,6 +50,16 @@ export class StoreManager {
     return this.#call(store => store.getAll(key));
   }
 
+  getKey(key) {
+    log(`getKey ${this.storeName}`, key);
+    return this.#call(store => store.getKey(key));
+  }
+
+  getAllKeys(key) {
+    log(`getAllKeys ${this.storeName}`, key);
+    return this.#call(store => store.getAllKeys(key));
+  }
+
   add(value, key) {
     log(`add ${this.storeName}`, value, key);
     return this.#call(store => store.add(value, key), 'readwrite');
