@@ -160,7 +160,12 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       const truncateRange = IDBKeyRange.bound(
         [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
         [this.name, Number.MAX_VALUE])
-      await this.databaseStore.delete(truncateRange);
+      tx.objectStore('database').delete(truncateRange);
+
+      await new Promise(resolve => {
+        tx.addEventListener('complete', resolve);
+        tx.commit();
+      });
     }
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }
