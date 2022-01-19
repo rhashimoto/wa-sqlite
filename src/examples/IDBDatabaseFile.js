@@ -11,6 +11,8 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   writeCache = new Map();
   spilled = new Set();
 
+  rollback = false;
+
   constructor(/** @type {IDBDatabase} */ db) {
     super();
     this.db = db;
@@ -116,38 +118,41 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE && this.writeCache.size) {
       // Flush the (possibly spilled) cache in a single transaction.
       const tx = this.db.transaction(['database', 'spill'], 'readwrite');
-      tx.objectStore('database').put(this.metadata);
-      for (const block of this.writeCache.values()) {
-        // Skip blocks past EOF.
-        if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
-          tx.objectStore('database').put(block);
-        }
-      }
-      this.writeCache.clear();
-
       const spillRange = IDBKeyRange.bound(
         [this.name, 0],
-        [this.name, Number.MAX_SAFE_INTEGER]);
-      await new Promise((resolve, reject) => {
-        // Iterate spilled blocks.
-        const request = tx.objectStore('spill').openCursor(spillRange)
-        request.addEventListener('success', event => {
-          // @ts-ignore
-          /** @type {IDBCursorWithValue} */ const cursor = event.target.result;
-          if (cursor) {
-            // Ignore unreferenced entries that occur when a block has
-            // been overridden by a new write cache entry.
-            const block = cursor.value;
-            if (this.spilled.has(block.index)) {
-              tx.objectStore('database').put(block);
-            }
-            cursor.continue();
-          } else {
-            resolve();
+        [this.name, Number.MAX_VALUE]);
+      if (!this.rollback) {
+        tx.objectStore('database').put(this.metadata);
+        for (const block of this.writeCache.values()) {
+          // Skip blocks past EOF.
+          if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
+            tx.objectStore('database').put(block);
           }
+        }
+
+        await new Promise((resolve, reject) => {
+          // Iterate spilled blocks.
+          const request = tx.objectStore('spill').openCursor(spillRange)
+          request.addEventListener('success', event => {
+            // @ts-ignore
+            /** @type {IDBCursorWithValue} */ const cursor = event.target.result;
+            if (cursor) {
+              // Ignore unreferenced entries that occur when a block has
+              // been overridden by a new write cache entry.
+              const block = cursor.value;
+              if (this.spilled.has(block.index)) {
+                tx.objectStore('database').put(block);
+              }
+              cursor.continue();
+            } else {
+              resolve();
+            }
+          });
+          request.addEventListener('error', reject);
         });
-        request.addEventListener('error', reject);
-      });
+      }
+      this.rollback = false;
+      this.writeCache.clear();
       this.spilled.clear();
       tx.objectStore('spill').delete(spillRange);
 
@@ -155,7 +160,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       const truncateRange = IDBKeyRange.bound(
         [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
         [this.name, Number.MAX_VALUE])
-      this.databaseStore.delete(truncateRange);
+      await this.databaseStore.delete(truncateRange);
     }
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }

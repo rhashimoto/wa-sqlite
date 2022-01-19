@@ -42,11 +42,44 @@ export class IDBJournalFile extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
+  // debugBuffer = new Int8Array();
+  // debugWrite(fileId, pData, iOffset) {
+  //   if (pData.size + iOffset > this.debugBuffer.byteLength) {
+  //     const oldBuffer = this.debugBuffer;
+  //     this.debugBuffer = new Int8Array(pData.size + iOffset);
+  //     this.debugBuffer.set(oldBuffer);
+  //   }
+  //   this.debugBuffer.set(pData.value, iOffset);
+  // }
+
+  // debugTruncate(fileId, iSize) {
+  //   console.assert(iSize <= this.debugBuffer.byteLength);
+  //   this.debugBuffer = this.debugBuffer.slice(0, iSize);
+  // }
+
+  // debugRead(fileId, pData, iOffset) {
+  //   const data = this.debugBuffer.slice(iOffset, iOffset + pData.size);
+  //   if (data.byteLength !== pData.value.byteLength ||
+  //       Array.prototype.some.call(data, (byte, i) => byte !== pData.value[i])) {
+  //     console.assert(false, 'xRead discrepancy');
+  //     // debugger;
+  //     throw new Error('debugRead');
+  //   }
+  // }
+
   async xRead(fileId, pData, iOffset) {
     // Check for read past the end of data.
     if (iOffset >= this.metadata.fileSize) {
       pData.value.fill(0, pData.size);
       return VFS.SQLITE_IOERR_SHORT_READ;
+    }
+
+    if (this.tx) {
+      // A write transaction may be open. Wait until it closes.
+      await Promise.race([
+        new Promise(resolve => this.tx.addEventListener('complete', resolve)),
+        new Promise(resolve => setTimeout(() => this.tx || resolve()))
+      ]);
     }
 
     // Fetch all writes that could overlap the request.
@@ -70,11 +103,13 @@ export class IDBJournalFile extends VFS.Base {
         pData.value.set(source, targetOffset)
       }
     }
+    this['debugRead'] && this['debugRead'](fileId, pData, iOffset);
     return VFS.SQLITE_OK;
   }
 
   xWrite(fileId, pData, iOffset) {
     // Check for write past the end of data.
+    this['debugWrite'] && this['debugWrite'](fileId, pData, iOffset);
     if (iOffset + pData.size >= this.metadata.fileSize) {
       this.metadata.fileSize = iOffset + pData.size;
     }
@@ -108,6 +143,7 @@ export class IDBJournalFile extends VFS.Base {
   }
 
   xTruncate(fileId, iSize) {
+    this['debugTruncate'] && this['debugTruncate'](fileId, iSize);
     this.metadata.fileSize = iSize;
     return VFS.SQLITE_OK;
   }
