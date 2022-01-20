@@ -379,7 +379,7 @@ function shared(ready) {
     sqlite3.finalize.restore();
   });
 
-  it('rollback', async function() {
+  it('rollback insert', async function() {
     let count;
     await sqlite3.exec(db, `
       CREATE TABLE foo (x);
@@ -390,12 +390,13 @@ function shared(ready) {
 
     count = undefined;
     await sqlite3.exec(db, `
+      PRAGMA journal_mode=delete;
       BEGIN TRANSACTION;
-      WITH numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 100)
+      WITH numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 10000)
         INSERT INTO foo SELECT * FROM numbers;
       SELECT COUNT(*) FROM foo;
     `, row => count = row[0]);
-    expect(count).toBe(103);
+    expect(count).toBe(10003);
 
     count = undefined;
     await sqlite3.exec(db, `
@@ -403,6 +404,62 @@ function shared(ready) {
       SELECT COUNT(*) FROM foo;
     `, row => count = row[0]);
     expect(count).toBe(3);
+  });
+
+  it('rollback delete', async function() {
+    let count;
+    await sqlite3.exec(db, `
+      CREATE TABLE foo (x);
+      WITH numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 10000)
+        INSERT INTO foo SELECT * FROM numbers;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(10000);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      PRAGMA journal_mode=delete;
+      BEGIN TRANSACTION;
+      DELETE FROM foo WHERE x > 12;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(12);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      ROLLBACK;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(10000);
+  });
+
+  it('rollback delete no cache', async function() {
+    let count;
+    await sqlite3.exec(db, `
+      CREATE TABLE foo (x);
+      WITH numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 10000)
+        INSERT INTO foo SELECT * FROM numbers;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(10000);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      PRAGMA journal_mode=delete;
+      PRAGMA cache_size=0;
+      BEGIN TRANSACTION;
+      DELETE FROM foo WHERE x > 12;
+      SELECT COUNT(*) FROM foo;
+    `, row => count = row[0]);
+    expect(count).toBe(12);
+
+    count = undefined;
+    await sqlite3.exec(db, `
+      ROLLBACK;
+      SELECT COUNT(*) FROM foo;
+      PRAGMA cache_size=-2000;
+    `, row => count = row[0]);
+    expect(count).toBe(10000);
   });
 
   it('vacuum', async function() {
