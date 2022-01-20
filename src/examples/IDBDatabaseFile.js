@@ -151,8 +151,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
           request.addEventListener('error', reject);
         });
       }
-      this.rollback = false;
-      this.writeCache.clear();
       this.spilled.clear();
       tx.objectStore('spill').delete(spillRange);
 
@@ -166,6 +164,31 @@ export class IDBDatabaseFile extends WebLocksMixin() {
         tx.addEventListener('complete', resolve);
         tx.commit();
       });
+    }
+
+    if (this.rollback) {
+      // This is an out-of-band rollback so no writes are passed on to
+      // the database. This will leave some pages in SQLite's cache as
+      // changed even though they aren't changed in IndexedDB. We need
+      // to increment the file change counter in the header so SQLite
+      // will invalidate its cache on the next lock.
+      //
+      // Note that the out-of-band rollback can be received even if the
+      // VFS never receives an exclusive lock. This happens if all
+      // changes have only been made in the SQLite cache.
+      const block = this.writeCache.get(0);
+      const view = new DataView(block.data);
+      const counter = view.getUint32(24);
+      view.setUint32(24, counter + 1);
+
+      await new Promise(resolve => {
+        const tx = this.db.transaction('database', 'readwrite');
+        tx.objectStore('database').put(block);
+        tx.addEventListener('complete', resolve);
+        tx.commit();
+      });
+      this.rollback = false;
+      this.writeCache.clear();
     }
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }
