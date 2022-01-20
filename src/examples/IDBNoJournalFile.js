@@ -50,7 +50,7 @@ export class IDBNoJournalFile extends VFS.Base {
     }
 
     pData.value.set(this.journal.subarray(iOffset, iOffset + pData.size));
-    this.dbFile.rollback = true;
+    this.dbFile.rollbackOOB = true;
     return VFS.SQLITE_OK;
   }
 
