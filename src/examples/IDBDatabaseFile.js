@@ -52,11 +52,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   xClose() {
-    // Clearing the spill data from IndexedDB on every SQLite transaction
-    // benchmarks measurably slower, so just do it on close.
-    this.db.transaction('spill', 'readwrite')
-      .objectStore('spill')
-      .delete(IDBKeyRange.bound([this.name], [this.name, Number.MAX_VALUE]));
     return VFS.SQLITE_OK;
   }
 
@@ -185,6 +180,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
       this.writeCache.clear();
       this.spillCache.clear();
+      this.#idbClear('spill');
     }
 
     if (this.rollbackOOB) {
@@ -259,6 +255,10 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
   #idbDelete(/** @type {string} */ storeName, key) {
     return this.#store(storeName, store => store.delete(key));
+  }
+
+  #idbClear(/** @type {string} */ storeName) {
+    return this.#store(storeName, store => store.clear());
   }
 
   /**
