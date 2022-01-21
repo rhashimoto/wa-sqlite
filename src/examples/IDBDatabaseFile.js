@@ -189,23 +189,20 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
     if (this.rollbackOOB) {
       // This is an out-of-band rollback so no writes are passed on to
-      // the database. Note that rollback can be received even if the
-      // VFS never receives an exclusive lock, which happens when all
-      // changes have only been made in the SQLite cache.
-      await new Promise(async (resolve) => {
-        // Increment the change counter in the database header so SQLite
-        // will invalidate its internal cache.
-        const tx = this.db.transaction('database', 'readwrite');
-        const store = tx.objectStore('database');
-        const block = await this.#idbWrap(store.get([this.name, 0]));
-        const view = new DataView(block.data);
-        const counter = view.getUint32(24);
-        view.setUint32(24, counter + 1);
-        store.put(block);
+      // the database. Increment the change counter in the database header
+      // so SQLite will invalidate its internal cache.
+      if (this.#tx?.mode !== 'readwrite') {
+        // This happens when all changes have only been made in the
+        // SQLite cache so the VFS has a reserved lock (not an exclusive
+        // lock) and this doesn't have a read-write transaction.
+        this.#tx = this.db.transaction('database', 'readwrite');
+      }
+      const block = await this.#idbGet('database', [this.name, 0]);
+      const view = new DataView(block.data);
+      const counter = view.getUint32(24);
+      view.setUint32(24, counter + 1);
+      this.#idbPut('database', block);
 
-        tx.addEventListener('complete', resolve);
-        tx.commit();
-      });
       this.metadata.fileSize = this.rollbackSize;
       this.rollbackOOB = false;
     }
@@ -243,7 +240,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     for (const candidate of this.writeCache.values()) {
       if (this.writeCache.size <= WRITE_CACHE_SIZE) break;
 
-      // Keep block 0 in the cache.
+      // Keep block 0 in memory to improve performance.
       if (candidate.index > 0) {
         this.#idbPut('spill', candidate);
         this.spillCache.add(candidate.index);
@@ -265,6 +262,8 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   /**
+   * Helper to reuse the last IndexedDB transaction for a new request,
+   * if possible.
    * @param {string} storeName 
    * @param {(store: IDBObjectStore) => IDBRequest} callback 
    * @returns Promise
@@ -296,6 +295,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   /**
+   * Promise wrapper for IDBRequest.
    * @param {IDBRequest} request 
    * @returns Promise
    */
