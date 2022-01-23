@@ -1,5 +1,6 @@
 import * as VFS from '../VFS.js';
 import { WebLocksMixin } from './WebLocksMixin.js';
+import { IDBActivity } from './IDBActivity.js';
 
 // Default block size for new databases.
 const BLOCK_SIZE = 8192;
@@ -23,6 +24,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   constructor(/** @type {IDBDatabase} */ db) {
     super();
     this.db = db;
+    this.idb = new IDBActivity(db, ['database', 'spill'], 'readwrite');
   }
 
   get name() { return this.metadata.name; }
@@ -32,7 +34,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     this.flags = flags;
 
     // Fetch metadata.
-    this.metadata = await this.#idbGet('database', [name, 'metadata']);
+    this.metadata = await this.idb.run(({ database }) => database.get([name, 'metadata']));
     if (!this.metadata) {
       // File doesn't exist, create if requested.
       if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -42,7 +44,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
           fileSize: 0,
           blockSize: BLOCK_SIZE
         };
-        this.#idbPut('database', this.metadata);
+        this.idb.run(({ database }) => database.put(this.metadata));
       } else {
         return VFS.SQLITE_CANTOPEN;
       }
@@ -52,11 +54,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   xClose() {
-    // Clearing the spill data from IndexedDB on every SQLite transaction
-    // benchmarks measurably slower, so just do it on close.
-    this.db.transaction('spill', 'readwrite')
-      .objectStore('spill')
-      .delete(IDBKeyRange.bound([this.name], [this.name, Number.MAX_VALUE]));
     return VFS.SQLITE_OK;
   }
 
@@ -100,9 +97,8 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       index: blockIndex,
       data: new ArrayBuffer(this.metadata.blockSize)
     };
-    this.putBlock(blockIndex, block);
-
     new Int8Array(block.data).set(pData.value);
+    this.putBlock(block);
     return VFS.SQLITE_OK;
   }
 
@@ -121,17 +117,17 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   async xLock(fileId, flags) {
-    const result = (super.xLock && super.xLock(fileId, flags)) ?? VFS.SQLITE_OK;
+    const result = (super.xLock && await super.xLock(fileId, flags)) ?? VFS.SQLITE_OK;
     switch (this.lockState) {
       case VFS.SQLITE_LOCK_SHARED: // read lock
+        this.idb.updateTxMode('readonly');
         this.metadata = await this.getBlock('metadata');
         this.rollbackSize = this.metadata.fileSize;
         this.writeCache.clear();
         this.spillCache.clear();
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
-        // Discard any previous readonly transaction.
-        this.#tx = null;
+        this.idb.updateTxMode('readwrite');
         break;
     }
     return result;
@@ -140,49 +136,44 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   async xUnlock(fileId, flags) {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
       if (!this.rollbackOOB) {
-        // Flush metadata.
-        this.#idbPut('database', this.metadata);
+        await this.idb.run(async ({ database, spill }) => {
+          // Flush metadata.
+          database.put(this.metadata);
 
-        // Flush the 2nd level cache stored in IndexedDB.
-        await new Promise((resolve, reject) => {
-          // Iterate spilled blocks.
-          const spillRange = IDBKeyRange.bound(
-            [this.name, 0],
-            [this.name, Number.MAX_VALUE]);
-          const request = this.#tx.objectStore('spill').openCursor(spillRange)
-            request.addEventListener('success', event => {
-            // @ts-ignore
-            /** @type {IDBCursorWithValue} */ const cursor = event.target.result;
-            if (cursor) {
-              // Ignore unreferenced entries that occur when a block has
-              // been overridden by a new write cache entry.
-              const block = cursor.value;
-              if (this.spillCache.has(block.index) &&
-                  block.index * this.metadata.blockSize < this.metadata.fileSize) {
-                this.#idbPut('database', block);
-              }
-              cursor.continue();
-            } else {
-              resolve();
+          // Flush the 1st level cache stored in memory.
+          for (const block of this.writeCache.values()) {
+            if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
+              database.put(block);
             }
-          });
-          request.addEventListener('error', reject);
-        });
-
-        // Flush the 1st level cache stored in memory.
-        for (const block of this.writeCache.values()) {
-          if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
-            this.#idbPut('database', block);
           }
-        }
 
-        // Remove blocks truncated from the file.
-        const truncateRange = IDBKeyRange.bound(
-          [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
-          [this.name, Number.MAX_VALUE])
-        this.#idbDelete('database', truncateRange);
+          // Flush the 2nd level cache stored in IndexedDB.
+          if (this.writeCache.size >= WRITE_CACHE_SIZE) {
+            let query = IDBKeyRange.lowerBound([this.name], true);
+            let blocks = [];
+            do {
+              blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
+              for (const block of blocks) {
+                if (this.spillCache.has(block.index) &&
+                    block.index * this.metadata.blockSize < this.metadata.fileSize) {
+                  database.put(block);
+                }
+              }
+              query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
+            } while (blocks.length);
+          }
+
+          // Remove blocks truncated from the file.
+          const truncateRange = IDBKeyRange.bound(
+            [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
+            [this.name, Number.MAX_VALUE]);
+          database.delete(truncateRange);
+        });
       }
 
+      if (this.writeCache.size >= WRITE_CACHE_SIZE) {
+        this.idb.run(({ spill }) => spill.clear());
+      }
       this.writeCache.clear();
       this.spillCache.clear();
     }
@@ -191,17 +182,19 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       // This is an out-of-band rollback so no writes are passed on to
       // the database. Increment the change counter in the database header
       // so SQLite will invalidate its internal cache.
-      if (this.#tx?.mode !== 'readwrite') {
-        // This happens when all changes have only been made in the
-        // SQLite cache so the VFS has a reserved lock (not an exclusive
-        // lock) and this doesn't have a read-write transaction.
-        this.#tx = this.db.transaction('database', 'readwrite');
+      if (this.lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
+        // If all changes fit into the SQLite internal cache, the
+        // database will not have been locked for writing but we still
+        // need a writable IndexedDB transaction.
+        this.idb.updateTxMode('readwrite');
       }
-      const block = await this.#idbGet('database', [this.name, 0]);
-      const view = new DataView(block.data);
-      const counter = view.getUint32(24);
-      view.setUint32(24, counter + 1);
-      this.#idbPut('database', block);
+      this.idb.run(async ({ database }) => {
+        const block = await database.get([this.name, 0]);
+        const view = new DataView(block.data);
+        const counter = view.getUint32(24);
+        view.setUint32(24, counter + 1);
+        database.put(block);
+      });
 
       this.metadata.fileSize = this.rollbackSize;
       this.rollbackOOB = false;
@@ -223,18 +216,18 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     if (block) return block;
 
     if (this.spillCache.has(index)) {
-      return this.#idbGet('spill', [this.name, index]);
+      return this.idb.run(({ spill }) => spill.get([this.name, index]));
     }
-    return this.#idbGet('database', [this.name, index]);
+    return this.idb.run(({ database }) => database.get([this.name, index]));
   }
 
-  putBlock(index, block) {
+  putBlock(block) {
     // Replace or insert at the end of the write cache.
-    this.writeCache.delete(index);
-    this.writeCache.set(index, block);
+    this.writeCache.delete(block.index);
+    this.writeCache.set(block.index, block);
 
     // Remove any spill cache entry.
-    this.spillCache.delete(index);
+    this.spillCache.delete(block.index);
 
     // Spill any write cache overflow.
     for (const candidate of this.writeCache.values()) {
@@ -242,67 +235,10 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
       // Keep block 0 in memory to improve performance.
       if (candidate.index > 0) {
-        this.#idbPut('spill', candidate);
+        this.idb.run(({ spill }) => spill.put(candidate));
         this.spillCache.add(candidate.index);
         this.writeCache.delete(candidate.index);
       }
     }
-  }
-
-  #idbGet(/** @type {string} */ storeName, key) {
-    return this.#store(storeName, store => store.get(key));
-  }
-
-  #idbPut(/** @type {string} */ storeName, key) {
-    return this.#store(storeName, store => store.put(key));
-  }
-
-  #idbDelete(/** @type {string} */ storeName, key) {
-    return this.#store(storeName, store => store.delete(key));
-  }
-
-  /**
-   * Helper to reuse the last IndexedDB transaction for a new request,
-   * if possible.
-   * @param {string} storeName 
-   * @param {(store: IDBObjectStore) => IDBRequest} callback 
-   * @returns Promise
-   */
-  #store(storeName, callback) {
-    for (let i = 0; i < 2; ++i) {
-      if (!this.#tx) {
-        const [stores, mode] = this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE
-          ? [['database', 'spill'], 'readwrite']
-          : [['database'], 'readonly'];
-        // @ts-ignore
-        this.#tx = this.db.transaction(stores, mode);
-        this.#tx.oncomplete = ({ target }) => {
-          if (this.#tx === target) {
-            this.tx = null;
-          }
-        }
-      }
-
-      try {
-        const request = callback(this.#tx.objectStore(storeName));
-        return this.#idbWrap(request);
-      } catch (e) {
-        if (i) throw e;
-        // console.log(`new transaction ${storeName} (${e.message})`);
-        this.#tx = null;
-      }
-    }
-  }
-
-  /**
-   * Promise wrapper for IDBRequest.
-   * @param {IDBRequest} request 
-   * @returns Promise
-   */
-  #idbWrap(request) {
-    return new Promise(function(resolve, reject) {
-      request.addEventListener('success', () => resolve(request.result), { once: true });
-      request.addEventListener('error', () => reject(request.error), { once: true });
-    });
   }
 }
