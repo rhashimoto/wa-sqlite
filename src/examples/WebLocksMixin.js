@@ -64,6 +64,14 @@ export const WebLocksMixin = (Base = Object) => class extends Base {
 
   async xUnlock(fileId, flags) {
     switch (flags) {
+      case VFS.SQLITE_LOCK_RESERVED:  // only happens with OOB rollback
+        switch (this.lockState) {
+          case VFS.SQLITE_LOCK_EXCLUSIVE:
+            this.#releaseWebLock('Inner');
+            await this.#acquireWebLock('Inner', 'shared');
+            break;
+        }
+        break;
       case VFS.SQLITE_LOCK_SHARED:
         switch (this.lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:  // intentional case fall-through

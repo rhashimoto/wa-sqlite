@@ -1,8 +1,19 @@
 import * as VFS from '../VFS.js';
 
+// This "journal file" does not actually store more than a small portion
+// (1 page entry) of journal data written to it. When it detects a rollback
+// instead of returning a complete journal it signals its IDBDatabaseFile
+// directly. This saves both time and space.
+//
+// The drawback with this approach is that on rollback the SQLite internal
+// cache of the database file becomes inconsistent because it does not
+// receive complete rollback data. IDBDatabaseFile works around this by
+// incrementing the file change counter to force reloading the cache, but
+// note that this does not work with PRAGMA locking_mode=exclusive (unless
+// also using PRAGMA cache_size=0).
 export class IDBNoJournalFile extends VFS.Base {
   journal = new Int8Array();
-  maxJournalSize = null;
+  maxJournalSize = 0;
 
   constructor(name, mapIdToFile) {
     super();
@@ -62,12 +73,12 @@ export class IDBNoJournalFile extends VFS.Base {
       const sectorSize = view.getInt32(20);
       const pageSize = view.getInt32(24);
 
-      // Limit the journal to 1 page.
+      // Limit the journal to 1 page entry.
       this.maxJournalSize = sectorSize + pageSize + 8;
     }
 
     // Discard writes past the first page record.
-    if (iOffset < (this.maxJournalSize ?? Number.MAX_SAFE_INTEGER)) {
+    if (!this.maxJournalSize || iOffset < this.maxJournalSize) {
       if (pData.size + iOffset > this.journal.byteLength) {
         const oldJournal = this.journal;
         this.journal = new Int8Array(pData.size + iOffset);

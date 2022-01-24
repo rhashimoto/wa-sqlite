@@ -134,71 +134,50 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   async xUnlock(fileId, flags) {
-    if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
-      if (!this.rollbackOOB) {
-        await this.idb.run(async ({ database, spill }) => {
-          // Flush metadata.
-          database.put(this.metadata);
-
-          // Flush the 1st level cache stored in memory.
-          for (const block of this.writeCache.values()) {
-            if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
-              database.put(block);
-            }
-          }
-
-          // Flush the 2nd level cache stored in IndexedDB.
-          if (this.writeCache.size >= WRITE_CACHE_SIZE) {
-            let query = IDBKeyRange.lowerBound([this.name], true);
-            let blocks = [];
-            do {
-              blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
-              for (const block of blocks) {
-                if (this.spillCache.has(block.index) &&
-                    block.index * this.metadata.blockSize < this.metadata.fileSize) {
-                  database.put(block);
-                }
-              }
-              query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
-            } while (blocks.length);
-          }
-
-          // Remove blocks truncated from the file.
-          const truncateRange = IDBKeyRange.bound(
-            [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
-            [this.name, Number.MAX_VALUE]);
-          database.delete(truncateRange);
-        });
-      }
-
-      if (this.writeCache.size >= WRITE_CACHE_SIZE) {
-        this.idb.run(({ spill }) => spill.clear());
-      }
-      this.writeCache.clear();
-      this.spillCache.clear();
-    }
-
     if (this.rollbackOOB) {
-      // This is an out-of-band rollback so no writes are passed on to
-      // the database. Increment the change counter in the database header
-      // so SQLite will invalidate its internal cache.
-      if (this.lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
-        // If all changes fit into the SQLite internal cache, the
-        // database will not have been locked for writing but we still
-        // need a writable IndexedDB transaction.
-        this.idb.updateTxMode('readwrite');
-      }
-      this.idb.run(async ({ database }) => {
-        const block = await database.get([this.name, 0]);
-        const view = new DataView(block.data);
-        const counter = view.getUint32(24);
-        view.setUint32(24, counter + 1);
-        database.put(block);
-      });
-
-      this.metadata.fileSize = this.rollbackSize;
+      await this.rollback();
       this.rollbackOOB = false;
     }
+
+    if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
+      await this.idb.run(async ({ database, spill }) => {
+        // Flush metadata.
+        database.put(this.metadata);
+
+        // Flush the 1st level cache stored in memory.
+        for (const block of this.writeCache.values()) {
+          if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
+            database.put(block);
+          }
+        }
+        this.writeCache.clear();
+
+        // Flush the 2nd level cache stored in IndexedDB.
+        if (this.spillCache.size) {
+          let query = IDBKeyRange.lowerBound([this.name], true);
+          let blocks = [];
+          do {
+            blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
+            for (const block of blocks) {
+              if (this.spillCache.has(block.index) &&
+                  block.index * this.metadata.blockSize < this.metadata.fileSize) {
+                database.put(block);
+              }
+            }
+            query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
+          } while (blocks.length);
+          this.spillCache.clear();
+          spill.clear();
+        }
+
+        // Remove blocks truncated from the file.
+        const truncateRange = IDBKeyRange.bound(
+          [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
+          [this.name, Number.MAX_VALUE]);
+        database.delete(truncateRange);
+      });
+    }
+
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }
 
@@ -209,6 +188,39 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   xDeviceCharacteristics(fileId) {
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+  }
+
+  async rollback() {
+    // If all changes fit into the SQLite internal cache, the
+    // database will never have been locked for writing.
+    const lockState = this.lockState;
+    if (lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
+      super.xLock && await super.xLock(0, VFS.SQLITE_LOCK_EXCLUSIVE);
+      this.idb.updateTxMode('readwrite');
+    }
+
+    // At this point the SQLite internal cache may be inconsistent
+    // because it has not received complete rollback data. Increment
+    // the file change counter to force a reload. Note that this does
+    // not work with `PRAGMA locking_mode=exclusive` (unless the
+    // SQLite cache is disabled, in which case it is not needed).
+    await this.idb.run(async ({ database, spill }) => {
+      const block = await database.get([this.name, 0]);
+      const view = new DataView(block.data);
+      view.setUint32(24, view.getUint32(24) + 1);
+      await database.put(block);
+
+      this.metadata.fileSize = this.rollbackSize;
+      if (this.writeCache.size >= WRITE_CACHE_SIZE) {
+        spill.clear();
+      }
+      this.writeCache.clear();
+      this.spillCache.clear();
+    });
+
+    if (lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
+      super.xUnlock && await super.xUnlock(0, lockState);
+    }
   }
 
   getBlock(index) {
