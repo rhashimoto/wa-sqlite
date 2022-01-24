@@ -14,6 +14,8 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   writeCache = new Map();
   spillCache = new Set();
 
+  truncateRange = null;
+
   // Out-of-band rollback state. Discard writes when signalled directly
   // by the journal file without SQLite's knowledge.
   rollbackOOB = false;
@@ -104,6 +106,9 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
   xTruncate(fileId, iSize) {
     this.metadata.fileSize = iSize;
+    this.truncateRange = IDBKeyRange.bound(
+      [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
+      [this.name, Number.MAX_VALUE]);
     return VFS.SQLITE_OK;
   }
 
@@ -140,42 +145,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     }
 
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
-      await this.idb.run(async ({ database, spill }) => {
-        // Flush metadata.
-        database.put(this.metadata);
-
-        // Flush the 1st level cache stored in memory.
-        for (const block of this.writeCache.values()) {
-          if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
-            database.put(block);
-          }
-        }
-        this.writeCache.clear();
-
-        // Flush the 2nd level cache stored in IndexedDB.
-        if (this.spillCache.size) {
-          let query = IDBKeyRange.lowerBound([this.name], true);
-          let blocks = [];
-          do {
-            blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
-            for (const block of blocks) {
-              if (this.spillCache.has(block.index) &&
-                  block.index * this.metadata.blockSize < this.metadata.fileSize) {
-                database.put(block);
-              }
-            }
-            query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
-          } while (blocks.length);
-          this.spillCache.clear();
-          spill.clear();
-        }
-
-        // Remove blocks truncated from the file.
-        const truncateRange = IDBKeyRange.bound(
-          [this.name, (this.metadata.fileSize / this.metadata.blockSize) | 0],
-          [this.name, Number.MAX_VALUE]);
-        database.delete(truncateRange);
-      });
+      await this.commit();
     }
 
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
@@ -188,6 +158,47 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   xDeviceCharacteristics(fileId) {
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+  }
+
+  async commit() {
+    await this.idb.run(async ({ database, spill }) => {
+      if (this.writeCache.size) {
+        // Flush metadata.
+        database.put(this.metadata);
+
+        // Flush the 1st level cache stored in memory.
+        for (const block of this.writeCache.values()) {
+          if (block.index * this.metadata.blockSize < this.metadata.fileSize) {
+            database.put(block);
+          }
+        }
+        this.writeCache.clear();
+      }
+
+      // Flush the 2nd level cache stored in IndexedDB.
+      if (this.spillCache.size) {
+        let query = IDBKeyRange.lowerBound([this.name], true);
+        let blocks = [];
+        do {
+          blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
+          for (const block of blocks) {
+            if (this.spillCache.has(block.index) &&
+                block.index * this.metadata.blockSize < this.metadata.fileSize) {
+              database.put(block);
+            }
+          }
+          query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
+        } while (blocks.length);
+        this.spillCache.clear();
+        spill.clear();
+      }
+
+      // Remove blocks truncated from the file.
+      if (this.truncateRange) {
+        database.delete(this.truncateRange);
+        this.truncateRange = null;
+      }
+    });
   }
 
   async rollback() {

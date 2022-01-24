@@ -17,6 +17,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   /** @type {Promise<IDBDatabase>} */ dbReady;
   mapIdToFile = new Map();
+  closedFileIds = new Set();
 
   constructor(idbDatabaseName = 'sqlite') {
     super();
@@ -91,6 +92,14 @@ export class IndexedDbVFS extends VFS.Base {
 
   xOpen(name, fileId, flags, pOutFlags) {
     log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
+
+    // Clear any closed fileId instances. This is deferred from xClose()
+    // for correct Asyncify behavior.
+    for (const id of this.closedFileIds) {
+      this.mapIdToFile.delete(id);
+    }
+    this.closedFileIds.clear();
+
     switch (flags & VFS.FILE_TYPE_MASK) {
       case VFS.SQLITE_OPEN_MAIN_DB:
         return this.handleAsync(async () => {
@@ -113,10 +122,11 @@ export class IndexedDbVFS extends VFS.Base {
   xClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
     log(`xClose ${file?.name ?? fileId}`);
+
+    this.closedFileIds.add(fileId);
     switch (file?.type) {
       case VFS.SQLITE_OPEN_MAIN_DB:
       case VFS.SQLITE_OPEN_MAIN_JOURNAL:
-        this.mapIdToFile.delete(fileId)
         return file.xClose();
     }
     return this.fallback.xClose(fileId);

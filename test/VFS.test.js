@@ -11,6 +11,8 @@ import sinon from '../.yarn/unplugged/sinon-npm-11.0.0-1b596cee10/node_modules/s
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
 
+const IDB_DATABASE_NAME = 'wa-sqlite-test';
+
 /**
  * @param {SQLiteAPI} sqlite3 
  * @param {number} db 
@@ -541,6 +543,10 @@ describe('MemoryAsyncVFS', function() {
 
 // Explore the IndexedDB filesystem without using SQLite.
 class ExploreIndexedDbVFS extends IndexedDbVFS {
+  constructor(dbName) {
+    super(dbName);
+  }
+
   handleAsync(f) {
     return f();
   }
@@ -552,9 +558,15 @@ describe('IndexedDbVFS', function() {
     resolveReady = resolve;
   });
   beforeAll(async function() {
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
+      request.addEventListener('success', () => resolve(request.result));
+      request.addEventListener('error', () => reject(request.error));
+    });
+    
     /** @type {SQLiteAPI} */
     const sqlite3 = await getSQLiteAsync();
-    const vfs = new IndexedDbVFS();
+    const vfs = new IndexedDbVFS(IDB_DATABASE_NAME);
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });
   });
@@ -566,22 +578,28 @@ describe('IndexedDbVFS', function() {
     const db = setup.db;
     const sql = setup.sql;
 
-    const vfs = new ExploreIndexedDbVFS();
+    const vfs = new ExploreIndexedDbVFS(IDB_DATABASE_NAME);
     const fileId = 0;
     const flags = VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
 
     // Load data into the database and record file size.
     const fileSizes = [];
     await loadSampleTable(sqlite3, db);
+
     await vfs.xOpen('foo', fileId, flags, { set() {} });
+    await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
     await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
     await vfs.xClose(fileId);
 
     // Shrink the database and record file size.
     await sql`DELETE FROM goog WHERE Close > Open`;
     await sql`VACUUM`;
+
     await vfs.xOpen('foo', fileId, flags, { set() {} });
+    await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
     await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
     await vfs.xClose(fileId);
 
     expect(fileSizes[1]).toBeLessThan(fileSizes[0]);
