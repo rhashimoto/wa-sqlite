@@ -337,7 +337,9 @@ async function test15(sqlite3, db) {
 // Test 16: DROP TABLE
 async function test16(sqlite3, db) {
   await sqlite3.exec(db, `
-    INSERT INTO t2 SELECT * FROM t1;
+    DROP TABLE t1;
+    DROP TABLE t2;
+    DROP TABLE t3;
   `);
 }
 
