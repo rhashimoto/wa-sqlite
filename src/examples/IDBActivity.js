@@ -1,12 +1,11 @@
+// For debugging.
 let nextTxId = 0;
 const mapTxToId = new WeakMap();
 
-/**
- * This classes manages IDBTransaction and IDBRequest instances. It tries
- * to chain requests to reduce the number of transactions.
- */
+
+// This classes manages IDBTransaction and IDBRequest instances. It tries
+// to reuse transactions to minimize transaction overhead.
 export class IDBActivity {
-  /** @type {Array<() => any>} */ #jobs = [];
   /** @type {IDBTransaction} */ #tx = null;
   /** @type {Promise} */ #txComplete = null;
   /** @type {IDBRequest} */ #request = null;
@@ -40,7 +39,7 @@ export class IDBActivity {
 
   /**
    * Run a function with the provided object stores. The function
-   * should be idempotent if it is passed an expired transaction.
+   * should be idempotent in case it is passed an expired transaction.
    * @param {(stores: Object.<string, Store>) => any} f 
    */
   async run(f) {
@@ -66,7 +65,7 @@ export class IDBActivity {
           });
         });
         // console.log(`new transaction ${nextTxId}`, this.storeNames, this.mode);
-        mapTxToId.set(this.#tx, nextTxId++);
+        // mapTxToId.set(this.#tx, nextTxId++);
       }
 
       try {
@@ -83,7 +82,7 @@ export class IDBActivity {
     }
   }
 
-  async sync() {
+  sync() {
     return this.#txComplete;
   }
 
