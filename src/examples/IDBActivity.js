@@ -8,6 +8,7 @@ const mapTxToId = new WeakMap();
 export class IDBActivity {
   /** @type {Array<() => any>} */ #jobs = [];
   /** @type {IDBTransaction} */ #tx = null;
+  /** @type {Promise} */ #txComplete = null;
   /** @type {IDBRequest} */ #request = null;
 
   /**
@@ -55,11 +56,14 @@ export class IDBActivity {
     for (let i = 0; i < 2; ++i) {
       if (!this.#tx) {
         this.#tx = this.db.transaction(this.storeNames, this.mode);
-        this.#tx.addEventListener('complete', event => {
-          if (this.#tx === event.target) {
-            this.#tx = null
-          }
-          // console.log(`transaction ${mapTxToId.get(event.target)} complete`);
+        this.#txComplete = new Promise(resolve => {
+          this.#tx.addEventListener('complete', event => {
+            if (this.#tx === event.target) {
+              this.#tx = null
+            }
+            resolve();
+            // console.log(`transaction ${mapTxToId.get(event.target)} complete`);
+          });
         });
         // console.log(`new transaction ${nextTxId}`, this.storeNames, this.mode);
         mapTxToId.set(this.#tx, nextTxId++);
@@ -77,6 +81,10 @@ export class IDBActivity {
         this.#tx = null;
       }
     }
+  }
+
+  async sync() {
+    return this.#txComplete;
   }
 
   /**

@@ -127,12 +127,10 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       case VFS.SQLITE_LOCK_SHARED: // read lock
         this.idb.updateTxMode('readonly');
         this.metadata = await this.getBlock('metadata');
-        this.rollbackSize = this.metadata.fileSize;
-        this.writeCache.clear();
-        this.spillCache.clear();
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
         this.idb.updateTxMode('readwrite');
+        this.rollbackSize = this.metadata.fileSize;
         break;
     }
     return result;
@@ -146,6 +144,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
       await this.commit();
+      await this.idb.sync();
     }
 
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
