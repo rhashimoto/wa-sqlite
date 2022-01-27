@@ -3,7 +3,7 @@ This is a WebAssembly build of SQLite with experimental support for writing SQLi
 
 An [IndexedDB virtual filesystem](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IndexedDbVFS.js) and a [virtual table module that accesses Javascript arrays](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js) are provided as proof of concept.
 
-[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) with a modern desktop web browser.
+[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser (for highest IndexedDB performance, consider [exclusive locking](https://github.com/rhashimoto/wa-sqlite/discussions/36)).
 
 ## Build
 The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the "buildless" branch with pre-built artifacts checked in. This is also recommended when including the project as a dependency (e.g. `yarn add "wa-sqlite@rhashimoto/wa-sqlite#buildless"`).
