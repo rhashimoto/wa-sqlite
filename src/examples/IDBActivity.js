@@ -1,9 +1,10 @@
+const RETRYABLE_EXCEPTIONS = new Set(['TransactionInactiveError', 'InvalidStateError']);
+
 // For debugging.
 let nextTxId = 0;
 const mapTxToId = new WeakMap();
 
-
-// This classes manages IDBTransaction and IDBRequest instances. It tries
+// This class manages IDBTransaction and IDBRequest instances. It tries
 // to reuse transactions to minimize transaction overhead.
 export class IDBActivity {
   /** @type {IDBTransaction} */ #tx = null;
@@ -28,9 +29,7 @@ export class IDBActivity {
     // If the transition is from readwrite to readonly, wait until
     // all changes are visible to the new transaction.
     if (this.#tx?.mode === 'readwrite' && mode === 'readonly') {
-      await new Promise(complete => {
-        this.#tx.addEventListener('complete', complete);
-      });
+      await this.#txComplete;
     } else if (mode === 'readwrite' && mode !== this.#tx?.mode) {
       this.#tx = null;
     }
@@ -43,7 +42,8 @@ export class IDBActivity {
    * @param {(stores: Object.<string, Store>) => any} f 
    */
   async run(f) {
-    // If the last IDBRequest is pending, wait until it is done.
+    // If the last IDBRequest is pending, wait until it is done so
+    // the IDBTransaction is active.
     if (this.#request && this.#request.readyState === 'pending') {
       await new Promise(done => {
         this.#request.addEventListener('success', done);
@@ -76,7 +76,11 @@ export class IDBActivity {
         }));
         return await f(stores);
       } catch (e) {
-        if (i) throw e;
+        if (i || !RETRYABLE_EXCEPTIONS.has(e.name)) {
+          // On failure make sure nothing is committed.
+          try { this.#tx.abort() } catch (ignored) {}
+          throw e;
+        }
         this.#tx = null;
       }
     }
