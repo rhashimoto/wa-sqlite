@@ -8,6 +8,11 @@ const BLOCK_SIZE = 8192;
 // Max number of blocks to store in the 1st-level write cache.
 const WRITE_CACHE_SIZE = 2048;
 
+// This implementation of a SQLite database file buffers writes (in
+// memory spilling to IndexedDB), and writes the SQLite transaction
+// in a single IndexedDB transaction at commit. File data is stored
+// to IndexedDB in fixed-size blocks, plus a special object for
+// file metadata.
 export class IDBDatabaseFile extends WebLocksMixin() {
   // Two-level write cache, RAM and IndexedDB. Only writes are cached;
   // read caching is left to SQLite.
@@ -15,13 +20,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   spillCache = new Set();
 
   truncateRange = null;
-
-  // Out-of-band rollback state. Discard writes when signalled directly
-  // by the journal file without SQLite's knowledge.
-  rollbackOOB = false;
-  rollbackSize = 0;
-
-  /** @type {?IDBTransaction} */ #tx = null;
 
   constructor(/** @type {IDBDatabase} */ db) {
     super();
@@ -73,7 +71,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     }
 
     // Fetch the file data.
-    let block = this.getBlock(blockIndex);
+    let block = this.#getBlock(blockIndex);
     block = block.name ? block : await block;
 
     const blockOffset = iOffset % this.metadata.blockSize;
@@ -90,7 +88,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       return VFS.SQLITE_IOERR;
     }
 
-    // Check for write past the end of data.
+    // Extend the file when writing past the end.
     this.metadata.fileSize = Math.max(this.metadata.fileSize, iOffset + pData.size);
 
     // Get the block from the cache, creating if not present.
@@ -100,7 +98,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       data: new ArrayBuffer(this.metadata.blockSize)
     };
     new Int8Array(block.data).set(pData.value);
-    this.putBlock(block);
+    this.#putBlock(block);
     return VFS.SQLITE_OK;
   }
 
@@ -126,22 +124,16 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     switch (this.lockState) {
       case VFS.SQLITE_LOCK_SHARED: // read lock
         this.idb.updateTxMode('readonly');
-        this.metadata = await this.getBlock('metadata');
+        this.metadata = await this.#getBlock('metadata');
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
         this.idb.updateTxMode('readwrite');
-        this.rollbackSize = this.metadata.fileSize;
         break;
     }
     return result;
   }
 
   async xUnlock(fileId, flags) {
-    if (this.rollbackOOB) {
-      await this.rollback();
-      this.rollbackOOB = false;
-    }
-
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
       await this.commit();
       await this.idb.sync();
@@ -160,6 +152,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   async commit() {
+    // All file changes, except creation, take place here.
     await this.idb.run(async ({ database, spill }) => {
       if (this.writeCache.size) {
         // Flush metadata.
@@ -200,40 +193,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     });
   }
 
-  async rollback() {
-    // If all changes fit into the SQLite internal cache, the
-    // database will never have been locked for writing.
-    const lockState = this.lockState;
-    if (lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
-      super.xLock && await super.xLock(0, VFS.SQLITE_LOCK_EXCLUSIVE);
-      this.idb.updateTxMode('readwrite');
-    }
-
-    // At this point the SQLite internal cache may be inconsistent
-    // because it has not received complete rollback data. Increment
-    // the file change counter to force a reload. Note that this does
-    // not work with `PRAGMA locking_mode=exclusive` (unless the
-    // SQLite cache is disabled, in which case it is not needed).
-    await this.idb.run(async ({ database, spill }) => {
-      const block = await database.get([this.name, 0]);
-      const view = new DataView(block.data);
-      view.setUint32(24, view.getUint32(24) + 1);
-      await database.put(block);
-
-      this.metadata.fileSize = this.rollbackSize;
-      if (this.writeCache.size >= WRITE_CACHE_SIZE) {
-        spill.clear();
-      }
-      this.writeCache.clear();
-      this.spillCache.clear();
-    });
-
-    if (lockState !== VFS.SQLITE_LOCK_EXCLUSIVE) {
-      super.xUnlock && await super.xUnlock(0, lockState);
-    }
-  }
-
-  getBlock(index) {
+  #getBlock(index) {
     const block = this.writeCache.get(index);
     if (block) return block;
 
@@ -243,7 +203,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     return this.idb.run(({ database }) => database.get([this.name, index]));
   }
 
-  putBlock(block) {
+  #putBlock(block) {
     // Replace or insert at the end of the write cache.
     this.writeCache.delete(block.index);
     this.writeCache.set(block.index, block);

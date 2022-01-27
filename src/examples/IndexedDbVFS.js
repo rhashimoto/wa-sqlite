@@ -3,7 +3,6 @@ import * as VFS from '../VFS.js';
 import { MemoryVFS } from './MemoryVFS.js';
 import { IDBDatabaseFile } from './IDBDatabaseFile.js';
 import { IDBNoJournalFile } from './IDBNoJournalFile.js';
-import * as IDBUtils from './IDBUtils.js';
 
 function log(...args) {
   // console.debug(...args);
@@ -23,7 +22,7 @@ export class IndexedDbVFS extends VFS.Base {
     super();
 
     // Open IDB database.
-    this.dbReady = IDBUtils.promisify(globalThis.indexedDB.open(idbDatabaseName, 3), {
+    this.dbReady = wrapRequest(globalThis.indexedDB.open(idbDatabaseName, 3), {
       async upgradeneeded(event) {
       // Most of this function handles migrating a now obsolete IndexedDB
       // schema, to make sure that users of newly updated pages (e.g. the
@@ -257,4 +256,14 @@ export class IndexedDbVFS extends VFS.Base {
     }
     return this.fallback.xAccess(name, flags, pResOut);
   }
+}
+
+function wrapRequest(request, listeners) {
+  return new Promise(function(resolve, reject) {
+    for (const [key, listener] of Object.entries(listeners)) {
+      request.addEventListener(key, listener);
+    }
+    request.addEventListener('success', () => resolve(request.result), { once: true });
+    request.addEventListener('error', () => reject(request.error), { once: true });
+  });
 }

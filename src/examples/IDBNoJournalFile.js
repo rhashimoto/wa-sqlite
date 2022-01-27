@@ -1,12 +1,19 @@
 import * as VFS from '../VFS.js';
 
+// This implementation of a rollback journal file actually stores
+// only the journal header and page indexes. When the journal is
+// read, the previously discarded data is reconstituted from the
+// database file.
 export class IDBNoJournalFile extends VFS.Base {
-  journal = new Int8Array();
+  headerSector = new Int8Array();
 
   sectorSize = Number.NaN;
   pageSize = Number.NaN;
   pageIndexes = [];
 
+  // SQLite takes 3 xRead() calls to read a page entry. On the
+  // first read we reconstitute the entire entry and cache it for
+  // the remaining calls.
   cachedPageIndex = 0;
   cachedPageEntry = null;
 
@@ -73,45 +80,33 @@ export class IDBNoJournalFile extends VFS.Base {
         const cachedPageView = new DataView(this.cachedPageEntry.buffer);
         cachedPageView.setUint32(0, pageIndex);
         this.cachedPageEntry.set(fileBlockData, 4);
-        cachedPageView.setUint32(this.entrySize - 4, this.checksum(fileBlockData));
+        cachedPageView.setUint32(this.entrySize - 4, this.#checksum(fileBlockData));
       }
     
       // Transfer the requested portion of the page entry.
       const skip = (iOffset - this.sectorSize) % this.entrySize;
-
-      // const testValue = pData.value.slice();
-      // testValue.set(this.cachedPageEntry.subarray(skip, skip + pData.value.length));
-      // pData.value.set(this.journal.subarray(iOffset, iOffset + pData.size));
-      // for (let i = 0; i < testValue.length; ++i) {
-      //   if (testValue[i] !== pData.value[i]) {
-      //     console.log(`error at ${i}`, testValue, pData.value);
-      //     debugger;
-      //     break;
-      //   }
-      // }
       pData.value.set(this.cachedPageEntry.subarray(skip, skip + pData.value.length));
     } else {
       // Read journal header.
-      pData.value.set(this.journal.subarray(iOffset, iOffset + pData.size));
+      pData.value.set(this.headerSector.subarray(iOffset, iOffset + pData.size));
     }
     // console.log(pData.value);
     return VFS.SQLITE_OK;
   }
 
   xWrite(fileId, pData, iOffset) {
-    // Store only the first sector of data. The logic is a little tricky
-    // because the sector size is specified in the header.
+    // This logic is a little tricky because the sector size is specified
+    // in the header and may not yet have been set.
     if (!(iOffset >= this.sectorSize)) {
-      if (this.journal.length < iOffset + pData.size) {
-        const oldJournal = this.journal;
-        this.journal = new Int8Array(oldJournal.length + pData.value.length);
-        this.journal.set(oldJournal);
+      // Store header data.
+      if (this.headerSector.length < iOffset + pData.size) {
+        const oldJournal = this.headerSector;
+        this.headerSector = new Int8Array(oldJournal.length + pData.value.length);
+        this.headerSector.set(oldJournal);
       }
-      this.journal.set(pData.value, iOffset);
-    }
-
-    // Capture page indices.
-    if (iOffset >= this.sectorSize && (iOffset - this.sectorSize) % this.entrySize === 0) {
+      this.headerSector.set(pData.value, iOffset);
+    } else if ((iOffset - this.sectorSize) % this.entrySize === 0) {
+      // Store the page index for this page entry. The data is discarded.
       const entryIndex = (iOffset - this.sectorSize) / this.entrySize;
       const pageIndex = new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0);
       this.pageIndexes[entryIndex] = pageIndex;
@@ -121,13 +116,13 @@ export class IDBNoJournalFile extends VFS.Base {
     // https://www.sqlite.org/fileformat.html#the_rollback_journal
     if (iOffset === 0) {
       if (pData.value[0]) {
-        const view = new DataView(this.journal.buffer);
+        const view = new DataView(this.headerSector.buffer);
         this.nonce = view.getUint32(12);
         this.sectorSize = view.getUint32(20) || this.sectorSize;
         this.pageSize = view.getUint32(24) || this.sectorSize;
       } else {
-        // Overwriting the header with zeroes signals the end of a
-        // transaction in for locking_mode=exclusive.
+        // SQLite overwrites the header with zeroes to signal the end of
+        // a transaction when locking_mode=exclusive.
         this.dbFile.commit();
       }
     }
@@ -135,8 +130,8 @@ export class IDBNoJournalFile extends VFS.Base {
   }
 
   xTruncate(fileId, iSize) {
-    console.assert(iSize <= this.journal.length);
-    this.journal = this.journal.slice(0, iSize);
+    console.assert(iSize <= this.headerSector.length);
+    this.headerSector = this.headerSector.slice(0, iSize);
     return VFS.SQLITE_OK;
   }
 
@@ -160,7 +155,7 @@ export class IDBNoJournalFile extends VFS.Base {
   }
 
   // SQLite journal checksum
-  checksum(data) {
+  #checksum(data) {
     let result = this.nonce;
     let x = this.pageSize - 200;
     while (x > 0) {
