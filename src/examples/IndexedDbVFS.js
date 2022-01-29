@@ -22,7 +22,7 @@ export class IndexedDbVFS extends VFS.Base {
     super();
 
     // Open IDB database.
-    this.dbReady = wrapRequest(globalThis.indexedDB.open(idbDatabaseName, 3), {
+    this.dbReady = wrapRequest(globalThis.indexedDB.open(idbDatabaseName, 4), {
       async upgradeneeded(event) {
       // Most of this function handles migrating a now obsolete IndexedDB
       // schema, to make sure that users of newly updated pages (e.g. the
@@ -79,7 +79,28 @@ export class IndexedDbVFS extends VFS.Base {
             db.createObjectStore('journal', {
               keyPath: ['name', 'address', 'order']
             });
-            break;
+          case 3:
+            await new Promise(complete => {
+              const database = tx.objectStore('database');
+              database.openCursor().addEventListener('success', async (event) => {
+                // @ts-ignore
+                /** @type {IDBCursorWithValue} */ const cursor = event.target.result;
+                if (cursor) {
+                  if (cursor.value.index === 'metadata') {
+                    const block0 = await new Promise((resolve, reject) => {
+                      const request = database.get([cursor.value.name, 0]);
+                      request.addEventListener('success', () => resolve(request.result));
+                      request.addEventListener('error', () => reject(request.error));
+                    })
+                    database.put(Object.assign({}, cursor.value, block0));
+                    cursor.delete();
+                  }
+                  cursor.continue();
+                } else {
+                  complete();
+                }
+              });
+            });
         }
       },
 

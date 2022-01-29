@@ -26,11 +26,7 @@ export class IDBActivity {
    * @param {IDBTransactionMode} mode 
    */
   async updateTxMode(mode) {
-    // If the transition is from readwrite to readonly, wait until
-    // all changes are visible to the new transaction.
-    if (this.#tx?.mode === 'readwrite' && mode === 'readonly') {
-      await this.#txComplete;
-    } else if (mode === 'readwrite' && mode !== this.#tx?.mode) {
+    if (mode === 'readwrite' && mode !== this.#tx?.mode) {
       this.#tx = null;
     }
     this.mode = mode;
@@ -86,7 +82,15 @@ export class IDBActivity {
     }
   }
 
-  sync() {
+  async sync() {
+    const request = this.#request;
+    if (request && request.readyState === 'pending') {
+      await new Promise(done => {
+        request.addEventListener('success', done);
+        request.addEventListener('error', done);
+      });
+      request.transaction.commit();
+    }
     return this.#txComplete;
   }
 
