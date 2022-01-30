@@ -67,7 +67,7 @@ export class IDBNoJournalFile extends VFS.Base {
       const pageIndex = this.pageIndexes[entryIndex];
       if (this.cachedPageIndex !== pageIndex) {
         // Fetch file data.
-        const fileBlock = await this.dbFile.idb.run(({ database }) => {
+        const fileBlock = await this.dbFile.idb.run('readonly', ({ database }) => {
           return database.get([this.dbFile.name, pageIndex - 1]);
         });
         const fileBlockData = new Uint8Array(fileBlock.data);

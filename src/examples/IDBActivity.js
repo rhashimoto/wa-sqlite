@@ -3,6 +3,9 @@ const RETRYABLE_EXCEPTIONS = new Set(['TransactionInactiveError', 'InvalidStateE
 // For debugging.
 let nextTxId = 0;
 const mapTxToId = new WeakMap();
+function log(...args) {
+  // console.debug(...args);
+}
 
 // This class manages IDBTransaction and IDBRequest instances. It tries
 // to reuse transactions to minimize transaction overhead.
@@ -10,37 +13,40 @@ export class IDBActivity {
   /** @type {IDBTransaction} */ #tx = null;
   /** @type {Promise} */ #txComplete = null;
   /** @type {IDBRequest} */ #request = null;
+  #chain = Promise.resolve();
 
   /**
    * @param {IDBDatabase} db
    * @param {string|string[]} storeNames 
-   * @param {IDBTransactionMode} mode 
    */
-  constructor(db, storeNames, mode) {
+  constructor(db, storeNames) {
     this.db = db;
     this.storeNames = [storeNames].flat();
-    this.mode = mode;
-  }
-
-  /**
-   * @param {IDBTransactionMode} mode 
-   */
-  async updateTxMode(mode) {
-    if (mode === 'readwrite' && mode !== this.#tx?.mode) {
-      this.#tx = null;
-    }
-    this.mode = mode;
   }
 
   /**
    * Run a function with the provided object stores. The function
    * should be idempotent in case it is passed an expired transaction.
+   * @param {IDBTransactionMode} mode
    * @param {(stores: Object.<string, Store>) => any} f 
    */
-  async run(f) {
-    // If the last IDBRequest is pending, wait until it is done so
-    // the IDBTransaction is active.
-    if (this.#request && this.#request.readyState === 'pending') {
+  async run(mode, f) {
+    // Ensure that functions run sequentially.
+    return this.#chain = this.#chain.then(() => {
+      return this.#run(mode, f);
+    });
+  }
+
+  /**
+   * @param {IDBTransactionMode} mode
+   * @param {(stores: Object.<string, Store>) => any} f 
+   * @returns 
+   */
+  async #run(mode, f) {
+    if (mode !== 'readonly' && this.#tx && this.#tx.mode === 'readonly') {
+      this.#tx = null;
+    } else if (this.#request && this.#request.readyState === 'pending') {
+      // Wait for pending IDBRequest so the IDBTransaction is active.
       await new Promise(done => {
         this.#request.addEventListener('success', done);
         this.#request.addEventListener('error', done);
@@ -50,18 +56,18 @@ export class IDBActivity {
     // Run the user function with a retry in case the transaction is invalid.
     for (let i = 0; i < 2; ++i) {
       if (!this.#tx) {
-        this.#tx = this.db.transaction(this.storeNames, this.mode);
+        this.#tx = this.db.transaction(this.storeNames, mode);
         this.#txComplete = new Promise(resolve => {
           this.#tx.addEventListener('complete', event => {
             if (this.#tx === event.target) {
               this.#tx = null
             }
             resolve();
-            // console.log(`transaction ${mapTxToId.get(event.target)} complete`);
+            log(`transaction ${mapTxToId.get(event.target)} complete`);
           });
         });
-        // console.log(`new transaction ${nextTxId}`, this.storeNames, this.mode);
-        // mapTxToId.set(this.#tx, nextTxId++);
+        log(`new transaction ${nextTxId}`, this.storeNames, mode);
+        mapTxToId.set(this.#tx, nextTxId++);
       }
 
       try {
@@ -122,7 +128,7 @@ class Store {
    * @returns {Promise}
    */
   get(query) {
-    // console.log(`get ${this.store.name}`, query);
+    log(`get ${this.store.name}`, query);
     const request = this.store.get(query);
     return this.addRequest(request);
   }
@@ -133,7 +139,7 @@ class Store {
    * @returns {Promise}
    */
    getAll(query, count) {
-    // console.log(`getAll ${this.store.name}`, query, count);
+    log(`getAll ${this.store.name}`, query, count);
     const request = this.store.getAll(query);
     return this.addRequest(request);
   }
@@ -143,7 +149,7 @@ class Store {
    * @returns {Promise<IDBValidKey>}
    */
   getKey(query) {
-    // console.log(`getKey ${this.store.name}`, query);
+    log(`getKey ${this.store.name}`, query);
     const request = this.store.getKey(query);
     return this.addRequest(request);
   }
@@ -154,7 +160,7 @@ class Store {
    * @returns {Promise}
    */
    getAllKeys(query, count) {
-    // console.log(`getAllKeys ${this.store.name}`, query, count);
+    log(`getAllKeys ${this.store.name}`, query, count);
     const request = this.store.getAllKeys(query);
     return this.addRequest(request);
   }
@@ -165,7 +171,7 @@ class Store {
    * @returns {Promise}
    */
    put(value, key) {
-    // console.log(`put ${this.store.name}`, value, key);
+    log(`put ${this.store.name}`, value, key);
     const request = this.store.put(value, key);
     return this.addRequest(request);
   }
@@ -175,13 +181,40 @@ class Store {
    * @returns {Promise}
    */
    delete(query) {
-    // console.log(`delete ${this.store.name}`, query);
+    log(`delete ${this.store.name}`, query);
     const request = this.store.delete(query);
     return this.addRequest(request);
   }
 
   clear() {
+    log(`clear ${this.store.name}`);
     const request = this.store.clear();
+    return this.addRequest(request);
+  }
+
+  index(name) {
+    return new Index(this.store.index(name), request => this.addRequest(request));
+  }
+}
+
+class Index {
+  /**
+   * @param {IDBIndex} index 
+   * @param {(request: IDBRequest) => Promise} addRequest
+   */
+   constructor(index, addRequest) {
+    this.index = index;
+    this.addRequest = addRequest;
+  }
+
+  /**
+   * @param {IDBValidKey|IDBKeyRange} query 
+   * @param {number} [count]
+   * @returns {Promise<IDBValidKey[]>}
+   */
+  getAllKeys(query, count) {
+    log(`IDBIndex.getAllKeys ${this.index.objectStore.name}<${this.index.name}>`, query, count);
+    const request = this.index.getAllKeys(query, count);
     return this.addRequest(request);
   }
 }
