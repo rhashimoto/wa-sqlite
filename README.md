@@ -65,3 +65,6 @@ CREATE TABLE IF NOT EXISTS tbl AS SELECT * FROM goog;
 ```
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
+
+## License
+GNU General Public License v3, unless explicitly arranged.
