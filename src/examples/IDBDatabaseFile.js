@@ -25,7 +25,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   constructor(/** @type {IDBDatabase} */ db) {
     super();
     this.db = db;
-    this.idb = new IDBActivity(db, ['database', 'spill'], 'readonly');
+    this.idb = new IDBActivity(db, ['database', 'spill']);
   }
 
   get name() { return this.block0.name; }
@@ -36,7 +36,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     this.flags = flags;
 
     // Fetch metadata.
-    this.block0 = await this.idb.run(({ database }) => database.get([name, 0]));
+    this.block0 = await this.idb.run('readonly', ({ database }) => database.get([name, 0]));
     if (!this.block0) {
       // File doesn't exist, create if requested.
       if (flags & VFS.SQLITE_OPEN_CREATE) {
@@ -46,10 +46,8 @@ export class IDBDatabaseFile extends WebLocksMixin() {
           data: new ArrayBuffer(BLOCK_SIZE),
           fileSize: 0
         };
-        this.idb.updateTxMode('readwrite');
-        this.idb.run(({ database }) => database.put(this.block0));
+        this.idb.run('readwrite', ({ database }) => database.put(this.block0));
         await this.idb.sync();
-        this.idb.updateTxMode('readonly');
       } else {
         return VFS.SQLITE_CANTOPEN;
       }
@@ -127,10 +125,11 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     const result = (super.xLock && await super.xLock(fileId, flags)) ?? VFS.SQLITE_OK;
     switch (this.lockState) {
       case VFS.SQLITE_LOCK_SHARED: // read lock
-        this.block0 = await this.idb.run(({ database }) => database.get([this.name, 0]));
+        this.block0 = await this.idb.run('readonly', ({ database }) => {
+          return database.get([this.name, 0]);
+        });
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
-        this.idb.updateTxMode('readwrite');
         break;
     }
     return result;
@@ -140,7 +139,6 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
       this.commit();
       await this.idb.sync();
-      this.idb.updateTxMode('readonly');
     }
 
     return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
@@ -157,7 +155,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
 
   commit() {
     // All file changes, except creation, take place here.
-    this.idb.run(async ({ database, spill }) => {
+    this.idb.run('readwrite', async ({ database, spill }) => {
       if (this.writeCache.size) {
         // Flush metadata.
         database.put(this.block0);
@@ -204,9 +202,9 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     if (block) return block;
 
     if (this.spillCache.has(index)) {
-      return this.idb.run(({ spill }) => spill.get([this.name, index]));
+      return this.idb.run('readonly', ({ spill }) => spill.get([this.name, index]));
     }
-    return this.idb.run(({ database }) => database.get([this.name, index]));
+    return this.idb.run('readonly', ({ database }) => database.get([this.name, index]));
   }
 
   #putBlock(block) {
@@ -223,7 +221,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     for (const candidate of this.writeCache.values()) {
       if (this.writeCache.size <= WRITE_CACHE_SIZE) break;
 
-      this.idb.run(({ spill }) => spill.put(candidate));
+      this.idb.run('readwrite', ({ spill }) => spill.put(candidate));
       this.spillCache.add(candidate.index);
       this.writeCache.delete(candidate.index);
     }
