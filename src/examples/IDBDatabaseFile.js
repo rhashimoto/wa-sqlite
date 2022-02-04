@@ -16,6 +16,7 @@ const WRITE_CACHE_SIZE = 2048;
 export class IDBDatabaseFile extends WebLocksMixin() {
   // Two-level write cache, RAM and IndexedDB. Only writes are cached;
   // read caching is left to SQLite.
+  isChanged = false;
   writeCache = new Map();
   spillCache = new Set();
 
@@ -101,6 +102,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     };
     new Int8Array(block.data).set(pData.value);
     this.#putBlock(block);
+    this.isChanged = true;
     return VFS.SQLITE_OK;
   }
 
@@ -109,6 +111,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
     this.truncateRange = IDBKeyRange.bound(
       [this.name, (this.block0.fileSize / this.blockSize) | 0],
       [this.name, Number.MAX_VALUE]);
+    this.isChanged = true;
     return VFS.SQLITE_OK;
   }
 
@@ -156,7 +159,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   commit() {
     // All file changes, except creation, take place here.
     this.idb.run('readwrite', async ({ database, spill }) => {
-      if (this.writeCache.size) {
+      if (this.isChanged) {
         // Flush metadata.
         database.put(this.block0);
 
@@ -167,6 +170,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
           }
         }
         this.writeCache.clear();
+        this.isChanged = false;
       }
 
       // Flush the 2nd level cache stored in IndexedDB.
