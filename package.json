@@ -21,7 +21,7 @@
   "devDependencies": {
     "@web/dev-server": "^0.1.13",
     "jasmine-core": "^3.7.1",
-    "karma": "^6.3.10",
+    "karma": "^6.3.14",
     "karma-jasmine": "^4.0.1",
     "monaco-editor": "^0.23.0",
     "sinon": "^11.0.0",
