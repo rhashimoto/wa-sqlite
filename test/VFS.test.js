@@ -7,7 +7,7 @@ import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
 
 import GOOG from './GOOG.js';
 
-import sinon from '../.yarn/unplugged/sinon-npm-11.0.0-1b596cee10/node_modules/sinon/pkg/sinon-esm.js';
+import sinon from '../.yarn/unplugged/sinon-npm-11.1.2-5325724cb2/node_modules/sinon/pkg/sinon-esm.js';
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
 
