@@ -1,6 +1,6 @@
 import { getSQLite, getSQLiteAsync } from './api-instances.js';
 import * as SQLite from '../src/sqlite-api.js';
-import sinon from '../.yarn/unplugged/sinon-npm-11.0.0-1b596cee10/node_modules/sinon/pkg/sinon-esm.js';
+import sinon from '../.yarn/unplugged/sinon-npm-11.1.2-5325724cb2/node_modules/sinon/pkg/sinon-esm.js';
 
 const LIBVERSION = '3.37.2';
 const LIBVERSION_NUMBER = (function() {
