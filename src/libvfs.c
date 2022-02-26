@@ -1,4 +1,5 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
+#include <sys/time.h>
 #include <emscripten.h>
 #include <sqlite3.h>
 #include <string.h>
@@ -59,6 +60,16 @@ static int xFullPathname(sqlite3_vfs* vfs, const char* zName, int nOut, char* zO
   return SQLITE_OK;
 }
 
+static int xCurrentTime(sqlite3_vfs* vfs, double* pJulianDay) {
+  // UNIX epoch 1/1/1970 is Julian day 2440587.5
+  static const sqlite3_int64 unixEpoch = 24405875*(sqlite3_int64)8640000;
+  struct timeval sNow;
+  gettimeofday(&sNow, 0);
+  sqlite3_int64 julianMillis = unixEpoch + 1000*(sqlite3_int64)sNow.tv_sec + sNow.tv_usec/1000;
+  *pJulianDay = julianMillis / 86400000.0;
+  return SQLITE_OK;
+}
+
 const int EMSCRIPTEN_KEEPALIVE register_vfs(
   const char* zName,
   int mxPathName,
@@ -79,7 +90,8 @@ const int EMSCRIPTEN_KEEPALIVE register_vfs(
   vfs->xDelete = vfsDelete;
   vfs->xAccess = vfsAccess;
   vfs->xFullPathname = xFullPathname;
-
+  vfs->xCurrentTime = xCurrentTime;
+  
   // Get remaining functionality from the default VFS.
   sqlite3_vfs* defer = sqlite3_vfs_find(0);
 #define COPY_FIELD(NAME) vfs->NAME = defer->NAME
@@ -89,7 +101,6 @@ const int EMSCRIPTEN_KEEPALIVE register_vfs(
   COPY_FIELD(xDlClose);
   COPY_FIELD(xRandomness);
   COPY_FIELD(xSleep);
-  COPY_FIELD(xCurrentTime);
   COPY_FIELD(xGetLastError);
 #undef COPY_FIELD
 

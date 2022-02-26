@@ -4,6 +4,7 @@
  * in Javascript. Also see the
  * [GitHub repository](https://github.com/rhashimoto/wa-sqlite) and the
  * [online demo](https://rhashimoto.github.io/wa-sqlite/demo/).
+ * @module
  */
 
 /**
