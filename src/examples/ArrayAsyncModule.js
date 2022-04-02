@@ -2,6 +2,12 @@ import { ArrayModule } from './ArrayModule.js';
 
 // This is an asynchronous subclass of ArrayModule used for testing
 // asynchronous virtual tables.
+//
+// Be aware that implementing an asynchronous module can be tricky
+// because any callbacks back into SQLite (e.g. declare_vtab, value_*,
+// result_*) must be called synchronously, i.e. in the current microtask.
+// This is the case in this example but that is because the code does
+// not actually suspend (e.g. with await).
 export class ArrayAsyncModule extends ArrayModule {
   /**
    * @param {number} db 
