@@ -1129,6 +1129,10 @@ declare module 'wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_INDEX_CONSTRAINT_IS: 72;
   export const SQLITE_INDEX_CONSTRAINT_FUNCTION: 150;
   export const SQLITE_INDEX_SCAN_UNIQUE: 1;
+  export const SQLITE_DETERMINISTIC: 0x000000800;
+  export const SQLITE_DIRECTONLY: 0x000080000;
+  export const SQLITE_SUBTYPE: 0x000100000;
+  export const SQLITE_INNOCUOUS: 0x000200000;
 }
 
 /** @ignore */

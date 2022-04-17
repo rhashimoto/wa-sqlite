@@ -85,6 +85,38 @@ SELECT * FROM goog LIMIT 5;
         // @ts-ignore
         new ArrayAsyncModule(sqlite3, db, GOOG.rows, GOOG.columns));
     }
+
+    // Add example functions regex and regex_replace.
+    sqlite3.create_function(
+      db,
+      'regexp', 2,
+      SQLite.SQLITE_UTF8 | SQLite.SQLITE_DETERMINISTIC, 0,
+      function(context, values) {
+        const pattern = new RegExp(sqlite3.value_text(values[0]))
+        const s = sqlite3.value_text(values[1]);
+        sqlite3.result(context, pattern.test(s) ? 1 : 0);
+      },
+      null, null);
+
+    sqlite3.create_function(
+      db,
+      'regexp_replace', -1,
+      SQLite.SQLITE_UTF8 | SQLite.SQLITE_DETERMINISTIC, 0,
+      function(context, values) {
+        // Arguments are
+        // (pattern, s, replacement) or
+        // (pattern, s, replacement, flags).
+        if (values.length < 3) {
+          sqlite3.result(context, '');
+          return;  
+        }
+        const pattern = sqlite3.value_text(values[0]);
+        const s = sqlite3.value_text(values[1]);
+        const replacement = sqlite3.value_text(values[2]);
+        const flags = values.length > 3 ? sqlite3.value_text(values[3]) : '';
+        sqlite3.result(context, s.replace(new RegExp(pattern, flags), replacement));
+      },
+      null, null);
   }
   await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
