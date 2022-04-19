@@ -1,16 +1,13 @@
 import * as VFS from '../VFS.js';
 
-const WEB_LOCKS = navigator['locks'] ?? console.warn('IndexedDB concurrency is unsafe without Web Locks API');
+const WEB_LOCKS = navigator['locks'] ?? console.warn('concurrency is unsafe without Web Locks API');
 
 export const WebLocksMixin = (Base = Object) => class extends Base {
-  lockState = VFS.SQLITE_LOCK_NONE;
-  lockReleasers = new Map();
+  /** @type {Map<number, number>} */ #mapIdToState = new Map();
+  /** @type {Map<string, (any) => void>} */ #mapNameToReleaser = new Map();
 
-  // Override this accessor in client class.
-  get name() { return 'missing-override'; }
-
-  constructor() {
-    super()
+  constructor(...args) {
+    super(...args)
   }
 
   // Two locks are used, an outer lock and an inner lock, where holding
@@ -23,34 +20,36 @@ export const WebLocksMixin = (Base = Object) => class extends Base {
   // with 'exclusive' mode.
 
   async xLock(fileId, flags) {
+    const lockState = this.#mapIdToState.get(fileId) ?? VFS.SQLITE_LOCK_NONE;
+
     switch (flags) {
       case VFS.SQLITE_LOCK_SHARED:
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_NONE:
-            await this.#acquireWebLock('Outer', 'exclusive');
-            await this.#acquireWebLock('Inner', 'shared');
-            this.#releaseWebLock('Outer');
+            await this.#acquireWebLock(`${fileId}-outer`, 'exclusive');
+            await this.#acquireWebLock(`${fileId}-inner`, 'shared');
+            this.#releaseWebLock(`${fileId}-outer`);
             break;
         }
         break;
       case VFS.SQLITE_LOCK_RESERVED:
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_SHARED:
-            await this.#acquireWebLock('Outer', 'exclusive');
+            await this.#acquireWebLock(`${fileId}-outer`, 'exclusive');
             break;
           default:
-            console.error(`unexpected lock transition ${this.lockState} -> ${flags}`);
+            console.error(`unexpected lock transition ${lockState} -> ${flags}`);
             return VFS.SQLITE_ERROR;
         }
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_RESERVED:
-            this.#releaseWebLock('Inner');
-            await this.#acquireWebLock('Inner', 'exclusive');
+            this.#releaseWebLock(`${fileId}-inner`);
+            await this.#acquireWebLock(`${fileId}-inner`, 'exclusive');
             break;
           default:
-            console.error(`unexpected lock transition ${this.lockState} -> ${flags}`);
+            console.error(`unexpected lock transition ${lockState} -> ${flags}`);
             return VFS.SQLITE_ERROR;
           }
         break;
@@ -58,37 +57,39 @@ export const WebLocksMixin = (Base = Object) => class extends Base {
         console.error(`unexpected lock flag ${flags}`);
         return VFS.SQLITE_ERROR;
     }
-    this.lockState = flags;
+    this.#mapIdToState.set(fileId, flags);
     return VFS.SQLITE_OK
   }
 
   async xUnlock(fileId, flags) {
+    const lockState = this.#mapIdToState.get(fileId) ?? VFS.SQLITE_LOCK_NONE;
+
     switch (flags) {
       case VFS.SQLITE_LOCK_RESERVED:  // only happens with OOB rollback
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:
-            this.#releaseWebLock('Inner');
-            await this.#acquireWebLock('Inner', 'shared');
+            this.#releaseWebLock(`${fileId}-inner`);
+            await this.#acquireWebLock(`${fileId}-inner`, 'shared');
             break;
         }
         break;
       case VFS.SQLITE_LOCK_SHARED:
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:  // intentional case fall-through
-            this.#releaseWebLock('Inner');
-            await this.#acquireWebLock('Inner', 'shared');
+            this.#releaseWebLock(`${fileId}-inner`);
+            await this.#acquireWebLock(`${fileId}-inner`, 'shared');
           case VFS.SQLITE_LOCK_RESERVED:
-            this.#releaseWebLock('Outer');
+            this.#releaseWebLock(`${fileId}-outer`);
             break;
         }
         break;
       case VFS.SQLITE_LOCK_NONE:
-        switch (this.lockState) {
+        switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:  // intentional case fall-through
           case VFS.SQLITE_LOCK_RESERVED:
-            this.#releaseWebLock('Outer');
+            this.#releaseWebLock(`${fileId}-outer`);
           case VFS.SQLITE_LOCK_SHARED:
-            this.#releaseWebLock('Inner');
+            this.#releaseWebLock(`${fileId}-inner`);
             break;
         }
         break;
@@ -96,24 +97,29 @@ export const WebLocksMixin = (Base = Object) => class extends Base {
         console.error(`unexpected lock flag ${flags}`);
         return VFS.SQLITE_ERROR;
     }
-    this.lockState = flags;
+
+    if (flags !== VFS.SQLITE_LOCK_NONE) {
+      this.#mapIdToState.set(fileId, flags);
+    } else {
+      this.#mapIdToState.delete(fileId);
+    }
     return VFS.SQLITE_OK
   }
 
   async #acquireWebLock(name, mode) {
     if (WEB_LOCKS) {
-      const lockName = `${this.name}-lock-${name}`;
+      const lockName = `lock-${name}`;
       return new Promise(hasLock => {
         WEB_LOCKS.request(lockName, { mode }, () => new Promise(release => {
           hasLock();
-          this.lockReleasers.set(name, release);
+          this.#mapNameToReleaser.set(name, release);
         }));
       });
     }
   }
 
   #releaseWebLock(name) {
-    this.lockReleasers.get(name)?.();
-    this.lockReleasers.delete(name);
+    this.#mapNameToReleaser.get(name)?.();
+    this.#mapNameToReleaser.delete(name);
   }
 };
