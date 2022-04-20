@@ -4,23 +4,26 @@ import { WebLocksMixin } from './WebLocksMixin.js';
 
 const BLOCK_SIZE = 4096;
 
+/** @type {Map<string,FileSystemDirectoryHandle>} */
+const DIRECTORY_CACHE = new Map();
+
 function log(...args) {
   // console.debug(...args);
 }
 
 /**
  * @typedef OpenedFileEntry
- * @property {string} name
+ * @property {string} filename
  * @property {number} flags
  * @property {FileSystemFileHandle} fileHandle
- * @property {FileSystemAccessHandle} accessHandle
+ * @property {*} accessHandle
  */
 
 // @ts-ignore
 export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   #root = null;
   #rootReady = navigator.storage.getDirectory().then(handle => {
-    this.root = handle;
+    this.#root = handle;
     return handle;
   });
 
@@ -29,54 +32,65 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   get name() { return 'opfs'; }
 
   xOpen(name, fileId, flags, pOutFlags) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
 
       try {
-        const root = this.#root ?? await this.#rootReady;
+        const url = new URL(name, 'http://localhost/');
+
         const create = (flags & VFS.SQLITE_OPEN_CREATE) ? true : false;
-        const fileHandle = await root.getFileHandle(name, { create });
+        const [directoryHandle, filename] = await this.#getPathComponents(url, create);
+        const fileHandle = await directoryHandle.getFileHandle(filename, { create });
 
         const fileEntry = {
-          name,
+          filename: name,
           flags,
           fileHandle,
           accessHandle: null,
         };
         this.#mapIdToFile.set(fileId, fileEntry);
 
-        if (!(flags & VFS.SQLITE_OPEN_MAIN_DB)) {
+        if (!(flags & VFS.SQLITE_OPEN_MAIN_DB) ||
+            url.searchParams.has('immutable') ||
+            url.searchParams.has('nolock')) {
           // Get an access handle for files that SQLite does not lock.
           await this.#getAccessHandle(fileEntry);
         }
         pOutFlags.set(0);
         return VFS.SQLITE_OK;
       } catch (e) {
+        console.error(e.message);
         return VFS.SQLITE_CANTOPEN;
       }
     });
   }
 
   xClose(fileId) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xClose ${fileEntry.name}`);
+      if (fileEntry) {
+        log(`xClose ${fileEntry.filename}`);
 
-      this.#mapIdToFile.delete(fileId);
-      await fileEntry.accessHandle?.close();
+        this.#mapIdToFile.delete(fileId);
+        await fileEntry.accessHandle?.close();
 
-      if (fileEntry.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-        const root = this.#root ?? await this.#rootReady;
-        await root.removeEntry(fileEntry.name).catch(() => {});
+        if (fileEntry.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+          const [directoryHandle, filename] =
+            await this.#getPathComponents(fileEntry.filename, false);
+          directoryHandle.removeEntry(filename);
+        }
       }
       return VFS.SQLITE_OK;
     });
   }
 
   xRead(fileId, pData, iOffset) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xRead ${fileEntry.name} ${pData.size} ${iOffset}`);
+      log(`xRead ${fileEntry.filename} ${pData.size} ${iOffset}`);
 
       let nBytesRead;
       if (fileEntry.accessHandle) {
@@ -100,16 +114,17 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
 
   xWrite(fileId, pData, iOffset) {
     const fileEntry = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${fileEntry.name} ${pData.size} ${iOffset}`);
+    log(`xWrite ${fileEntry.filename} ${pData.size} ${iOffset}`);
 
     const nBytes = fileEntry.accessHandle.write(pData.value, { at: iOffset });
     return nBytes === pData.size ? VFS.SQLITE_OK : VFS.SQLITE_IOERR;
   }
 
   xTruncate(fileId, iSize) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xTruncate ${fileEntry.name} ${iSize}`);
+      log(`xTruncate ${fileEntry.filename} ${iSize}`);
 
       const accessHandle = await this.#getAccessHandle(fileEntry);
       await accessHandle.truncate(iSize);
@@ -118,9 +133,10 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xSync(fileId, flags) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xSync ${fileEntry.name} ${flags}`);
+      log(`xSync ${fileEntry.filename} ${flags}`);
       
       await fileEntry.accessHandle?.flush();
       return VFS.SQLITE_OK;
@@ -128,9 +144,10 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xFileSize(fileId, pSize64) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xFileSize ${fileEntry.name}`);
+      log(`xFileSize ${fileEntry.filename}`);
 
       let size;
       if (fileEntry.accessHandle) {
@@ -144,9 +161,10 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xLock(fileId, flags) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xLock ${fileEntry.name} ${flags}`);
+      log(`xLock ${fileEntry.filename} ${flags}`);
       await super.xLock(fileId, flags);
 
       if (flags === VFS.SQLITE_LOCK_EXCLUSIVE) {
@@ -157,9 +175,10 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xUnlock(fileId, flags) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xUnlock ${fileEntry.name} ${flags}`);
+      log(`xUnlock ${fileEntry.filename} ${flags}`);
 
       if (flags === VFS.SQLITE_LOCK_NONE) {
         await fileEntry.accessHandle?.close();
@@ -171,11 +190,13 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
     });
   }
 
+  // @ts-ignore
   xSectorSize(fileId) {
     log('xSectorSize', BLOCK_SIZE);
     return BLOCK_SIZE;
   }
 
+  // @ts-ignore
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
@@ -183,11 +204,12 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xAccess(name, flags, pResOut) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xAccess ${name} ${flags}`);
       try {
-        const root = this.#root ?? await this.#rootReady;
-        await root.getFileHandle(name);
+        const [directoryHandle, filename] = await this.#getPathComponents(name, false);
+        await directoryHandle.getFileHandle(filename);
         pResOut.set(1);
       } catch (e) {
         pResOut.set(0);
@@ -197,12 +219,41 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xDelete(name, syncDir) {
+    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xDelete ${name} ${syncDir}`);
-      const root = this.#root ?? await this.#rootReady;
-      await root.removeEntry(name).catch(() => {});
+      const [directoryHandle, filename] = await this.#getPathComponents(name, false);
+      if (syncDir) {
+        await directoryHandle.removeEntry(filename);
+      } else {
+        directoryHandle.removeEntry(filename);
+      }
       return VFS.SQLITE_OK;
     });
+  }
+
+  /**
+   * @param {string|URL} nameOrURL
+   * @param {boolean} create
+   * @returns {Promise<[FileSystemDirectoryHandle, string]>}
+   */
+  async #getPathComponents(nameOrURL, create) {
+    const url = typeof nameOrURL === 'string' ?
+      new URL(nameOrURL, 'file://localhost/') :
+      nameOrURL;
+    const [_, directories, filename] = url.pathname.match(/[/]?(.*)[/](.*)$/);
+
+    let directoryHandle = DIRECTORY_CACHE.get(directories);
+    if (!directoryHandle) {
+      directoryHandle = this.#root ?? await this.#rootReady;
+      for (const directory of directories.split('/')) {
+        if (directory) {
+          directoryHandle = await directoryHandle.getDirectoryHandle(directory, { create });
+        }
+      }
+      DIRECTORY_CACHE.set(directories, directoryHandle);
+    }
+    return [directoryHandle, filename];
   }
 
   async #getAccessHandle(fileEntry) {
