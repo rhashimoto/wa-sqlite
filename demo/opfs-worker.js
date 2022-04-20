@@ -1,9 +1,8 @@
-// @ts-ignore
 import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 import { OriginPrivateFileSystemVFS } from '../src/examples/OriginPrivateFileSystemVFS.js';
 
-const DB_NAME = 'benchmark';
+const DB_NAME = 'file:///benchmark?foo=bar';
 const TESTS = [
   test1,
   test2,
@@ -28,7 +27,7 @@ let sqlite3, db;
   const module = await SQLiteModuleFactory();
   sqlite3 = SQLite.Factory(module);
   // @ts-ignore
-  sqlite3.vfs_register(new OriginPrivateFileSystemVFS());
+  sqlite3.vfs_register(new OriginPrivateFileSystemVFS(), true);
 
   addEventListener('message', async function({ data }) {
     let result;
@@ -53,22 +52,27 @@ let sqlite3, db;
 })();
 
 async function initialize(preamble) {
-  // Clear file system.
-  const rootDir = await navigator.storage.getDirectory();
-  // @ts-ignore
-  for await (const [name] of rootDir.entries()) {
-    await rootDir.removeEntry(name, { recursive: true }).catch(() => {});
-  }
+  await clearFilesystem();
 
-  // Create the database.
-  db = await sqlite3.open_v2(DB_NAME, undefined, 'opfs');
-
-  // Execute the preamble.
+  db = await sqlite3.open_v2(
+    DB_NAME,
+    SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
+    'opfs');
   await sqlite3.exec(db, preamble);
 }
 
 async function finalize() {
   await sqlite3.close(db);
+  await clearFilesystem();
+}
+
+async function clearFilesystem() {
+  const rootDir = await navigator.storage.getDirectory();
+  // @ts-ignore
+  for await (const [name] of rootDir.entries()) {
+    console.debug(`removing ${name}`);
+    await rootDir.removeEntry(name, { recursive: true }).catch(() => {});
+  }
 }
 
 // Test 1: 1000 INSERTs
