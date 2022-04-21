@@ -150,11 +150,42 @@ const vfs_methods = {
         }
       }
       
-      return vfs['xOpen'](
-        zName ? UTF8ToString(zName) : null,
-        file,
-        flags,
-        new Value(pOutFlags, 'i32'));
+      // If zName is a URI, then the null-terminated name is followed by
+      // additional key and value strings. Reassemble it into a single
+      // string.
+      let name = null;
+      if (flags & 64) {
+        let pName = zName;
+        let state = 1;
+        const charCodes = [];
+        while (state) {
+          const charCode = HEAP8[pName++];
+          if (charCode) {
+            charCodes.push(charCode);
+          } else {
+            if (!HEAP8[pName]) state = null;
+            switch (state) {
+              case 1: // path
+                charCodes.push('?'.charCodeAt(0));
+                state = 2;
+                break;
+              case 2: // key
+                charCodes.push('='.charCodeAt(0));
+                state = 3;
+                break;
+              case 3: // value
+                charCodes.push('&'.charCodeAt(0));
+                state = 2;
+                break;
+            }
+          }
+        }
+        name = new TextDecoder().decode(new Int8Array(charCodes));
+      } else if (zName) {
+        name = UTF8ToString(zName);
+      }
+
+      return vfs['xOpen'](name, file, flags, new Value(pOutFlags, 'i32'));
     }
 
     // int xDelete(sqlite3_vfs* vfs, const char *zName, int syncDir);
