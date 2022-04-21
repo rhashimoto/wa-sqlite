@@ -1,5 +1,5 @@
 import * as VFS from '../VFS.js';
-import { WebLocksMixin } from './WebLocksMixin.js';
+import { WebLocks } from './WebLocks.js';
 import { IDBActivity } from './IDBActivity.js';
 
 // Default block size for new databases.
@@ -13,7 +13,7 @@ const WRITE_CACHE_SIZE = 2048;
 // in a single IndexedDB transaction at commit. File data is stored
 // to IndexedDB in fixed-size blocks, plus a special object for
 // file metadata.
-export class IDBDatabaseFile extends WebLocksMixin() {
+export class IDBDatabaseFile {
   // Two-level write cache, RAM and IndexedDB. Only writes are cached;
   // read caching is left to SQLite.
   isChanged = false;
@@ -23,8 +23,10 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   block0 = null;
   truncateRange = null;
 
+  webLocks = new WebLocks();
+  lockState = VFS.SQLITE_LOCK_NONE;
+
   constructor(/** @type {IDBDatabase} */ db) {
-    super();
     this.db = db;
     this.idb = new IDBActivity(db, ['database', 'spill']);
   }
@@ -125,7 +127,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
   }
 
   async xLock(fileId, flags) {
-    const result = (super.xLock && await super.xLock(fileId, flags)) ?? VFS.SQLITE_OK;
+    const result = await this.webLocks.lock(this.name, flags);
     switch (this.lockState) {
       case VFS.SQLITE_LOCK_SHARED: // read lock
         this.block0 = await this.idb.run('readonly', ({ database }) => {
@@ -135,6 +137,7 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
         break;
     }
+    this.lockState = flags;
     return result;
   }
 
@@ -144,7 +147,9 @@ export class IDBDatabaseFile extends WebLocksMixin() {
       await this.idb.sync();
     }
 
-    return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
+    const result = await this.webLocks.unlock(this.name, flags);
+    this.lockState = flags;
+    return result;
   }
 
   xSectorSize(fileId) {

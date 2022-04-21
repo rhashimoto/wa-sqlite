@@ -1,6 +1,6 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
-import { WebLocksMixin } from './WebLocksMixin.js';
+import { WebLocks } from './WebLocks.js';
 
 const BLOCK_SIZE = 4096;
 
@@ -20,7 +20,7 @@ function log(...args) {
  */
 
 // @ts-ignore
-export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
+export class OriginPrivateFileSystemVFS extends VFS.Base {
   #root = null;
   #rootReady = navigator.storage.getDirectory().then(handle => {
     this.#root = handle;
@@ -29,10 +29,11 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
 
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
 
+  #webLocks = new WebLocks();
+
   get name() { return 'opfs'; }
 
   xOpen(name, fileId, flags, pOutFlags) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
 
@@ -67,7 +68,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xClose(fileId) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       if (fileEntry) {
@@ -87,7 +87,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xRead(fileId, pData, iOffset) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xRead ${fileEntry.filename} ${pData.size} ${iOffset}`);
@@ -121,7 +120,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xTruncate(fileId, iSize) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xTruncate ${fileEntry.filename} ${iSize}`);
@@ -133,7 +131,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xSync(fileId, flags) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xSync ${fileEntry.filename} ${flags}`);
@@ -144,7 +141,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xFileSize(fileId, pSize64) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xFileSize ${fileEntry.filename}`);
@@ -161,11 +157,10 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xLock(fileId, flags) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xLock ${fileEntry.filename} ${flags}`);
-      await super.xLock(fileId, flags);
+      await this.#webLocks.lock(fileEntry.filename, flags);
 
       if (flags === VFS.SQLITE_LOCK_EXCLUSIVE) {
         await this.#getAccessHandle(fileEntry);
@@ -175,7 +170,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xUnlock(fileId, flags) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xUnlock ${fileEntry.filename} ${flags}`);
@@ -185,26 +179,24 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
         fileEntry.accessHandle = null;
       }
 
-      await super.xUnlock(fileId, flags);
+      await this.#webLocks.unlock(fileEntry.filename, flags);
       return VFS.SQLITE_OK;
     });
   }
 
-  // @ts-ignore
   xSectorSize(fileId) {
     log('xSectorSize', BLOCK_SIZE);
     return BLOCK_SIZE;
   }
 
-  // @ts-ignore
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
+           VFS.SQLITE_IOCAP_SEQUENTIAL |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
   xAccess(name, flags, pResOut) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xAccess ${name} ${flags}`);
       try {
@@ -219,7 +211,6 @@ export class OriginPrivateFileSystemVFS extends WebLocksMixin(VFS.Base) {
   }
 
   xDelete(name, syncDir) {
-    // @ts-ignore
     return this.handleAsync(async () => {
       log(`xDelete ${name} ${syncDir}`);
       const [directoryHandle, filename] = await this.#getPathComponents(name, false);
