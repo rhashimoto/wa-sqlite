@@ -45,7 +45,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
         const fileHandle = await directoryHandle.getFileHandle(filename, { create });
 
         const fileEntry = {
-          filename: name,
+          filename: url.pathname,
           flags,
           fileHandle,
           accessHandle: null,
