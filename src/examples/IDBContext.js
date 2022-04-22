@@ -9,19 +9,42 @@ function log(...args) {
 
 // This class manages IDBTransaction and IDBRequest instances. It tries
 // to reuse transactions to minimize transaction overhead.
-export class IDBActivity {
+export class IDBContext {
+  /** @type {Promise<IDBDatabase>} */ #dbReady;
+
   /** @type {IDBTransaction} */ #tx = null;
-  /** @type {Promise} */ #txComplete = null;
+  /** @type {Promise<void>} */ #txComplete = null;
   /** @type {IDBRequest} */ #request = null;
   #chain = Promise.resolve();
 
   /**
-   * @param {IDBDatabase} db
-   * @param {string|string[]} storeNames 
+   * @param {string} fsName
    */
-  constructor(db, storeNames) {
-    this.db = db;
-    this.storeNames = [storeNames].flat();
+  constructor(fsName) {
+    this.#dbReady = new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open(fsName, 5);
+      request.addEventListener('upgradeneeded', event => {
+        const { oldVersion, newVersion } = event;
+        console.log(`Upgrading "${fsName}" ${oldVersion} -> ${newVersion}`);
+        if (oldVersion !== 0) {
+          // A production implementation should upgrade old databases.
+          const error = new Error(`incompatible IDB database '${fsName}' exists`);
+          reject(error);
+          throw error;
+        }
+
+        const db = request.result;
+        db.createObjectStore('blocks', {
+          keyPath: ['name', 'index', 'version']
+        }).createIndex('version', ['name', 'version']);
+      });
+      request.addEventListener('success', () => {
+        resolve(request.result);
+      });
+      request.addEventListener('error', () => {
+        reject(request.error);
+      });
+    });
   }
 
   /**
@@ -43,9 +66,12 @@ export class IDBActivity {
    * @returns 
    */
   async #run(mode, f) {
-    if (mode !== 'readonly' && this.#tx && this.#tx.mode === 'readonly') {
+    const db = await this.#dbReady;
+    const storeNames = Array.from(db.objectStoreNames);
+    if (mode !== 'readonly' && this.#tx?.mode === 'readonly') {
+      // Force creation of a new read-write transaction.
       this.#tx = null;
-    } else if (this.#request && this.#request.readyState === 'pending') {
+    } else if (this.#request?.readyState === 'pending') {
       // Wait for pending IDBRequest so the IDBTransaction is active.
       await new Promise(done => {
         this.#request.addEventListener('success', done);
@@ -56,7 +82,7 @@ export class IDBActivity {
     // Run the user function with a retry in case the transaction is invalid.
     for (let i = 0; i < 2; ++i) {
       if (!this.#tx) {
-        this.#tx = this.db.transaction(this.storeNames, mode);
+        this.#tx = db.transaction(storeNames, mode);
         this.#txComplete = new Promise(resolve => {
           this.#tx.addEventListener('complete', event => {
             if (this.#tx === event.target) {
@@ -66,12 +92,12 @@ export class IDBActivity {
             log(`transaction ${mapTxToId.get(event.target)} complete`);
           });
         });
-        log(`new transaction ${nextTxId}`, this.storeNames, mode);
+        log(`new transaction ${nextTxId} ${mode}`);
         mapTxToId.set(this.#tx, nextTxId++);
       }
 
       try {
-        const stores = Object.fromEntries(this.storeNames.map(name => {
+        const stores = Object.fromEntries(storeNames.map(name => {
           const objectStore = this.#tx.objectStore(name);
           const store = new Store(objectStore, request => this.#setRequest(request));
           return [name, store];
@@ -90,7 +116,7 @@ export class IDBActivity {
 
   async sync() {
     const request = this.#request;
-    if (request && request.readyState === 'pending') {
+    if (request?.readyState === 'pending') {
       await new Promise(done => {
         request.addEventListener('success', done);
         request.addEventListener('error', done);

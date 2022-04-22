@@ -1,55 +1,52 @@
 import * as VFS from '../VFS.js';
-import { WebLocks } from './WebLocks.js';
+import { WebLocksMixin } from './WebLocksMixin.js';
 import { IDBActivity } from './IDBActivity.js';
 
 // Default block size for new databases.
 const BLOCK_SIZE = 8192;
-
-// Max number of blocks to store in the 1st-level write cache.
-const WRITE_CACHE_SIZE = 2048;
 
 // This implementation of a SQLite database file buffers writes (in
 // memory spilling to IndexedDB), and writes the SQLite transaction
 // in a single IndexedDB transaction at commit. File data is stored
 // to IndexedDB in fixed-size blocks, plus a special object for
 // file metadata.
-export class IDBDatabaseFile {
-  // Two-level write cache, RAM and IndexedDB. Only writes are cached;
-  // read caching is left to SQLite.
-  isChanged = false;
-  writeCache = new Map();
-  spillCache = new Set();
+export class IDBDatabaseFile extends WebLocksMixin() {
+  purge = new Set();
 
   block0 = null;
   truncateRange = null;
 
-  webLocks = new WebLocks();
-  lockState = VFS.SQLITE_LOCK_NONE;
+  inTransaction = false;
 
   constructor(/** @type {IDBDatabase} */ db) {
+    super();
     this.db = db;
-    this.idb = new IDBActivity(db, ['database', 'spill']);
+    this.idb = new IDBActivity(db, ['pages']);
   }
 
   get name() { return this.block0.name; }
   get type() { return this.flags & VFS.FILE_TYPE_MASK; }
-  get blockSize() { return this.block0.data.byteLength; }
+  get blockSize() { return this.block0.data.byteLength }
 
   async xOpen(name, fileId, flags, pOutFlags) {
     this.flags = flags;
 
     // Fetch metadata.
-    this.block0 = await this.idb.run('readonly', ({ database }) => database.get([name, 0]));
+    this.block0 = await this.idb.run('readonly', ({ pages }) => {
+      return pages.get(IDBKeyRange.bound([name, 0], [name, 0, []]));
+    });
     if (!this.block0) {
       // File doesn't exist, create if requested.
       if (flags & VFS.SQLITE_OPEN_CREATE) {
         this.block0 = {
           name,
           index: 0,
-          data: new ArrayBuffer(BLOCK_SIZE),
-          fileSize: 0
+          version: 0,
+          purgeVersion: 0,
+          fileSize: 0,
+          data: new ArrayBuffer(BLOCK_SIZE)
         };
-        this.idb.run('readwrite', ({ database }) => database.put(this.block0));
+        this.idb.run('readwrite', ({ pages }) => pages.put(this.block0));
         await this.idb.sync();
       } else {
         return VFS.SQLITE_CANTOPEN;
@@ -77,10 +74,9 @@ export class IDBDatabaseFile {
     }
 
     // Fetch the file data.
-    const block = this.#getBlock(blockIndex);
-    const blockData = (block.then ? await block : block).data;
+    const block = blockIndex === 0 ? this.block0 : await this.getBlock(blockIndex);
     const blockOffset = iOffset % this.blockSize;
-    pData.value.set(new Int8Array(blockData, blockOffset, pData.size));
+    pData.value.set(new Int8Array(block.data, blockOffset, pData.size));
     return VFS.SQLITE_OK;
   }
 
@@ -96,24 +92,35 @@ export class IDBDatabaseFile {
     // Extend the file when writing past the end.
     this.block0.fileSize = Math.max(this.block0.fileSize, iOffset + pData.size);
 
-    // Get the block from the cache, creating if not present.
-    const block = blockIndex === 0 ? this.block0 : this.writeCache.get(blockIndex) ?? {
+    this.prepare();
+    const block = blockIndex === 0 ? this.block0 : {
       name: this.name,
       index: blockIndex,
       data: new ArrayBuffer(this.blockSize)
     };
     new Int8Array(block.data).set(pData.value);
     this.#putBlock(block);
-    this.isChanged = true;
     return VFS.SQLITE_OK;
   }
 
   xTruncate(fileId, iSize) {
-    this.block0.fileSize = iSize;
-    this.truncateRange = IDBKeyRange.bound(
-      [this.name, (this.block0.fileSize / this.blockSize) | 0],
-      [this.name, Number.MAX_VALUE]);
-    this.isChanged = true;
+    // If the SQLite transaction has already been closed, e.g. because
+    // the journal closed, create a fake transaction.
+    const isTransactionClosed = !this.inTransaction;
+    if (isTransactionClosed) {
+      this.prepare();
+    }
+
+    this.idb.run('readwrite', () => {
+      this.block0.fileSize = iSize;
+      this.truncateRange = IDBKeyRange.bound(
+        [this.name, (this.block0.fileSize / this.blockSize) | 0],
+        [this.name, Number.MAX_VALUE, Number.MAX_VALUE]);
+    });
+
+    if (isTransactionClosed) {
+      this.commit();
+    }
     return VFS.SQLITE_OK;
   }
 
@@ -127,29 +134,41 @@ export class IDBDatabaseFile {
   }
 
   async xLock(fileId, flags) {
-    const result = await this.webLocks.lock(this.name, flags);
+    const result = (super.xLock && await super.xLock(fileId, flags)) ?? VFS.SQLITE_OK;
     switch (this.lockState) {
       case VFS.SQLITE_LOCK_SHARED: // read lock
-        this.block0 = await this.idb.run('readonly', ({ database }) => {
-          return database.get([this.name, 0]);
+        this.block0 = await this.idb.run('readonly', ({ pages }) => {
+          return pages.get(IDBKeyRange.bound([this.name, 0], [this.name, 0, []]));
         });
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE: // write lock
+        // Remove any blocks newer than the version. This would be leftover
+        // from an interrupted transaction.
+        this.idb.run('readwrite', async ({ pages }) => {
+          const keys = await pages.index('version')
+            .getAllKeys(IDBKeyRange.bound(
+              [this.name],
+              [this.name, this.block0.version],
+              false, true));
+          if (keys.length) {
+            console.log(`Removing ${keys.length} previously uncommitted pages.`);
+            for (const key of keys) {
+              pages.delete(key);
+            }
+          }
+        });
+        this.prepare();
         break;
     }
-    this.lockState = flags;
     return result;
   }
 
   async xUnlock(fileId, flags) {
     if (this.lockState === VFS.SQLITE_LOCK_EXCLUSIVE) {
-      this.commit();
-      await this.idb.sync();
+      await this.commit();
     }
 
-    const result = await this.webLocks.unlock(this.name, flags);
-    this.lockState = flags;
-    return result;
+    return (super.xUnlock && super.xUnlock(fileId, flags)) ?? VFS.SQLITE_OK;
   }
 
   xSectorSize(fileId) {
@@ -161,78 +180,67 @@ export class IDBDatabaseFile {
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
-  commit() {
-    // All file changes, except creation, take place here.
-    this.idb.run('readwrite', async ({ database, spill }) => {
-      if (this.isChanged) {
-        // Flush metadata.
-        database.put(this.block0);
+  prepare() {
+    if (this.inTransaction) return;
+    this.inTransaction = true;
 
-        // Flush the 1st level cache stored in memory.
-        for (const block of this.writeCache.values()) {
-          if (block.index * this.blockSize < this.block0.fileSize) {
-            database.put(block);
-          }
-        }
-        this.writeCache.clear();
-        this.isChanged = false;
-      }
-
-      // Flush the 2nd level cache stored in IndexedDB.
-      if (this.spillCache.size) {
-        let query = IDBKeyRange.lowerBound([this.name], true);
-        let blocks = [];
-        do {
-          blocks = await spill.getAll(query, WRITE_CACHE_SIZE);
-          for (const block of blocks) {
-            if (this.spillCache.has(block.index) &&
-                block.index * this.blockSize < this.block0.fileSize) {
-              database.put(block);
-            }
-          }
-          query = IDBKeyRange.lowerBound([this.name, blocks.pop()?.index ?? 0], true);
-        } while (blocks.length);
-        this.spillCache.clear();
-        spill.clear();
-      }
-
-      // Remove blocks truncated from the file.
-      if (this.truncateRange) {
-        database.delete(this.truncateRange);
-        this.truncateRange = null;
-      }
+    this.idb.run('readwrite', () => {
+      this.block0.version--;
     });
   }
 
-  #getBlock(index) {
-    if (index === 0) return this.block0;
+  commit() {
+    if (!this.inTransaction) return;
+    this.inTransaction = false;
 
-    const block = this.writeCache.get(index);
-    if (block) return block;
+    // All file changes, except creation, take place here.
+    return this.idb.run('readwrite', ({ pages }) => {
+      // Flush metadata. This publishes the new version.
+      pages.put(this.block0);
 
-    if (this.spillCache.has(index)) {
-      return this.idb.run('readonly', ({ spill }) => spill.get([this.name, index]));
-    }
-    return this.idb.run('readonly', ({ database }) => database.get([this.name, index]));
+      // Remove blocks truncated from the file.
+      if (this.truncateRange) {
+        pages.delete(this.truncateRange);
+        this.truncateRange = null;
+      }
+
+      // Purge obsolete blocks.
+      this.purge.add(0);
+      for (const index of this.purge) {
+        if (index * this.blockSize < this.block0.fileSize) {
+          pages.delete(IDBKeyRange.bound(
+            [this.name, index, this.block0.version],
+            [this.name, index, Number.MAX_VALUE],
+            true));
+        }
+      }
+      this.purge.clear();
+    }, true);
+  }
+
+  /**
+   * 
+   * @param {string|number} index 
+   * @param {boolean} [open] 
+   * @returns 
+   */
+  getBlock(index, open = false) {
+    console.assert(index !== 0 || open, 'invalid block 0 access');
+    return this.idb.run('readonly', ({ pages }) => {
+      const query = IDBKeyRange.lowerBound(
+        [this.name, index, this.block0.version],
+        open)
+      return pages.get(query);
+    });
   }
 
   #putBlock(block) {
-    if (block.index === 0) return;
-
-    // Replace or insert at the end of the write cache.
-    this.writeCache.delete(block.index);
-    this.writeCache.set(block.index, block);
-
-    // Remove any spill cache entry.
-    this.spillCache.delete(block.index);
-
-    // Spill any write cache overflow.
-    for (const candidate of this.writeCache.values()) {
-      if (this.writeCache.size <= WRITE_CACHE_SIZE) break;
-
-      this.idb.run('readwrite', ({ spill }) => spill.put(candidate));
-      this.spillCache.add(candidate.index);
-      this.writeCache.delete(candidate.index);
+    if (block.index > 0) {
+      return this.idb.run('readwrite', ({ pages }) => {
+        this.purge.add(block.index);
+        block.version = this.block0.version;
+        pages.put(block);
+      });
     }
   }
 }
