@@ -106,49 +106,121 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   xRead(fileId, pData, iOffset) {
-    return this.handleAsync(async () => {
-      const file = this.#mapIdToFile.get(fileId);
-      log(`xRead ${file.path} ${pData.size} ${iOffset}`);
+    // TODO: special case for journal
+    const file = this.#mapIdToFile.get(fileId);
 
-      // We believe SQLite never reads across a block boundary.
+    return this.handleAsync(async () => {
       const blockSize = file.block0.data.byteLength;
       const blockIndex = (iOffset / blockSize) | 0;
       if (iOffset + pData.size > (blockIndex + 1) * blockSize) {
-        console.assert(false, 'unexpected read across block boundary');
-        return VFS.SQLITE_IOERR;
+        // TODO: consider using #xReadGeneral for all cases.
+        return this.#xReadGeneral(file, pData, iOffset);
       }
   
+      log(`xRead ${file.path} ${pData.size} ${iOffset}`);
+
       // Check for read past the end of data.
       if (iOffset >= file.block0.fileSize) {
         pData.value.fill(0, pData.size);
         return VFS.SQLITE_IOERR_SHORT_READ;
       }
 
-      // Fetch the file data.
-      /** @type {FileBlock} */ const block = blockIndex === 0 ?
-        file.block0 :
-        await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(IDBKeyRange.bound(
-            [file.path, blockIndex, file.block0.version],
-            [file.path, blockIndex, Infinity]));
-        });
+      // Fetch from IndexedDB.
+      /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
+        return blocks.get(IDBKeyRange.bound(
+          [file.path, blockIndex, file.block0.version],
+          [file.path, blockIndex, Infinity]));
+      });
+
+      // Block 0 contains file metadata so it is cached.
+      if (blockIndex === 0) {
+        if (file.block0.version > block.version) {
+          // Incoming version is newer.
+          file.block0 = block;
+        } else {
+          block = file.block0;
+        }
+      }
+
       const blockOffset = iOffset % blockSize;
       pData.value.set(block.data.subarray(blockOffset, blockOffset + pData.value.length));
+
+      if (blockIndex === 0) {
+        file.block0 = block;
+      }
       return VFS.SQLITE_OK
     });
   }
 
-  xWrite(fileId, pData, iOffset) {
-    const file = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${file.path} ${pData.size} ${iOffset}`);
+  /**
+   * @param {OpenedFileEntry} file 
+   * @param {*} pData 
+   * @param {number} iOffset 
+   * @returns {Promise<number>}
+   */
+  async #xReadGeneral(file, pData, iOffset) {
+    log(`xRead (slow path) ${file.path} ${pData.size} ${iOffset}`);
 
-    // SQLite writes full blocks so we never do a read-modify-write.
+    // Clip the requested read to the file boundary.
+    const bgn = Math.min(iOffset, file.block0.fileSize);
+    const end = Math.min(iOffset + pData.size, file.block0.fileSize);    
+
+    let bytesRemaining = end - bgn;
+    let bufferOffset = 0;
+    let fileOffset = iOffset;
+    const blockSize = file.block0.data.byteLength;
+    while (bytesRemaining) {
+      const blockIndex = Math.floor(fileOffset / blockSize);
+      const blockOffset = fileOffset % blockSize;
+      const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
+
+      // Fetch from IndexedDB.
+      /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
+          return blocks.get(IDBKeyRange.bound(
+            [file.path, blockIndex],
+            [file.path, blockIndex, Infinity]
+          ));
+        }) ?? file.block0;
+
+      // Block 0 contains file metadata so it is cached.
+      if (blockIndex === 0) {
+        if (file.block0.version > block.version) {
+          // Incoming version is newer.
+          file.block0 = block;
+        } else {
+          block = file.block0;
+        }
+      }
+
+      pData.value.subarray(bufferOffset)
+        .set(block.data.subarray(blockOffset, blockOffset + blockBytes));
+
+      bufferOffset += blockBytes;
+      fileOffset += blockBytes;
+      bytesRemaining -= blockBytes;
+    }
+
+    if (bufferOffset !== pData.size) {
+      // Zero unused area of read buffer.
+      pData.value.subarray(bufferOffset).fill(0, pData.size - bufferOffset);
+      return VFS.SQLITE_IOERR_SHORT_READ;
+    }
+    return VFS.SQLITE_OK;
+  }
+  
+  xWrite(fileId, pData, iOffset) {
+    // TODO: special case for journal
+
+    // Check if read-modify-write path is needed.
+    const file = this.#mapIdToFile.get(fileId);
     const blockSize = file.block0.data.byteLength;
     const blockIndex = (iOffset / blockSize) | 0;
-    if (iOffset !== blockIndex * blockSize || pData.size !== blockSize) {
-      console.assert(false, 'unexpected write parameters');
-      return VFS.SQLITE_IOERR;
+    if (iOffset !== blockIndex * blockSize ||
+        (iOffset < file.block0.fileSize && pData.size !== blockSize)) {
+      return this.#xWriteGeneral(file, pData, iOffset);
     }
+
+    log(`xWrite ${file.path} ${pData.size} ${iOffset}`);
 
     // Extend the file when writing past the end.
     file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
@@ -173,6 +245,68 @@ export class IndexedDbVFS extends VFS.Base {
       });
     }
     return VFS.SQLITE_OK;
+  }
+
+  /**
+   * 
+   * @param {OpenedFileEntry} file 
+   * @param {*} pData 
+   * @param {number} iOffset 
+   */
+  #xWriteGeneral(file, pData, iOffset) {
+    return this.handleAsync(async () => {
+      log(`xWrite (slow path) ${file.path} ${pData.size} ${iOffset}`);
+
+      let bufferOffset = 0;
+      let fileOffset = iOffset;
+      let bytesRemaining = pData.value.length;
+      const blockSize = file.block0.data.byteLength;
+      const lastBlockIndex = Math.floor(file.block0.fileSize / blockSize);
+      while (bytesRemaining) {
+        const blockIndex = Math.floor(fileOffset / blockSize);
+        const blockOffset = fileOffset % blockSize;
+        const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
+
+        // Read.
+        /** @type {FileBlock} */ let block;
+        if (blockIndex === 0) {
+          block = file.block0;
+        } else if (blockIndex <= lastBlockIndex && blockBytes < blockSize) {
+          block = await this.#idb.run('readonly', ({blocks}) => {
+            return blocks.get(IDBKeyRange.bound(
+              [file.path, blockIndex],
+              [file.path, blockIndex, Infinity]
+            ));
+          });
+        } else {
+          block = {
+            name: file.block0.name,
+            index: blockIndex,
+            version: file.block0.version,
+            data: new Int8Array(file.block0.data.length)
+          };
+        }
+
+        // Modify.
+        block.data.set(
+          pData.value.subarray(bufferOffset, bufferOffset + blockBytes),
+          blockOffset);
+        
+        // Write (except block 0).
+        if (blockIndex) {
+          this.#idb.run('readwrite', ({blocks}) => {
+            blocks.put(block);
+          });
+        }
+
+        bufferOffset += blockBytes;
+        fileOffset += blockBytes;
+        bytesRemaining -= blockBytes;
+      }
+      
+      file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
+      return VFS.SQLITE_OK;
+    });
   }
 
   xTruncate(fileId, iSize) {
@@ -266,14 +400,4 @@ export class IndexedDbVFS extends VFS.Base {
       return VFS.SQLITE_OK;
     });
   }
-}
-
-function wrapRequest(request, listeners) {
-  return new Promise(function(resolve, reject) {
-    for (const [key, listener] of Object.entries(listeners)) {
-      request.addEventListener(key, listener);
-    }
-    request.addEventListener('success', () => resolve(request.result), { once: true });
-    request.addEventListener('error', () => reject(request.error), { once: true });
-  });
 }
