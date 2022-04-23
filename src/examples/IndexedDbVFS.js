@@ -9,10 +9,6 @@ function log(...args) {
   // console.debug(...args);
 }
 
-// // journal file debugging
-// let jId = null;
-// let jBuffer = new Int8Array();
-
 /**
  * @typedef FileBlock
  * @property {string} name
@@ -244,11 +240,6 @@ export class IndexedDbVFS extends VFS.Base {
   async #xReadJournal(file, pData, iOffset) {
     log(`xRead (journal) ${file.path} ${pData.size} ${iOffset}`);
 
-    // const jResult = pData.value.slice();
-    // jResult.set(jBuffer.subarray(iOffset, iOffset + pData.size));
-    // // pData.value.set(jResult);
-    // // return VFS.SQLITE_OK;
-
     const dbPath = this.#getJournalDatabasePath(file);
     const dbFile = this.#mapPathToFile.get(dbPath);
     const journalHeaderView = new DataView(file.block0.data.buffer);
@@ -414,13 +405,6 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       log(`xWrite (journal) ${file.path} ${pData.size} ${iOffset}`);
 
-      // if (iOffset + pData.size > jBuffer.length) {
-      //   const jBufferNew = new Int8Array(iOffset + pData.size);
-      //   jBufferNew.set(jBuffer);
-      //   jBuffer = jBufferNew;
-      // }
-      // jBuffer.set(pData.value, iOffset);
-
       const dbPath = this.#getJournalDatabasePath(file);
       const dbFile = this.#mapPathToFile.get(dbPath);
       if (iOffset === 0) {
@@ -475,10 +459,6 @@ export class IndexedDbVFS extends VFS.Base {
         [file.path, lastBlockIndex, Infinity],
         [file.path, Infinity, Infinity]));
     });
-
-    // if (fileId === jId) {
-    //   jBuffer = jBuffer.slice(0, iSize);
-    // }
     return VFS.SQLITE_OK;
   }
 
@@ -602,9 +582,6 @@ export class IndexedDbVFS extends VFS.Base {
       const path = new URL(name, 'file://localhost/').pathname;
       log(`xDelete ${path} ${syncDir}`);
 
-      // if (path.endsWith('-journal')) {
-      //   jBuffer = new Int8Array();
-      // }
       const complete = this.#idb.run('readwrite', ({blocks}) => {
         return blocks.delete(IDBKeyRange.bound(
           [path, 0],
@@ -621,7 +598,6 @@ export class IndexedDbVFS extends VFS.Base {
    * @param {OpenedFileEntry} file 
    */
   #isJournal(file) {
-    return false;
     return file.flags & (VFS.SQLITE_OPEN_MAIN_JOURNAL | VFS.SQLITE_OPEN_TEMP_JOURNAL)
   }
 
