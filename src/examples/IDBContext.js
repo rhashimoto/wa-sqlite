@@ -18,33 +18,10 @@ export class IDBContext {
   #chain = Promise.resolve();
 
   /**
-   * @param {string} fsName
+   * @param {IDBDatabase|Promise<IDBDatabase>} idbDatabase
    */
-  constructor(fsName) {
-    this.#dbReady = new Promise((resolve, reject) => {
-      const request = globalThis.indexedDB.open(fsName, 5);
-      request.addEventListener('upgradeneeded', event => {
-        const { oldVersion, newVersion } = event;
-        console.log(`Upgrading "${fsName}" ${oldVersion} -> ${newVersion}`);
-        if (oldVersion !== 0) {
-          // A production implementation should upgrade old databases.
-          const error = new Error(`incompatible IDB database '${fsName}' exists`);
-          reject(error);
-          throw error;
-        }
-
-        const db = request.result;
-        db.createObjectStore('blocks', {
-          keyPath: ['name', 'index', 'version']
-        }).createIndex('version', ['name', 'version']);
-      });
-      request.addEventListener('success', () => {
-        resolve(request.result);
-      });
-      request.addEventListener('error', () => {
-        reject(request.error);
-      });
-    });
+  constructor(idbDatabase) {
+    this.#dbReady = Promise.resolve(idbDatabase);
   }
 
   /**

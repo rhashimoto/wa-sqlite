@@ -46,7 +46,31 @@ export class IndexedDbVFS extends VFS.Base {
 
   constructor(idbDatabaseName = 'sqlite') {
     super();
-    this.#idb = new IDBContext(idbDatabaseName);
+    const idbDatabase = new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open(idbDatabaseName, 5);
+      request.addEventListener('upgradeneeded', event => {
+        const { oldVersion, newVersion } = event;
+        console.log(`Upgrading "${idbDatabaseName}" ${oldVersion} -> ${newVersion}`);
+        if (oldVersion !== 0) {
+          // A production implementation should upgrade old databases.
+          const error = new Error(`incompatible IDB database '${idbDatabaseName}' exists`);
+          reject(error);
+          throw error;
+        }
+
+        const db = request.result;
+        db.createObjectStore('blocks', {
+          keyPath: ['name', 'index', 'version']
+        }).createIndex('version', ['name', 'version']);
+      });
+      request.addEventListener('success', () => {
+        resolve(request.result);
+      });
+      request.addEventListener('error', () => {
+        reject(request.error);
+      });
+    });
+    this.#idb = new IDBContext(idbDatabase);
   }
 
   xOpen(name, fileId, flags, pOutFlags) {
