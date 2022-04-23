@@ -58,31 +58,7 @@ export class IndexedDbVFS extends VFS.Base {
     super();
     this.name = idbDatabaseName;
     this.#options = options;
-    const idbDatabase = new Promise((resolve, reject) => {
-      const request = globalThis.indexedDB.open(idbDatabaseName, 5);
-      request.addEventListener('upgradeneeded', event => {
-        const { oldVersion, newVersion } = event;
-        console.log(`Upgrading "${idbDatabaseName}" ${oldVersion} -> ${newVersion}`);
-        if (oldVersion !== 0) {
-          // A production implementation should upgrade old databases.
-          const error = new Error(`incompatible IDB database '${idbDatabaseName}' exists`);
-          reject(error);
-          throw error;
-        }
-
-        const db = request.result;
-        db.createObjectStore('blocks', {
-          keyPath: ['name', 'index', 'version']
-        }).createIndex('version', ['name', 'version']);
-      });
-      request.addEventListener('success', () => {
-        resolve(request.result);
-      });
-      request.addEventListener('error', () => {
-        reject(request.error);
-      });
-    });
-    this.#idb = new IDBContext(idbDatabase, {
+    this.#idb = new IDBContext(openDatabase(idbDatabaseName), {
       durability: this.#options.durability
     });
   }
@@ -666,4 +642,60 @@ export class IndexedDbVFS extends VFS.Base {
     }
     return result;
   }
+}
+
+function openDatabase(idbDatabaseName) {
+  return new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.open(idbDatabaseName, 5);
+    request.addEventListener('upgradeneeded', async (event) => {
+      const { oldVersion, newVersion } = event;
+      console.log(`Upgrading "${idbDatabaseName}" ${oldVersion} -> ${newVersion}`);
+
+      // Upgrade one previous version.
+      /** @type {IDBDatabase} */ const db = request.result;
+      /** @type {IDBTransaction} */ const tx = request.transaction;
+      switch (oldVersion) {
+        case 0:
+          db.createObjectStore('database');
+          db.createObjectStore('spill');
+          db.createObjectStore('journal');
+        case 4:
+          const blocks = db.createObjectStore('blocks', {
+            keyPath: ['name', 'index', 'version']
+          })
+          blocks.createIndex('version', ['name', 'version']);
+          await new Promise(complete => {
+            const database = tx.objectStore('database');
+            const cursorRequest = database.openCursor();
+            cursorRequest.addEventListener('success', async (event) => {
+              /** @type {IDBCursorWithValue} */ const cursor = cursorRequest.result;
+              if (cursor) {
+                const block = cursor.value;
+                block.name = `/${block.name}`;
+                block.version = 0;
+                block.data = new Int8Array(block.data);
+                blocks.put(cursor.value);
+                cursor.continue();
+              } else {
+                complete();
+              }
+            });
+          });            
+          db.deleteObjectStore('database');
+          db.deleteObjectStore('spill');
+          db.deleteObjectStore('journal');
+          break;
+        default:
+          const error = new Error(`incompatible IDB database '${idbDatabaseName}' exists`);
+          reject(error);
+          throw error;
+      }
+    });
+    request.addEventListener('success', () => {
+      resolve(request.result);
+    });
+    request.addEventListener('error', () => {
+      reject(request.error);
+    });
+  });
 }

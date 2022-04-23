@@ -33,7 +33,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   if (params.has('clear')) {
     const dbNames = indexedDB.databases
       ? (await indexedDB.databases()).map(database => database.name)
-      : ['sqlite', 'idb-relaxed'];
+      : ['sqlite', 'idb-demo'];
     await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
     console.log('IndexedDB cleared by URL parameter');
   }
@@ -58,7 +58,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
-  sqlite3a.vfs_register(new IndexedDbVFS('idb-relaxed', { durability: 'relaxed' }));
+  sqlite3a.vfs_register(new IndexedDbVFS('idb-demo', { durability: 'relaxed' }));
 
   // Create the set of databases with respective runtime and VFS. For
   // each database we generate a template tag function that is used
@@ -118,7 +118,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
-  await addTag('idb', sqlite3a, 'idb-relaxed');
+  await addTag('idb', sqlite3a, 'idb-demo');
 
   // The selector widget determines the active template tag function.
   // It is also attached to the window so SQL queries can be easily
