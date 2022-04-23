@@ -30,17 +30,12 @@ const TESTS = [
 ];
 
 (async function() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('clear')) {
-    const dbNames = indexedDB.databases
-      ? (await indexedDB.databases()).map(database => database.name)
-      : ['benchmark'];
-    await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
-    console.log('IndexedDB cleared by URL parameter');
-  }
-})();
+  // Clear IndexedDB.
+  const dbNames = indexedDB.databases
+    ? (await indexedDB.databases()).map(database => database.name)
+    : ['benchmark', 'idb-benchmark', 'idb-benchmark-relaxed'];
+  await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
 
-(async function() {
   const [SQLiteModule, SQLiteAsyncModule] = await Promise.all([
     SQLiteESMFactory(),
     SQLiteAsyncESMFactory()
@@ -57,7 +52,8 @@ const TESTS = [
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
-  sqlite3a.vfs_register(new IndexedDbVFS());
+  sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark'));
+  sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark-relaxed', { durability: 'relaxed' }));
 
   /** @type {Array<[SQLiteAPI, string]>} */
   const configs = [
@@ -65,7 +61,8 @@ const TESTS = [
     [sqlite3s, 'memory'],
     [sqlite3a, 'memory'],
     [sqlite3a, 'memory-async'],
-    [sqlite3a, 'idb']
+    [sqlite3a, 'idb-benchmark'],
+    [sqlite3a, 'idb-benchmark-relaxed'],
   ];
 
   const button = document.getElementById('start');
