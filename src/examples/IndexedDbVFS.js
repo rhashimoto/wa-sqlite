@@ -4,6 +4,9 @@ import { WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const BLOCK_SIZE = 4096;
+const DEFAULT_OPTIONS = {
+  durability: "default"
+};
 
 function log(...args) {
   // console.debug(...args);
@@ -44,16 +47,17 @@ function log(...args) {
 // it possible to implement zero-store rollback journals because the
 // pre-transaction data can be restored from the database file.
 export class IndexedDbVFS extends VFS.Base {
-  name = 'idb';
-
+  #options;
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
   /** @type {Map<string, OpenedFileEntry>} */ #mapPathToFile = new Map();
 
   /** @type {IDBContext} */ #idb;
   #webLocks = new WebLocks();
 
-  constructor(idbDatabaseName = 'sqlite') {
+  constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
     super();
+    this.name = idbDatabaseName;
+    this.#options = options;
     const idbDatabase = new Promise((resolve, reject) => {
       const request = globalThis.indexedDB.open(idbDatabaseName, 5);
       request.addEventListener('upgradeneeded', event => {
@@ -78,7 +82,9 @@ export class IndexedDbVFS extends VFS.Base {
         reject(request.error);
       });
     });
-    this.#idb = new IDBContext(idbDatabase);
+    this.#idb = new IDBContext(idbDatabase, {
+      durability: this.#options.durability
+    });
   }
 
   xOpen(name, fileId, flags, pOutFlags) {
@@ -506,9 +512,9 @@ export class IndexedDbVFS extends VFS.Base {
           blocks.put(file.block0);
         });
 
-        // TODO: Consider a flag to optionally skip this sync to favor
-        // performance over durability.
-        await this.#idb.sync();
+        if (this.#options.durability !== 'relaxed') {
+          await this.#idb.sync();
+        }
       }
 
       if (file.changed?.size) {

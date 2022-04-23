@@ -11,6 +11,7 @@ function log(...args) {
 // to reuse transactions to minimize transaction overhead.
 export class IDBContext {
   /** @type {Promise<IDBDatabase>} */ #dbReady;
+  #txOptions;
 
   /** @type {IDBTransaction} */ #tx = null;
   /** @type {Promise<void>} */ #txComplete = null;
@@ -20,8 +21,9 @@ export class IDBContext {
   /**
    * @param {IDBDatabase|Promise<IDBDatabase>} idbDatabase
    */
-  constructor(idbDatabase) {
+  constructor(idbDatabase, txOptions = { durability: 'default' }) {
     this.#dbReady = Promise.resolve(idbDatabase);
+    this.#txOptions = txOptions;
   }
 
   /**
@@ -59,7 +61,8 @@ export class IDBContext {
     // Run the user function with a retry in case the transaction is invalid.
     for (let i = 0; i < 2; ++i) {
       if (!this.#tx) {
-        this.#tx = db.transaction(storeNames, mode);
+        // @ts-ignore
+        this.#tx = db.transaction(storeNames, mode, this.#txOptions);
         this.#txComplete = new Promise(resolve => {
           this.#tx.addEventListener('complete', event => {
             if (this.#tx === event.target) {
