@@ -29,10 +29,10 @@ function log(...args) {
  * @property {FileBlock} block0
  * 
  * Extra state for database files:
- * @property {Set<number>} [changed]
+ * @property {number[]} [journalPages]
+ * @property {Set<number>} [changedPages]
  * 
  * Extra state for journal files:
- * @property {number[]} [pageList]
  * @property {number} [cachedPageIndex]
  * @property {Int8Array} [cachedPageEntry]
  */
@@ -261,26 +261,27 @@ export class IndexedDbVFS extends VFS.Base {
       // The entry is typically read with three calls to xRead so it is
       // cached.
       const entryIndex = ((iOffset - sectorSize) / entrySize) | 0;
-      const pageIndex = file.pageList[entryIndex];
+      const pageIndex = dbFile.journalPages[entryIndex];
       if (file.cachedPageIndex !== pageIndex) {
         // Fetch file data. Note that the lower version bound is open,
         // so we don't read data from the current transaction.
         /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
-            [dbPath, pageIndex - 1, dbFile.block0.version],
-            [dbPath, pageIndex - 1, Infinity],
+            [dbPath, pageIndex, dbFile.block0.version],
+            [dbPath, pageIndex, Infinity],
             true, false));
         });
 
         // Build a rollback page entry, which contains the page index,
-        // the page data, and the page checksum.
+        // the page data, and the page checksum. In the journal the page
+        // index is 1-based.
         // https://www.sqlite.org/fileformat.html#the_rollback_journal
         const nonce = journalHeaderView.getUint32(12);
         const pageSize = dbFile.block0.data.length;
         this.cachedPageIndex = pageIndex;
         this.cachedPageEntry = new Int8Array(entrySize);
         const cachedPageView = new DataView(this.cachedPageEntry.buffer);
-        cachedPageView.setUint32(0, pageIndex);
+        cachedPageView.setUint32(0, pageIndex + 1); // 1-based
         this.cachedPageEntry.set(block.data, 4);
         cachedPageView.setUint32(entrySize - 4, this.#checksum(block.data, nonce, pageSize));
       }
@@ -334,9 +335,7 @@ export class IndexedDbVFS extends VFS.Base {
         blocks.put(block);
       });
     }
-
-    // Mark the block as changed.
-    file.changed?.add(blockIndex);
+    file.changedPages?.add(blockIndex);
     return VFS.SQLITE_OK;
   }
 
@@ -394,6 +393,7 @@ export class IndexedDbVFS extends VFS.Base {
             blocks.put(block);
           });
         }
+        file.changedPages?.add(blockIndex);
 
         bufferOffset += blockBytes;
         fileOffset += blockBytes;
@@ -425,14 +425,14 @@ export class IndexedDbVFS extends VFS.Base {
 
       if (file.block0.data[0]) {
         // This begins a new journalled transaction.
-        file.pageList = [];
+        dbFile.journalPages = [];
+        dbFile.changedPages = new Set();
         file.cachedPageIndex = -1;
         file.cachedPageEntry = null;
 
         // Decrement the database block0 version (lower number is newer).
         // Subsequent writes to the database will have this version.
         dbFile.block0.version--;
-        dbFile.changed = new Set([0]);
       }
     } else {
       // Extract and store page indices.
@@ -442,9 +442,11 @@ export class IndexedDbVFS extends VFS.Base {
       const entrySize = dbFile.block0.data.length + 8;
       if ((iOffset - sectorSize) % entrySize === 0) {
         // Store the page index for this page entry. The data is discarded.
+        // The page index in the journal data is 1-based.
         const entryIndex = (iOffset - sectorSize) / entrySize;
-        const pageIndex = new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0);
-        file.pageList[entryIndex] = pageIndex;
+        const pageIndex =
+          new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0) - 1;
+        dbFile.journalPages[entryIndex] = pageIndex;
       }
     }
 
@@ -485,24 +487,27 @@ export class IndexedDbVFS extends VFS.Base {
         this.#idb.run('readwrite', ({blocks})=> {
           blocks.put(file.block0);
         });
+        file.changedPages?.add(0);
 
         if (this.#options.durability !== 'relaxed') {
           await this.#idb.sync();
         }
       }
 
-      if (file.changed?.size) {
+      if (file.changedPages?.size) {
         // Purge superceded blocks. These blocks don't do anything harmful
         // other than take up space so removing them can be done whenever.
-        const changed = file.changed;
-        file.changed = null;
+        const journalPages = file.journalPages;
+        const changedPages = file.changedPages;
         const purge = () => {
-          this.#idb.run('readwrite', ({blocks}) => {
-            for (const index of changed) {
-              blocks.delete(IDBKeyRange.bound(
-                [file.path, index, version],
-                [file.path, index, Infinity],
-                true, false));
+          this.#idb.run('readwrite', async ({blocks}) => {
+            for (const pageIndex of journalPages) {
+              if (changedPages.has(pageIndex)) {
+                blocks.delete(IDBKeyRange.bound(
+                  [file.path, pageIndex, version],
+                  [file.path, pageIndex, Infinity],
+                  true, false));
+              }
             }
           });
         }
