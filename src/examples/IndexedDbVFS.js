@@ -80,7 +80,7 @@ export class IndexedDbVFS extends VFS.Base {
         // Read the first block, which also contains the file metadata.
         file.block0 = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
-            [file.path, 0, -Infinity],
+            [file.path, 0],
             [file.path, 0, Infinity]))
         });
         if (!file.block0) {
@@ -125,8 +125,8 @@ export class IndexedDbVFS extends VFS.Base {
         if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
           this.#idb.run('readwrite', ({blocks}) => {
             blocks.delete(IDBKeyRange.bound(
-              [file.path, 0],
-              [file.path, Infinity],
+              [file.path],
+              [file.path, []],
             ))
           });
         }
@@ -268,7 +268,7 @@ export class IndexedDbVFS extends VFS.Base {
         /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
             [dbPath, pageIndex - 1, dbFile.block0.version],
-            [dbPath, pageIndex, Infinity],
+            [dbPath, pageIndex - 1, Infinity],
             true, false));
         });
 
@@ -462,7 +462,7 @@ export class IndexedDbVFS extends VFS.Base {
 
     // Update metadata and delete all blocks beyond the file size. SQLite
     // calls this on a database file outside of any journal lifetime so it
-    // shouldn't remove that the journal might need.
+    // shouldn't remove blocks that the journal might need.
     const block0 = Object.assign({}, file.block0);
     const lastBlockIndex = Math.floor(file.block0.fileSize / file.block0.data.length);
     this.#idb.run('readwrite', ({blocks})=> {
@@ -602,8 +602,8 @@ export class IndexedDbVFS extends VFS.Base {
 
       const complete = this.#idb.run('readwrite', ({blocks}) => {
         return blocks.delete(IDBKeyRange.bound(
-          [path, 0],
-          [path, Infinity, Infinity]));
+          [path],
+          [path, []]));
       });
       if (syncDir) {
         await complete;
