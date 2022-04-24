@@ -4,8 +4,19 @@ import { WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const BLOCK_SIZE = 4096;
+
+/**
+ * @typedef VFSOptions
+ * @property {"default"|"strict"|"relaxed"} [durability]
+ * @property {"deferred"|"manual"} [purge]
+ * @property {number} [purgeAtLeast]
+ */
+
+/** @type {VFSOptions} */
 const DEFAULT_OPTIONS = {
-  durability: "default"
+  durability: "default",
+  purge: "deferred",
+  purgeAtLeast: 16
 };
 
 function log(...args) {
@@ -53,11 +64,12 @@ export class IndexedDbVFS extends VFS.Base {
 
   /** @type {IDBContext} */ #idb;
   #webLocks = new WebLocks();
+  /** @type {Set<string>} */ #pendingPurges = new Set();
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
     super();
     this.name = idbDatabaseName;
-    this.#options = options;
+    this.#options = Object.assign({}, DEFAULT_OPTIONS, options);
     this.#idb = new IDBContext(openDatabase(idbDatabaseName), {
       durability: this.#options.durability
     });
@@ -98,6 +110,7 @@ export class IndexedDbVFS extends VFS.Base {
             // Write metadata block to IndexedDB.
             if (!this.#isJournal(file)) {
               this.#idb.run('readwrite', ({blocks}) => blocks.put(file.block0));
+              this.purge(file.path);
               await this.#idb.sync();
             }
           } else {
@@ -482,42 +495,37 @@ export class IndexedDbVFS extends VFS.Base {
       // Write block 0. For database files (the only files where version
       // changes) this makes all the changes at the new version publicly
       // visible.
-      const version = file.block0.version;
       if (!this.#isJournal(file)) {
-        this.#idb.run('readwrite', ({blocks})=> {
+        this.#idb.run('readwrite', async ({blocks})=> {
           blocks.put(file.block0);
+
+          // Update purge state if necessary.
+          const changedPages = file.changedPages;
+          if (changedPages) {
+            // Blocks to purge are saved in a special IndexedDB object with
+            // an "index" of "purge".
+            const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
+              name: file.path,
+              index: 'purge',
+              version: 0,
+              data: new Map()
+            };
+
+            // journalPages are pre-existing pages that *may* have been
+            // overwritten. changedPages are written pages. The intersection
+            // of these collections need to be purged.
+            for (const pageIndex of file.journalPages) {
+              if (changedPages.has(pageIndex)) {
+                purgeBlock.data.set(pageIndex, file.block0.version);
+              }
+            }
+            blocks.put(purgeBlock);
+            this.#maybePurge(file.path, purgeBlock.data.size);
+          }
         });
-        file.changedPages?.add(0);
 
         if (this.#options.durability !== 'relaxed') {
           await this.#idb.sync();
-        }
-      }
-
-      if (file.changedPages?.size) {
-        // Purge superceded blocks. These blocks don't do anything harmful
-        // other than take up space so removing them can be done whenever.
-        const journalPages = file.journalPages;
-        const changedPages = file.changedPages;
-        const purge = () => {
-          this.#idb.run('readwrite', async ({blocks}) => {
-            for (const pageIndex of journalPages) {
-              if (changedPages.has(pageIndex)) {
-                blocks.delete(IDBKeyRange.bound(
-                  [file.path, pageIndex, version],
-                  [file.path, pageIndex, Infinity],
-                  true, false));
-              }
-            }
-          });
-        }
-
-        // Use the idle callback if supported.
-        // TODO: Add more control of purge scheduling.
-        if (globalThis.requestIdleCallback) {
-          globalThis.requestIdleCallback(purge);
-        } else {
-          purge();
         }
       }
       return VFS.SQLITE_OK;
@@ -613,6 +621,55 @@ export class IndexedDbVFS extends VFS.Base {
       }
       return VFS.SQLITE_OK;
     });
+  }
+
+  /**
+   * Purge obsolete blocks from a database file.
+   * @param {string} name 
+   */
+  purge(name) {
+    const start = Date.now();
+    const path = new URL(name, 'file://localhost/').pathname;
+    this.#idb.run('readwrite', async ({blocks}) => {
+      const purgeBlock = await blocks.get([path, 'purge', 0]);
+      if (purgeBlock) {
+        for (const [pageIndex, version] of purgeBlock.data) {
+          blocks.delete(IDBKeyRange.bound(
+            [path, pageIndex, version],
+            [path, pageIndex, Infinity],
+            true, false));
+        }
+        await blocks.delete([path, 'purge', 0]);
+      }
+      log(`purge ${name} ${purgeBlock?.data.size ?? 0} pages in ${Date.now() - start} ms`);
+    });
+    }
+
+  /**
+   * Conditionally schedule a purge task.
+   * @param {string} name 
+   * @param {number} nPages 
+   */
+  #maybePurge(name, nPages) {
+    if (this.#options.purge === 'manual' ||
+        this.#pendingPurges.has(name) ||
+        nPages < this.#options.purgeAtLeast) {
+      // No purge needed.
+      return;
+    }
+    
+    if (globalThis.requestIdleCallback) {
+      globalThis.requestIdleCallback(() => {
+        this.purge(name);
+        this.#pendingPurges.delete(name)
+      });
+    } else {
+      setTimeout(() => {
+        this.purge(name);
+        this.#pendingPurges.delete(name)
+      });
+    }
+    this.#pendingPurges.add(name);
   }
 
   /**
