@@ -412,46 +412,44 @@ export class IndexedDbVFS extends VFS.Base {
    * @param {number} iOffset 
    */
   #xWriteJournal(file, pData, iOffset) {
-    return this.handleAsync(async () => {
-      log(`xWrite (journal) ${file.path} ${pData.size} ${iOffset}`);
+    log(`xWrite (journal) ${file.path} ${pData.size} ${iOffset}`);
 
-      // Get the associated opened database file.
-      const dbPath = this.#getJournalDatabasePath(file);
-      const dbFile = this.#mapPathToFile.get(dbPath);
+    // Get the associated opened database file.
+    const dbPath = this.#getJournalDatabasePath(file);
+    const dbFile = this.#mapPathToFile.get(dbPath);
 
-      if (iOffset === 0) {
-        // Writing the journal header. This is the only journal data saved.
-        console.assert(pData.value.length <= file.block0.data.length, 'unexpected write');
-        file.block0.data.set(pData.value.subarray(0, file.block0.data.length));
+    if (iOffset === 0) {
+      // Writing the journal header. This is the only journal data saved.
+      console.assert(pData.value.length <= file.block0.data.length, 'unexpected write');
+      file.block0.data.set(pData.value.subarray(0, file.block0.data.length));
 
-        if (file.block0.data[0]) {
-          // This begins a new journalled transaction.
-          file.pageList = [];
-          file.cachedPageIndex = -1;
-          file.cachedPageEntry = null;
+      if (file.block0.data[0]) {
+        // This begins a new journalled transaction.
+        file.pageList = [];
+        file.cachedPageIndex = -1;
+        file.cachedPageEntry = null;
 
-          // Decrement the database block0 version (lower number is newer).
-          // Subsequent writes to the database will have this version.
-          dbFile.block0.version--;
-          dbFile.changed = new Set([0]);
-        }
-      } else {
-        // Extract and store page indices.
-        // See https://www.sqlite.org/fileformat.html#the_rollback_journal
-        const view = new DataView(file.block0.data.buffer);
-        const sectorSize = view.getUint32(20);
-        const entrySize = dbFile.block0.data.length + 8;
-        if ((iOffset - sectorSize) % entrySize === 0) {
-          // Store the page index for this page entry. The data is discarded.
-          const entryIndex = (iOffset - sectorSize) / entrySize;
-          const pageIndex = new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0);
-          file.pageList[entryIndex] = pageIndex;
-        }
+        // Decrement the database block0 version (lower number is newer).
+        // Subsequent writes to the database will have this version.
+        dbFile.block0.version--;
+        dbFile.changed = new Set([0]);
       }
+    } else {
+      // Extract and store page indices.
+      // See https://www.sqlite.org/fileformat.html#the_rollback_journal
+      const view = new DataView(file.block0.data.buffer);
+      const sectorSize = view.getUint32(20);
+      const entrySize = dbFile.block0.data.length + 8;
+      if ((iOffset - sectorSize) % entrySize === 0) {
+        // Store the page index for this page entry. The data is discarded.
+        const entryIndex = (iOffset - sectorSize) / entrySize;
+        const pageIndex = new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0);
+        file.pageList[entryIndex] = pageIndex;
+      }
+    }
 
-      file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
-      return VFS.SQLITE_OK;
-    });
+    file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
+    return VFS.SQLITE_OK;
   }
 
   xTruncate(fileId, iSize) {
