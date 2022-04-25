@@ -3,7 +3,7 @@ import * as VFS from '../VFS.js';
 import { WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
-const BLOCK_SIZE = 4096;
+const SECTOR_SIZE = 512;
 
 /**
  * @typedef VFSOptions
@@ -102,8 +102,7 @@ export class IndexedDbVFS extends VFS.Base {
               name: file.path,
               index: 0,
               version: 0,
-              data: new Int8Array(BLOCK_SIZE),
-
+              data: null,
               fileSize: 0
             };
 
@@ -156,13 +155,6 @@ export class IndexedDbVFS extends VFS.Base {
         return this.#xReadJournal(file, pData, iOffset);
       }
 
-      const blockSize = file.block0.data.byteLength;
-      const blockIndex = (iOffset / blockSize) | 0;
-      if (iOffset + pData.size > (blockIndex + 1) * blockSize) {
-        // TODO: consider using #xReadGeneral for all cases.
-        return this.#xReadGeneral(file, pData, iOffset);
-      }
-  
       log(`xRead ${file.path} ${pData.size} ${iOffset}`);
 
       // Check for read past the end of data.
@@ -171,86 +163,54 @@ export class IndexedDbVFS extends VFS.Base {
         return VFS.SQLITE_IOERR_SHORT_READ;
       }
 
-      // Fetch from IndexedDB.
-      /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
-        return blocks.get(IDBKeyRange.bound(
-          [file.path, blockIndex, file.block0.version],
-          [file.path, blockIndex, Infinity]));
-      });
+      // Clip the requested read to the file boundary.
+      const bgn = Math.min(iOffset, file.block0.fileSize);
+      const end = Math.min(iOffset + pData.size, file.block0.fileSize);    
 
-      // Block 0 contains file metadata so it is cached.
-      if (blockIndex === 0) {
-        if (file.block0.version > block.version) {
-          // Incoming version is newer.
-          file.block0 = block;
-        } else {
-          block = file.block0;
+      let bytesRemaining = end - bgn;
+      let bufferOffset = 0;
+      let fileOffset = iOffset;
+      const blockSize = file.block0.data.byteLength;
+      while (bytesRemaining) {
+        const blockIndex = Math.floor(fileOffset / blockSize);
+        const blockOffset = fileOffset % blockSize;
+        const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
+
+        // Fetch from IndexedDB.
+        /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
+            return blocks.get(IDBKeyRange.bound(
+              [file.path, blockIndex, file.block0.version],
+              [file.path, blockIndex, Infinity]
+            ));
+          }) ?? file.block0;
+
+        // Block 0 contains file metadata so it is cached.
+        if (blockIndex === 0) {
+          if (file.block0.version > block.version) {
+            // Incoming version is newer.
+            file.block0 = block;
+          } else {
+            block = file.block0;
+          }
         }
+
+        pData.value.subarray(bufferOffset)
+          .set(block.data.subarray(blockOffset, blockOffset + blockBytes));
+
+        bufferOffset += blockBytes;
+        fileOffset += blockBytes;
+        bytesRemaining -= blockBytes;
       }
 
-      const blockOffset = iOffset % blockSize;
-      pData.value.set(block.data.subarray(blockOffset, blockOffset + pData.value.length));
-      return VFS.SQLITE_OK
+      if (bufferOffset !== pData.size) {
+        // Zero unused area of read buffer.
+        pData.value.subarray(bufferOffset).fill(0, pData.size - bufferOffset);
+        return VFS.SQLITE_IOERR_SHORT_READ;
+      }
+      return VFS.SQLITE_OK;
     });
   }
 
-  /**
-   * Handles unaligned reads that can cross block boundaries.
-   * @param {OpenedFileEntry} file 
-   * @param {*} pData 
-   * @param {number} iOffset 
-   * @returns {Promise<number>}
-   */
-  async #xReadGeneral(file, pData, iOffset) {
-    log(`xRead (slow path) ${file.path} ${pData.size} ${iOffset}`);
-
-    // Clip the requested read to the file boundary.
-    const bgn = Math.min(iOffset, file.block0.fileSize);
-    const end = Math.min(iOffset + pData.size, file.block0.fileSize);    
-
-    let bytesRemaining = end - bgn;
-    let bufferOffset = 0;
-    let fileOffset = iOffset;
-    const blockSize = file.block0.data.byteLength;
-    while (bytesRemaining) {
-      const blockIndex = Math.floor(fileOffset / blockSize);
-      const blockOffset = fileOffset % blockSize;
-      const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
-
-      // Fetch from IndexedDB.
-      /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(IDBKeyRange.bound(
-            [file.path, blockIndex, file.block0.version],
-            [file.path, blockIndex, Infinity]
-          ));
-        }) ?? file.block0;
-
-      // Block 0 contains file metadata so it is cached.
-      if (blockIndex === 0) {
-        if (file.block0.version > block.version) {
-          // Incoming version is newer.
-          file.block0 = block;
-        } else {
-          block = file.block0;
-        }
-      }
-
-      pData.value.subarray(bufferOffset)
-        .set(block.data.subarray(blockOffset, blockOffset + blockBytes));
-
-      bufferOffset += blockBytes;
-      fileOffset += blockBytes;
-      bytesRemaining -= blockBytes;
-    }
-
-    if (bufferOffset !== pData.size) {
-      // Zero unused area of read buffer.
-      pData.value.subarray(bufferOffset).fill(0, pData.size - bufferOffset);
-      return VFS.SQLITE_IOERR_SHORT_READ;
-    }
-    return VFS.SQLITE_OK;
-  }
-  
   /**
    * Reads rollback journal files. Journal data is not saved to IndexedDB
    * so it needs to be reconstituted from the previous version of the
@@ -266,14 +226,13 @@ export class IndexedDbVFS extends VFS.Base {
     const dbPath = this.#getJournalDatabasePath(file);
     const dbFile = this.#mapPathToFile.get(dbPath);
     const journalHeader = new DataView(file.block0.data.buffer);
-    const sectorSize = journalHeader.getUint32(20);
     const entrySize = dbFile.block0.data.length + 8;
-    if (iOffset >= sectorSize) {
+    if (iOffset >= SECTOR_SIZE) {
       // This read is past the header so it is reading a rollback page
       // entry. The entry must be regenerated by reading the database file.
       // The entry is typically read with three calls to xRead so it is
       // cached.
-      const entryIndex = ((iOffset - sectorSize) / entrySize) | 0;
+      const entryIndex = ((iOffset - SECTOR_SIZE) / entrySize) | 0;
       const pageIndex = dbFile.journalPages[entryIndex];
       if (file.cachedPageIndex !== pageIndex) {
         // Fetch file data. Note that the lower version bound is open,
@@ -300,7 +259,7 @@ export class IndexedDbVFS extends VFS.Base {
       }
     
       // Transfer the requested portion of the page entry.
-      const skip = (iOffset - sectorSize) % entrySize;
+      const skip = (iOffset - SECTOR_SIZE) % entrySize;
       pData.value.set(this.cachedPageEntry.subarray(skip, skip + pData.value.length));
     } else {
       // Read journal header.
@@ -325,55 +284,14 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   xWrite(fileId, pData, iOffset) {
-    // Special handling for journal files.
     const file = this.#mapIdToFile.get(fileId);
+    if (this.#isDatabase(file)) {
+      return this.#xWriteDatabase(file, pData, iOffset);
+    }
     if (this.#isJournal(file)) {
       return this.#xWriteJournal(file, pData, iOffset);
     }
 
-    // Check if read-modify-write path is needed.
-    const blockSize = file.block0.data.byteLength;
-    const blockIndex = (iOffset / blockSize) | 0;
-    if (iOffset !== blockIndex * blockSize ||
-        (iOffset < file.block0.fileSize && pData.size !== blockSize)) {
-      return this.#xWriteGeneral(file, pData, iOffset);
-    }
-
-    log(`xWrite ${file.path} ${pData.size} ${iOffset}`);
-
-    // Extend the file when writing past the end.
-    file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
-
-    // Copy data into a block.
-    /** @type {FileBlock} */ const block = blockIndex === 0 ?
-      file.block0 :
-      {
-        name: file.block0.name,
-        index: blockIndex,
-        version: file.block0.version,
-        data: new Int8Array(file.block0.data.length)
-      };
-    block.data.set(pData.value);
-
-    // Store the block to IndexedDB, except not block 0 yet. Block 0
-    // contains the published file version so it isn't written until
-    // the transaction is complete.
-    if (blockIndex) {
-      this.#idb.run('readwrite', ({blocks}) => {
-        blocks.put(block);
-      });
-    }
-    file.changedPages?.add(blockIndex);
-    return VFS.SQLITE_OK;
-  }
-
-  /**
-   * Handles unaligned, partial block, and multi-block writes.
-   * @param {OpenedFileEntry} file 
-   * @param {*} pData 
-   * @param {number} iOffset 
-   */
-  #xWriteGeneral(file, pData, iOffset) {
     return this.handleAsync(async () => {
       log(`xWrite (slow path) ${file.path} ${pData.size} ${iOffset}`);
 
@@ -434,6 +352,44 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   /**
+   * Writes database files.
+   * @param {OpenedFileEntry} file 
+   * @param {*} pData 
+   * @param {number} iOffset 
+   */
+  #xWriteDatabase(file, pData, iOffset) {
+    log(`xWrite (database) ${file.path} ${pData.size} ${iOffset}`);
+
+    // Database writes (and reads) should be a complete single page.
+    const blockSize = iOffset === 0 ? pData.value.length : file.block0.data.length;
+    const blockIndex = (iOffset / blockSize) | 0;
+    if (iOffset !== blockIndex * blockSize || pData.value.length !== blockSize) {
+      console.error('unexpected database write parameters');
+      return VFS.SQLITE_IOERR;
+    }
+
+    // Store the block to IndexedDB, except the cached block 0.
+    /** @type {FileBlock} */ const block = {
+      name: file.block0.name,
+      index: blockIndex,
+      version: file.block0.version,
+      data: pData.value.slice()
+    };
+    if (blockIndex) {
+      this.#idb.run('readwrite', ({blocks}) => {
+        blocks.put(block);
+      });
+    } else {
+      file.block0.data = block.data;
+    }
+
+    // Extend the file when writing past the end.
+    file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.size);
+    file.changedPages?.add(blockIndex);
+    return VFS.SQLITE_OK;
+  }
+
+  /**
    * Writes rollback journal files.
    * @param {OpenedFileEntry} file 
    * @param {*} pData 
@@ -448,9 +404,7 @@ export class IndexedDbVFS extends VFS.Base {
 
     if (iOffset === 0) {
       // Writing the journal header. This is the only journal data saved.
-      console.assert(pData.value.length <= file.block0.data.length, 'unexpected write');
-      file.block0.data.set(pData.value.subarray(0, file.block0.data.length));
-
+      file.block0.data = pData.value.slice();
       if (file.block0.data[0]) {
         // This begins a new journalled transaction.
         dbFile.journalPages = [];
@@ -465,15 +419,13 @@ export class IndexedDbVFS extends VFS.Base {
     } else {
       // Extract and store page indices.
       // See https://www.sqlite.org/fileformat.html#the_rollback_journal
-      const view = new DataView(file.block0.data.buffer);
-      const sectorSize = view.getUint32(20);
       const entrySize = dbFile.block0.data.length + 8;
-      if ((iOffset - sectorSize) % entrySize === 0) {
+      if ((iOffset - SECTOR_SIZE) % entrySize === 0) {
         // Store the page index for this page entry. The data is discarded.
         // The page index in the journal data is 1-based.
-        const entryIndex = (iOffset - sectorSize) / entrySize;
+        const entryIndex = (iOffset - SECTOR_SIZE) / entrySize;
         const pageIndex =
-          new DataView(pData.value.buffer, pData.value.byteOffset).getUint32(0) - 1;
+          new DataView(pData.value.buffer).getUint32(pData.value.byteOffset) - 1;
         dbFile.journalPages[entryIndex] = pageIndex;
       }
     }
@@ -594,8 +546,8 @@ export class IndexedDbVFS extends VFS.Base {
   }
 
   xSectorSize(fileId) {
-    log('xSectorSize', BLOCK_SIZE);
-    return BLOCK_SIZE;
+    log('xSectorSize');
+    return SECTOR_SIZE;
   }
 
   xDeviceCharacteristics(fileId) {
@@ -690,6 +642,13 @@ export class IndexedDbVFS extends VFS.Base {
   /**
    * @param {OpenedFileEntry} file 
    */
+   #isDatabase(file) {
+    return file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB)
+  }
+
+  /**
+   * @param {OpenedFileEntry} file 
+   */
   #isJournal(file) {
     return file.flags & (VFS.SQLITE_OPEN_MAIN_JOURNAL | VFS.SQLITE_OPEN_TEMP_JOURNAL)
   }
@@ -739,10 +698,10 @@ function openDatabase(idbDatabaseName) {
             keyPath: ['name', 'index', 'version']
           })
           blocks.createIndex('version', ['name', 'version']);
-          await new Promise(complete => {
+          await new Promise((complete, fail) => {
             const database = tx.objectStore('database');
             const cursorRequest = database.openCursor();
-            cursorRequest.addEventListener('success', async (event) => {
+            cursorRequest.addEventListener('success', () => {
               /** @type {IDBCursorWithValue} */ const cursor = cursorRequest.result;
               if (cursor) {
                 const block = cursor.value;
@@ -754,6 +713,9 @@ function openDatabase(idbDatabaseName) {
               } else {
                 complete();
               }
+            });
+            cursorRequest.addEventListener('error', () => {
+              fail(cursorRequest.error);
             });
           });            
           db.deleteObjectStore('database');
