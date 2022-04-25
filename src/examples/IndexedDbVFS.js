@@ -44,6 +44,7 @@ function log(...args) {
  * @property {Set<number>} [changedPages]
  * 
  * Extra state for journal files:
+ * @property {number} [rollbackVersion]
  * @property {number} [cachedPageIndex]
  * @property {Int8Array} [cachedPageEntry]
  */
@@ -236,13 +237,11 @@ export class IndexedDbVFS extends VFS.Base {
       const entryIndex = ((iOffset - SECTOR_SIZE) / entrySize) | 0;
       const pageIndex = dbFile.journalPages[entryIndex];
       if (file.cachedPageIndex !== pageIndex) {
-        // Fetch file data. Note that the lower version bound is open,
-        // so we don't read data from the current transaction.
+        // Fetch original file data.
         /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
-            [dbPath, pageIndex, dbFile.block0.version],
-            [dbPath, pageIndex, Infinity],
-            true, false));
+            [dbPath, pageIndex, file.rollbackVersion],
+            [dbPath, pageIndex, Infinity]));
         });
 
         // Build a rollback page entry, which contains the page index,
@@ -391,11 +390,11 @@ export class IndexedDbVFS extends VFS.Base {
 
     if (iOffset === 0) {
       // Writing the journal header. This is the only journal data saved.
-      file.block0.data = pData.value.slice();
-      if (file.block0.data[0]) {
+      if (pData.value[0] && !file.block0.data?.[0]) {
         // This begins a new journalled transaction.
         dbFile.journalPages = [];
         dbFile.changedPages = new Set();
+        file.rollbackVersion = dbFile.block0.version;
         file.cachedPageIndex = -1;
         file.cachedPageEntry = null;
 
@@ -403,16 +402,12 @@ export class IndexedDbVFS extends VFS.Base {
         // Subsequent writes to the database will have this version.
         dbFile.block0.version--;
       }
+      file.block0.data = pData.value.slice();
     } else if (iOffset < SECTOR_SIZE) {
       // This is probably preparation to append another journal (possibly
       // for SAVEPOINT) which is unsupported.
       console.error('unexpected write to journal header');
-      this.#idb.run('readonly', async ({blocks}) => {
-        dbFile.block0 = await blocks.get(IDBKeyRange.bound(
-          [dbFile.path, 0, dbFile.block0.version],
-          [dbFile.path, 0, Infinity],
-          true, false));
-      });
+      this.#restoreBlock0(dbFile, file.rollbackVersion);
       return VFS.SQLITE_IOERR;
     } else {
       // Extract and store page indices.
@@ -438,16 +433,18 @@ export class IndexedDbVFS extends VFS.Base {
 
     file.block0.fileSize = iSize;
 
-    // Update metadata and delete all blocks beyond the file size. SQLite
-    // calls this on a database file outside of any journal lifetime so it
-    // shouldn't remove blocks that the journal might need.
+    // Update metadata and delete all blocks beyond the file size. We
+    // expect SQLite to call this outside any journal lifetime.
     const block0 = Object.assign({}, file.block0);
-    const lastBlockIndex = Math.floor(file.block0.fileSize / file.block0.data.length);
+    const lastBlockIndex = file.block0.fileSize ?
+      Math.floor(file.block0.fileSize / file.block0.data.length) :
+      0;
     this.#idb.run('readwrite', ({blocks})=> {
       blocks.put(block0);
       blocks.delete(IDBKeyRange.bound(
         [file.path, lastBlockIndex, Infinity],
-        [file.path, Infinity, Infinity]));
+        [file.path, Infinity, Infinity],
+        true, false));
     });
     return VFS.SQLITE_OK;
   }
@@ -456,6 +453,16 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
       log(`xSync ${file.path} ${flags}`);
+
+      // Don't accept changes to the page size.
+      if (file.block0.fileSize && this.#isDatabase(file)) {
+        const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
+        const pageSize = view.getUint16(16);
+        if (pageSize !== file.block0.data.length) {
+          console.error('unsupported page size change');
+          return VFS.SQLITE_IOERR_VNODE;
+        }
+      }
 
       // Write block 0. For database files (the only files where version
       // changes) this makes all the changes at the new version publicly
@@ -656,6 +663,14 @@ export class IndexedDbVFS extends VFS.Base {
    */
   #getJournalDatabasePath(file) {
     return file.path.replace(/-journal$/, '');
+  }
+
+  #restoreBlock0(file, version) {
+    return this.#idb.run('readonly', async ({blocks}) => {
+      file.block0 = await blocks.get(IDBKeyRange.bound(
+        [file.path, 0, version],
+        [file.path, 0, Infinity]));
+    });
   }
 
   /**
