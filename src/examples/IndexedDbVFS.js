@@ -265,8 +265,8 @@ export class IndexedDbVFS extends VFS.Base {
 
     const dbPath = this.#getJournalDatabasePath(file);
     const dbFile = this.#mapPathToFile.get(dbPath);
-    const journalHeaderView = new DataView(file.block0.data.buffer);
-    const sectorSize = journalHeaderView.getUint32(20);
+    const journalHeader = new DataView(file.block0.data.buffer);
+    const sectorSize = journalHeader.getUint32(20);
     const entrySize = dbFile.block0.data.length + 8;
     if (iOffset >= sectorSize) {
       // This read is past the header so it is reading a rollback page
@@ -289,7 +289,7 @@ export class IndexedDbVFS extends VFS.Base {
         // the page data, and the page checksum. In the journal the page
         // index is 1-based.
         // https://www.sqlite.org/fileformat.html#the_rollback_journal
-        const nonce = journalHeaderView.getUint32(12);
+        const nonce = journalHeader.getUint32(12);
         const pageSize = dbFile.block0.data.length;
         this.cachedPageIndex = pageIndex;
         this.cachedPageEntry = new Int8Array(entrySize);
@@ -304,6 +304,21 @@ export class IndexedDbVFS extends VFS.Base {
       pData.value.set(this.cachedPageEntry.subarray(skip, skip + pData.value.length));
     } else {
       // Read journal header.
+      const journalHeader = new DataView(file.block0.data.buffer);
+      const pageCount = journalHeader.getInt32(8);
+      if (pageCount !== -1) {
+        // A pageCount that is not -1 means there is additional data past
+        // the page entries, possibly a super-journal name or additional
+        // journals. These journal file augmentations are not supported.
+        console.warn('aborting due to unsupported journal data');
+        dbFile.block0 = await this.#idb.run('readonly', ({blocks}) => {
+          return blocks.get(IDBKeyRange.bound(
+            [dbFile.path, 0, dbFile.block0.version],
+            [dbFile.path, 0, Infinity],
+            true, false));
+        });
+        return VFS.SQLITE_IOERR;
+      }
       pData.value.set(file.block0.data.subarray(iOffset, iOffset + pData.size));
     }
     return VFS.SQLITE_OK;
