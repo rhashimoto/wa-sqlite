@@ -35,6 +35,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
 
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
+      if (name === null) name = `null_${fileId}`;
       log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
 
       try {

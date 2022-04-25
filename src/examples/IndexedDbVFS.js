@@ -77,6 +77,7 @@ export class IndexedDbVFS extends VFS.Base {
 
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
+      if (name === null) name = `null_${fileId}`;
       log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
 
       try {
@@ -170,7 +171,7 @@ export class IndexedDbVFS extends VFS.Base {
       let bytesRemaining = end - bgn;
       let bufferOffset = 0;
       let fileOffset = iOffset;
-      const blockSize = file.block0.data.byteLength;
+      const blockSize = file.block0.data ? file.block0.data.byteLength : pData.value.length;
       while (bytesRemaining) {
         const blockIndex = Math.floor(fileOffset / blockSize);
         const blockOffset = fileOffset % blockSize;
@@ -263,21 +264,6 @@ export class IndexedDbVFS extends VFS.Base {
       pData.value.set(this.cachedPageEntry.subarray(skip, skip + pData.value.length));
     } else {
       // Read journal header.
-      const journalHeader = new DataView(file.block0.data.buffer);
-      const pageCount = journalHeader.getInt32(8);
-      if (pageCount !== -1) {
-        // A pageCount that is not -1 means there is additional data past
-        // the page entries, possibly a super-journal name or additional
-        // journals. These journal file augmentations are not supported.
-        console.warn('aborting due to unsupported journal data');
-        dbFile.block0 = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(IDBKeyRange.bound(
-            [dbFile.path, 0, dbFile.block0.version],
-            [dbFile.path, 0, Infinity],
-            true, false));
-        });
-        return VFS.SQLITE_IOERR;
-      }
       pData.value.set(file.block0.data.subarray(iOffset, iOffset + pData.size));
     }
     return VFS.SQLITE_OK;
@@ -361,9 +347,10 @@ export class IndexedDbVFS extends VFS.Base {
     log(`xWrite (database) ${file.path} ${pData.size} ${iOffset}`);
 
     // Database writes (and reads) should be a complete single page.
-    const blockSize = iOffset === 0 ? pData.value.length : file.block0.data.length;
+    const blockSize = pData.value.length;
     const blockIndex = (iOffset / blockSize) | 0;
-    if (iOffset !== blockIndex * blockSize || pData.value.length !== blockSize) {
+    if (iOffset !== blockIndex * blockSize ||
+        (file.block0.data && blockSize !== file.block0.data.length)) {
       console.error('unexpected database write parameters');
       return VFS.SQLITE_IOERR;
     }
@@ -416,6 +403,17 @@ export class IndexedDbVFS extends VFS.Base {
         // Subsequent writes to the database will have this version.
         dbFile.block0.version--;
       }
+    } else if (iOffset < SECTOR_SIZE) {
+      // This is probably preparation to append another journal (possibly
+      // for SAVEPOINT) which is unsupported.
+      console.error('unexpected write to journal header');
+      this.#idb.run('readonly', async ({blocks}) => {
+        dbFile.block0 = await blocks.get(IDBKeyRange.bound(
+          [dbFile.path, 0, dbFile.block0.version],
+          [dbFile.path, 0, Infinity],
+          true, false));
+      });
+      return VFS.SQLITE_IOERR;
     } else {
       // Extract and store page indices.
       // See https://www.sqlite.org/fileformat.html#the_rollback_journal
