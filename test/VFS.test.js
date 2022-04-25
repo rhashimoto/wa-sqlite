@@ -510,7 +510,7 @@ function shared(ready) {
 
   it('time', async function() {
     const result = await sql`SELECT datetime('now', 'localtime');`;
-    const date = new Date(result[0][0]);
+    const date = new Date(result[0][0].replace(' ', 'T'));
     expect(Math.abs(date.getTime() - Date.now())).toBeLessThan(1000);
   });
 

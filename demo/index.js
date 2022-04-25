@@ -70,7 +70,10 @@ SELECT * FROM goog LIMIT 5;
   const mapNameToTag = new Map();
 
   async function addTag(key, /** @type {SQLiteAPI}*/sqlite3, vfs) {
-    const db = await sqlite3.open_v2(vfs, undefined, vfs);
+    const db = await sqlite3.open_v2(
+      vfs,
+      SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
+      vfs);
     const t = tag(sqlite3, db);
     mapNameToTag.set(key, t);
 
