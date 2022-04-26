@@ -665,14 +665,14 @@ export class IndexedDbVFS extends VFS.Base {
    * @param {OpenedFileEntry} file 
    */
   #isDatabase(file) {
-    return file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB)
+    return file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB);
   }
 
   /**
    * @param {OpenedFileEntry} file 
    */
   #isJournal(file) {
-    return file.flags & (VFS.SQLITE_OPEN_MAIN_JOURNAL | VFS.SQLITE_OPEN_TEMP_JOURNAL)
+    return file.flags & VFS.SQLITE_OPEN_MAIN_JOURNAL;
   }
 
   /**
