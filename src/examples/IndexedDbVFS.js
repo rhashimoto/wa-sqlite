@@ -4,6 +4,7 @@ import { WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const SECTOR_SIZE = 512;
+const GENERIC_FILE_BLOCK_SIZE = 4096;
 
 /**
  * @typedef VFSOptions
@@ -280,11 +281,23 @@ export class IndexedDbVFS extends VFS.Base {
     return this.handleAsync(async () => {
       log(`xWrite (slow path) ${file.path} ${pData.size} ${iOffset}`);
 
+      // Determine the appropriate block size for this file.
+      let blockSize = file.block0.data?.byteLength;
+      if (!blockSize) {
+        const fileType = file.flags & VFS.FILE_TYPE_MASK;
+        if (fileType === VFS.SQLITE_OPEN_MAIN_DB ||
+            fileType === VFS.SQLITE_OPEN_TEMP_DB) {
+          // This is a database file, so all writes will be the page size.
+          blockSize = pData.value.length;
+        } else {
+          blockSize = GENERIC_FILE_BLOCK_SIZE;
+        }
+      }
+
       let bufferOffset = 0;
       let fileOffset = iOffset;
       let bytesRemaining = pData.value.length;
-      const blockSize = file.block0.data.byteLength;
-      const lastBlockIndex = Math.floor(file.block0.fileSize / blockSize);
+      const lastBlockIndex = Math.max(Math.ceil(file.block0.fileSize / blockSize) - 1, 0);
       while (bytesRemaining) {
         const blockIndex = Math.floor(fileOffset / blockSize);
         const blockOffset = fileOffset % blockSize;
@@ -295,7 +308,8 @@ export class IndexedDbVFS extends VFS.Base {
         if (blockIndex === 0) {
           // Block 0 is always cached.
           block = file.block0;
-        } else if (blockIndex <= lastBlockIndex && blockBytes < blockSize) {
+          block.data = block.data || new Int8Array(blockSize);
+        } else if (blockIndex <= lastBlockIndex && blockBytes !== blockSize) {
           // Fetch from IndexedDB.
           block = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(IDBKeyRange.bound(
@@ -303,13 +317,16 @@ export class IndexedDbVFS extends VFS.Base {
               [file.path, blockIndex, Infinity]
             ));
           });
-        } else {
-          // Any existing data is overwritten so no read is necessary.
+        }
+        
+        if (!block) {
+          // Either no data was read (SQLite does not always write
+          // sequentially) or the write is beyond EOF.
           block = {
             name: file.block0.name,
             index: blockIndex,
             version: file.block0.version,
-            data: new Int8Array(file.block0.data.length)
+            data: new Int8Array(blockSize)
           };
         }
 
@@ -647,15 +664,15 @@ export class IndexedDbVFS extends VFS.Base {
   /**
    * @param {OpenedFileEntry} file 
    */
-   #isDatabase(file) {
-    return file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB)
+  #isDatabase(file) {
+    return file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB);
   }
 
   /**
    * @param {OpenedFileEntry} file 
    */
   #isJournal(file) {
-    return file.flags & (VFS.SQLITE_OPEN_MAIN_JOURNAL | VFS.SQLITE_OPEN_TEMP_JOURNAL)
+    return file.flags & VFS.SQLITE_OPEN_MAIN_JOURNAL;
   }
 
   /**
