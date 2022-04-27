@@ -9,6 +9,7 @@ import * as SQLite from '../src/sqlite-api.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
 import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
 
@@ -58,6 +59,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
+  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-demo', { durability: 'relaxed' }));
   sqlite3a.vfs_register(new IndexedDbVFS('idb-demo', { durability: 'relaxed' }));
 
   // Create the set of databases with respective runtime and VFS. For
@@ -121,6 +123,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   await addTag('unix', sqlite3s, 'unix');
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
+  await addTag('idb-minimal', sqlite3a, 'idb-minimal-demo');
   await addTag('idb', sqlite3a, 'idb-demo');
 
   // The selector widget determines the active template tag function.
