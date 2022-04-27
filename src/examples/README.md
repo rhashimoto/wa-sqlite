@@ -9,7 +9,7 @@ These are minimal working examples for writing a VFS. First-time implementers sh
 probably start by looking at these classes, as well as the
 [SQLite documentation](https://www.sqlite.org/vfs.html).
 
-### IndexedDbVFS
+### IDBVersionedVFS
 This is a VFS implementation that stores
 [versioned blocks on IndexedDB](https://github.com/rhashimoto/wa-sqlite/discussions/37).
 
@@ -18,7 +18,7 @@ This is another implementation of VFS on IndexedDB that provides less performanc
 but is smaller, simpler, and more general. It is described
 [here](https://github.com/rhashimoto/wa-sqlite/discussions/46).
 
-The databases produced by IndexedDbVFS and IDBMinimalVFS are _not_ compatible.
+The databases produced by IDBVersionedVFS and IDBMinimalVFS are _not_ compatible.
 
 ### OriginPrivateFileSystemVFS
 This VFS uses the proposed

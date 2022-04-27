@@ -8,7 +8,7 @@ import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
 import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
 import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
@@ -63,7 +63,7 @@ SELECT * FROM goog LIMIT 5;
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-demo', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IndexedDbVFS('idb-demo', { durability: 'relaxed' }));
+  sqlite3a.vfs_register(new IDBVersionedVFS('idb-demo', { durability: 'relaxed' }));
 
   // Create the set of databases with respective runtime and VFS. For
   // each database we generate a template tag function that is used

@@ -8,7 +8,7 @@ import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
 import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 
 const TESTS = [
@@ -55,8 +55,8 @@ const TESTS = [
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark'));
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark-relaxed', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark'));
-  sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark-relaxed', { durability: 'relaxed' }));
+  sqlite3a.vfs_register(new IDBVersionedVFS('idb-benchmark'));
+  sqlite3a.vfs_register(new IDBVersionedVFS('idb-benchmark-relaxed', { durability: 'relaxed' }));
 
   /** @type {Array<[SQLiteAPI, string]>} */
   const configs = [
