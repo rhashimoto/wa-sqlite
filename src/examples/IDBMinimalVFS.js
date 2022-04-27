@@ -1,5 +1,6 @@
 import * as VFS from '../VFS.js';
 import { IDBContext } from './IDBContext.js';
+import { WebLocks } from './WebLocks.js';
 
 function log(...args) {
   // console.debug(...args);
@@ -35,6 +36,7 @@ const DEFAULT_OPTIONS = { durability: "default" };
 export class IDBMinimalVFS extends VFS.Base {
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
   /** @type {IDBContext} */ #idb;
+  #webLocks = new WebLocks();
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
     super();
@@ -175,6 +177,25 @@ export class IDBMinimalVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
+  xLock(fileId, flags) {
+    return this.handleAsync(async () => {
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xLock ${file.path} ${flags}`);
+
+      await this.#webLocks.lock(file.path, flags);
+      return VFS.SQLITE_OK;
+    });
+  }
+
+  xUnlock(fileId, flags) {
+    return this.handleAsync(async () => {
+      const fileEntry = this.#mapIdToFile.get(fileId);
+      log(`xUnlock ${fileEntry.path} ${flags}`);
+
+      await this.#webLocks.unlock(fileEntry.path, flags);
+      return VFS.SQLITE_OK;
+    });
+  }
   xSectorSize(fileId) {
     log('xSectorSize');
     return 512;

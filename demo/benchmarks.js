@@ -9,6 +9,7 @@ import * as SQLite from '../src/sqlite-api.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 
 const TESTS = [
   test1,
@@ -52,6 +53,8 @@ const TESTS = [
   sqlite3s.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
+  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark'));
+  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark-relaxed', { durability: 'relaxed' }));
   sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark'));
   sqlite3a.vfs_register(new IndexedDbVFS('idb-benchmark-relaxed', { durability: 'relaxed' }));
 
@@ -61,6 +64,8 @@ const TESTS = [
     [sqlite3s, 'memory'],
     [sqlite3a, 'memory'],
     [sqlite3a, 'memory-async'],
+    [sqlite3a, 'idb-minimal-benchmark'],
+    [sqlite3a, 'idb-minimal-benchmark-relaxed'],
     [sqlite3a, 'idb-benchmark'],
     [sqlite3a, 'idb-benchmark-relaxed'],
   ];
