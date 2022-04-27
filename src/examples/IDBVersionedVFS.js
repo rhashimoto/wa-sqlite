@@ -59,7 +59,7 @@ function log(...args) {
 // easier to get the latest version using IndexedDB. This versioning makes
 // it possible to implement zero-store rollback journals because the
 // pre-transaction data can be restored from the database file.
-export class IndexedDbVFS extends VFS.Base {
+export class IDBVersionedVFS extends VFS.Base {
   #options;
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
   /** @type {Map<string, OpenedFileEntry>} */ #mapPathToFile = new Map();

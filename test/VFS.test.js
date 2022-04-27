@@ -3,7 +3,7 @@ import * as SQLite from '../src/sqlite-api.js';
 import * as VFS from '../src/VFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
-import { IndexedDbVFS } from '../src/examples/IndexedDbVFS.js';
+import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
 
 import GOOG from './GOOG.js';
 
@@ -548,7 +548,7 @@ describe('MemoryAsyncVFS', function() {
 });
 
 // Explore the IndexedDB filesystem without using SQLite.
-class ExploreIndexedDbVFS extends IndexedDbVFS {
+class ExploreIndexedDbVFS extends IDBVersionedVFS {
   constructor(dbName) {
     super(dbName);
   }
@@ -572,7 +572,7 @@ describe('IndexedDbVFS', function() {
     
     /** @type {SQLiteAPI} */
     const sqlite3 = await getSQLiteAsync();
-    const vfs = new IndexedDbVFS(IDB_DATABASE_NAME);
+    const vfs = new IDBVersionedVFS(IDB_DATABASE_NAME);
     sqlite3.vfs_register(vfs, false);
     resolveReady({ sqlite3 , vfs });
   });
