@@ -18,6 +18,8 @@ This is another implementation of VFS on IndexedDB that provides less performanc
 but is smaller, simpler, and more general. It is described
 [here](https://github.com/rhashimoto/wa-sqlite/discussions/46).
 
+The databases produced by IndexedDbVFS and IDBMinimalVFS are _not_ compatible.
+
 ### OriginPrivateFileSystemVFS
 This VFS uses the proposed
 [Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
