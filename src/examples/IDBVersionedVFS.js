@@ -466,51 +466,7 @@ export class IDBVersionedVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xSync ${file.path} ${flags}`);
 
-      // Don't accept changes to the page size.
-      if (file.block0.fileSize && this.#isDatabase(file)) {
-        const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
-        const pageSize = view.getUint16(16);
-        if (pageSize !== file.block0.data.length) {
-          console.error('unsupported page size change');
-          return VFS.SQLITE_IOERR_VNODE;
-        }
-      }
-
-      // Write block 0. For database files (the only files where version
-      // changes) this makes all the changes at the new version publicly
-      // visible.
       if (!this.#isJournal(file)) {
-        this.#idb.run('readwrite', async ({blocks})=> {
-
-          // Update purge state if necessary.
-          const changedPages = file.changedPages;
-          if (changedPages) {
-            file.block0.version--;
-            file.changedPages = null;
-
-            // Blocks to purge are saved in a special IndexedDB object with
-            // an "index" of "purge".
-            const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
-              name: file.path,
-              index: 'purge',
-              version: 0,
-              data: new Map()
-            };
-
-            // journalPages are pre-existing pages that *may* have been
-            // overwritten. changedPages are written pages. The intersection
-            // of these collections need to be purged.
-            for (const pageIndex of file.journalPages) {
-              if (changedPages.has(pageIndex)) {
-                purgeBlock.data.set(pageIndex, file.block0.version);
-              }
-            }
-            blocks.put(purgeBlock);
-            this.#maybePurge(file.path, purgeBlock.data.size);
-          }
-          blocks.put(file.block0);
-        });
-
         if (this.#options.durability !== 'relaxed') {
           await this.#idb.sync();
         }
@@ -549,7 +505,6 @@ export class IDBVersionedVFS extends VFS.Base {
           }
         });
       }
-
       return result;
     });
   }
@@ -573,6 +528,60 @@ export class IDBVersionedVFS extends VFS.Base {
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_SEQUENTIAL |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+  }
+
+  xFileControl(fileId, op, pArg) {
+    if (op === VFS.SQLITE_FCNTL_SYNC) {
+      // This opcode is called on database files immediately before xSync is
+      // or would have been called (i.e. even if PRAGMA synchronous=OFF).
+      // We use it to complete any outstanding transaction.
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xFileControl ${file.path} ${op}`);
+
+      // Don't accept changes to the page size.
+      if (file.block0.fileSize) {
+        const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
+        const pageSize = view.getUint16(16);
+        if (pageSize !== file.block0.data.length) {
+          console.error('unsupported page size change');
+          return VFS.SQLITE_IOERR_VNODE;
+        }
+      }
+
+      this.#idb.run('readwrite', async ({blocks})=> {
+        // Update purge state if necessary.
+        const changedPages = file.changedPages;
+        if (changedPages) {
+          file.block0.version--;
+          file.changedPages = null;
+
+          // Blocks to purge are saved in a special IndexedDB object with
+          // an "index" of "purge".
+          const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
+            name: file.path,
+            index: 'purge',
+            version: 0,
+            data: new Map()
+          };
+
+          // journalPages are pre-existing pages that *may* have been
+          // overwritten. changedPages are written pages. The intersection
+          // of these collections need to be purged.
+          for (const pageIndex of file.journalPages) {
+            if (changedPages.has(pageIndex)) {
+              purgeBlock.data.set(pageIndex, file.block0.version);
+            }
+          }
+          blocks.put(purgeBlock);
+          this.#maybePurge(file.path, purgeBlock.data.size);
+        }
+
+        // Publish block 0.
+        blocks.put(file.block0);
+      });
+      return VFS.SQLITE_OK;
+    }
+    return VFS.SQLITE_NOTFOUND;
   }
 
   xAccess(name, flags, pResOut) {
