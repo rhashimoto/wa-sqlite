@@ -45,7 +45,6 @@ function log(...args) {
  * @property {Set<number>} [changedPages]
  * 
  * Extra state for journal files:
- * @property {number} [rollbackVersion]
  * @property {number} [cachedPageIndex]
  * @property {Int8Array} [cachedPageEntry]
  */
@@ -180,12 +179,13 @@ export class IDBVersionedVFS extends VFS.Base {
         const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
 
         // Fetch from IndexedDB.
+        const version = file.block0.version - (file.changedPages?.size ? 1 : 0);
         /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(IDBKeyRange.bound(
-              [file.path, blockIndex, blockIndex !== 0 ? file.block0.version : -Infinity],
+              [file.path, blockIndex, version],
               [file.path, blockIndex, Infinity]
             ));
-          }) ?? file.block0;
+          });
 
         // Block 0 contains file metadata so it is cached.
         if (blockIndex === 0) {
@@ -241,7 +241,7 @@ export class IDBVersionedVFS extends VFS.Base {
         // Fetch original file data.
         /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
-            [dbPath, pageIndex, file.rollbackVersion],
+            [dbPath, pageIndex, dbFile.block0.version],
             [dbPath, pageIndex, Infinity]));
         });
 
@@ -375,7 +375,7 @@ export class IDBVersionedVFS extends VFS.Base {
     /** @type {FileBlock} */ const block = {
       name: file.block0.name,
       index: blockIndex,
-      version: file.block0.version,
+      version: file.block0.version - 1,
       data: pData.value.slice()
     };
     if (blockIndex) {
@@ -411,20 +411,15 @@ export class IDBVersionedVFS extends VFS.Base {
         // This begins a new journalled transaction.
         dbFile.journalPages = [];
         dbFile.changedPages = new Set();
-        file.rollbackVersion = dbFile.block0.version;
         file.cachedPageIndex = -1;
         file.cachedPageEntry = null;
-
-        // Decrement the database block0 version (lower number is newer).
-        // Subsequent writes to the database will have this version.
-        dbFile.block0.version--;
       }
       file.block0.data = pData.value.slice();
     } else if (iOffset < SECTOR_SIZE) {
       // This is probably preparation to append another journal (possibly
       // for SAVEPOINT) which is unsupported.
       console.error('unexpected write to journal header');
-      this.#restoreBlock0(dbFile, file.rollbackVersion);
+      this.#restoreBlock0(dbFile, dbFile.block0.version);
       return VFS.SQLITE_IOERR;
     } else {
       // Extract and store page indices.
@@ -486,11 +481,13 @@ export class IDBVersionedVFS extends VFS.Base {
       // visible.
       if (!this.#isJournal(file)) {
         this.#idb.run('readwrite', async ({blocks})=> {
-          blocks.put(file.block0);
 
           // Update purge state if necessary.
           const changedPages = file.changedPages;
           if (changedPages) {
+            file.block0.version--;
+            file.changedPages = null;
+
             // Blocks to purge are saved in a special IndexedDB object with
             // an "index" of "purge".
             const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
@@ -511,6 +508,7 @@ export class IDBVersionedVFS extends VFS.Base {
             blocks.put(purgeBlock);
             this.#maybePurge(file.path, purgeBlock.data.size);
           }
+          blocks.put(file.block0);
         });
 
         if (this.#options.durability !== 'relaxed') {
