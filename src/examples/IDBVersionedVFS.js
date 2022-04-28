@@ -45,7 +45,6 @@ function log(...args) {
  * @property {Set<number>} [changedPages]
  * 
  * Extra state for journal files:
- * @property {number} [rollbackVersion]
  * @property {number} [cachedPageIndex]
  * @property {Int8Array} [cachedPageEntry]
  */
@@ -180,12 +179,13 @@ export class IDBVersionedVFS extends VFS.Base {
         const blockBytes = Math.min(blockSize - blockOffset, bytesRemaining);
 
         // Fetch from IndexedDB.
+        const version = file.block0.version - (file.changedPages?.size ? 1 : 0);
         /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(IDBKeyRange.bound(
-              [file.path, blockIndex, file.block0.version],
+              [file.path, blockIndex, version],
               [file.path, blockIndex, Infinity]
             ));
-          }) ?? file.block0;
+          });
 
         // Block 0 contains file metadata so it is cached.
         if (blockIndex === 0) {
@@ -241,7 +241,7 @@ export class IDBVersionedVFS extends VFS.Base {
         // Fetch original file data.
         /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(IDBKeyRange.bound(
-            [dbPath, pageIndex, file.rollbackVersion],
+            [dbPath, pageIndex, dbFile.block0.version],
             [dbPath, pageIndex, Infinity]));
         });
 
@@ -375,7 +375,7 @@ export class IDBVersionedVFS extends VFS.Base {
     /** @type {FileBlock} */ const block = {
       name: file.block0.name,
       index: blockIndex,
-      version: file.block0.version,
+      version: file.block0.version - 1,
       data: pData.value.slice()
     };
     if (blockIndex) {
@@ -411,20 +411,15 @@ export class IDBVersionedVFS extends VFS.Base {
         // This begins a new journalled transaction.
         dbFile.journalPages = [];
         dbFile.changedPages = new Set();
-        file.rollbackVersion = dbFile.block0.version;
         file.cachedPageIndex = -1;
         file.cachedPageEntry = null;
-
-        // Decrement the database block0 version (lower number is newer).
-        // Subsequent writes to the database will have this version.
-        dbFile.block0.version--;
       }
       file.block0.data = pData.value.slice();
     } else if (iOffset < SECTOR_SIZE) {
       // This is probably preparation to append another journal (possibly
       // for SAVEPOINT) which is unsupported.
       console.error('unexpected write to journal header');
-      this.#restoreBlock0(dbFile, file.rollbackVersion);
+      this.#restoreBlock0(dbFile, dbFile.block0.version);
       return VFS.SQLITE_IOERR;
     } else {
       // Extract and store page indices.
@@ -471,48 +466,7 @@ export class IDBVersionedVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xSync ${file.path} ${flags}`);
 
-      // Don't accept changes to the page size.
-      if (file.block0.fileSize && this.#isDatabase(file)) {
-        const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
-        const pageSize = view.getUint16(16);
-        if (pageSize !== file.block0.data.length) {
-          console.error('unsupported page size change');
-          return VFS.SQLITE_IOERR_VNODE;
-        }
-      }
-
-      // Write block 0. For database files (the only files where version
-      // changes) this makes all the changes at the new version publicly
-      // visible.
       if (!this.#isJournal(file)) {
-        this.#idb.run('readwrite', async ({blocks})=> {
-          blocks.put(file.block0);
-
-          // Update purge state if necessary.
-          const changedPages = file.changedPages;
-          if (changedPages) {
-            // Blocks to purge are saved in a special IndexedDB object with
-            // an "index" of "purge".
-            const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
-              name: file.path,
-              index: 'purge',
-              version: 0,
-              data: new Map()
-            };
-
-            // journalPages are pre-existing pages that *may* have been
-            // overwritten. changedPages are written pages. The intersection
-            // of these collections need to be purged.
-            for (const pageIndex of file.journalPages) {
-              if (changedPages.has(pageIndex)) {
-                purgeBlock.data.set(pageIndex, file.block0.version);
-              }
-            }
-            blocks.put(purgeBlock);
-            this.#maybePurge(file.path, purgeBlock.data.size);
-          }
-        });
-
         if (this.#options.durability !== 'relaxed') {
           await this.#idb.sync();
         }
@@ -536,24 +490,21 @@ export class IDBVersionedVFS extends VFS.Base {
 
       // Acquire the lock.
       const result = this.#webLocks.lock(file.path, flags);
-      if (flags === VFS.SQLITE_LOCK_RESERVED) {
+      if (flags === VFS.SQLITE_LOCK_RESERVED && !this.#isJournal(file)) {
         // Clear blocks from abandoned transactions, i.e. blocks with
         // lower (newer) versions than block 0. This is done on reserved
         // locking which is after changes by other connections can be made,
         // and before a journal file is initialized.
         this.#idb.run('readwrite', async ({blocks}) => {
-          const dbPath = this.#getJournalDatabasePath(file);
-          const dbFile = this.#mapPathToFile.get(dbPath);
           const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
-            [dbPath],
-            [dbPath, dbFile.block0.version],
+            [file.path],
+            [file.path, file.block0.version],
             false, true));
           for (const key of keys) {
             blocks.delete(key);
           }
         });
       }
-
       return result;
     });
   }
@@ -577,6 +528,60 @@ export class IDBVersionedVFS extends VFS.Base {
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_SEQUENTIAL |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+  }
+
+  xFileControl(fileId, op, pArg) {
+    if (op === VFS.SQLITE_FCNTL_SYNC) {
+      // This opcode is called on database files immediately before xSync is
+      // or would have been called (i.e. even if PRAGMA synchronous=OFF).
+      // We use it to complete any outstanding transaction.
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xFileControl ${file.path} ${op}`);
+
+      // Don't accept changes to the page size.
+      if (file.block0.fileSize) {
+        const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
+        const pageSize = view.getUint16(16);
+        if (pageSize !== file.block0.data.length) {
+          console.error('unsupported page size change');
+          return VFS.SQLITE_IOERR_VNODE;
+        }
+      }
+
+      this.#idb.run('readwrite', async ({blocks})=> {
+        // Update purge state if necessary.
+        const changedPages = file.changedPages;
+        if (changedPages) {
+          file.block0.version--;
+          file.changedPages = null;
+
+          // Blocks to purge are saved in a special IndexedDB object with
+          // an "index" of "purge".
+          const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
+            name: file.path,
+            index: 'purge',
+            version: 0,
+            data: new Map()
+          };
+
+          // journalPages are pre-existing pages that *may* have been
+          // overwritten. changedPages are written pages. The intersection
+          // of these collections need to be purged.
+          for (const pageIndex of file.journalPages) {
+            if (changedPages.has(pageIndex)) {
+              purgeBlock.data.set(pageIndex, file.block0.version);
+            }
+          }
+          blocks.put(purgeBlock);
+          this.#maybePurge(file.path, purgeBlock.data.size);
+        }
+
+        // Publish block 0.
+        blocks.put(file.block0);
+      });
+      return VFS.SQLITE_OK;
+    }
+    return VFS.SQLITE_NOTFOUND;
   }
 
   xAccess(name, flags, pResOut) {
