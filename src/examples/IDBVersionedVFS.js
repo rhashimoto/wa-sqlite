@@ -536,17 +536,15 @@ export class IDBVersionedVFS extends VFS.Base {
 
       // Acquire the lock.
       const result = this.#webLocks.lock(file.path, flags);
-      if (flags === VFS.SQLITE_LOCK_RESERVED) {
+      if (flags === VFS.SQLITE_LOCK_RESERVED && !this.#isJournal(file)) {
         // Clear blocks from abandoned transactions, i.e. blocks with
         // lower (newer) versions than block 0. This is done on reserved
         // locking which is after changes by other connections can be made,
         // and before a journal file is initialized.
         this.#idb.run('readwrite', async ({blocks}) => {
-          const dbPath = this.#getJournalDatabasePath(file);
-          const dbFile = this.#mapPathToFile.get(dbPath);
           const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
-            [dbPath],
-            [dbPath, dbFile.block0.version],
+            [file.path],
+            [file.path, file.block0.version],
             false, true));
           for (const key of keys) {
             blocks.delete(key);
