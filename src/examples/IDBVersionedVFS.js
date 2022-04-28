@@ -182,7 +182,7 @@ export class IDBVersionedVFS extends VFS.Base {
         // Fetch from IndexedDB.
         /** @type {FileBlock} */ let block = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(IDBKeyRange.bound(
-              [file.path, blockIndex, file.block0.version],
+              [file.path, blockIndex, blockIndex !== 0 ? file.block0.version : -Infinity],
               [file.path, blockIndex, Infinity]
             ));
           }) ?? file.block0;
