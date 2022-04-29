@@ -37,10 +37,12 @@ export class IDBMinimalVFS extends VFS.Base {
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
   /** @type {IDBContext} */ #idb;
   #webLocks = new WebLocks();
+  #options;
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
     super();
     this.name = idbDatabaseName;
+    this.#options = options;
     this.#idb = new IDBContext(openDatabase(idbDatabaseName), options);
   }
 
@@ -64,18 +66,15 @@ export class IDBMinimalVFS extends VFS.Base {
         });
         if (lastBlock) {
           file.fileSize = lastBlock.data.length - lastBlock.offset;
+        } else if (flags & VFS.SQLITE_OPEN_CREATE) {
+          const block = {
+            path: file.path,
+            offset: 0,
+            data: new Int8Array(0),
+          };
+          this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
         } else {
-          // Create file if requested.
-          if (flags & VFS.SQLITE_OPEN_CREATE) {
-            const block = {
-              path: file.path,
-              offset: 0,
-              data: new Int8Array(0),
-            };
-            this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
-          } else {
-            throw new Error(`file not found: ${file.path}`);
-          }
+          throw new Error(`file not found: ${file.path}`);
         }
         pOutFlags.set(0);
         return VFS.SQLITE_OK;
@@ -108,15 +107,17 @@ export class IDBMinimalVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xRead ${file.path} ${pData.value.length} ${iOffset}`);
 
-      /** @type {FileBlock} */ const block = await this.#idb.run('readonly', ({blocks}) => {
-        return blocks.get(this.#bound(file, -iOffset));
-      });
-      if (!block || block.data.length === 0) {
+      if (iOffset >= file.fileSize) {
         pData.value.fill(0, pData.value.length);
         return VFS.SQLITE_IOERR_SHORT_READ;
       }
 
       try {
+        /** @type {FileBlock} */
+        const block = await this.#idb.run('readonly', ({blocks}) => {
+          return blocks.get(this.#bound(file, -iOffset));
+        });
+
         const blockOffset = iOffset + block.offset;
         pData.value.set(block.data.subarray(blockOffset, blockOffset + pData.value.length));
         return VFS.SQLITE_OK;
@@ -164,7 +165,7 @@ export class IDBMinimalVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xSync ${file.path} ${flags}`);
 
-      await this.#idb.sync();
+      if (this.#options.durability !== 'relaxed') await this.#idb.sync();
       return VFS.SQLITE_OK;
     });
   }
@@ -196,6 +197,7 @@ export class IDBMinimalVFS extends VFS.Base {
       return VFS.SQLITE_OK;
     });
   }
+
   xSectorSize(fileId) {
     log('xSectorSize');
     return 512;
