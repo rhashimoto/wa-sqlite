@@ -548,13 +548,22 @@ export class IDBVersionedVFS extends VFS.Base {
         }
       }
 
-      this.#idb.run('readwrite', async ({blocks})=> {
-        // Update purge state if necessary.
-        const changedPages = file.changedPages;
-        if (changedPages) {
-          file.block0.version--;
-          file.changedPages = null;
+      // journalPages are pre-existing pages that *may* have been
+      // overwritten. changedPages are written pages. The intersection
+      // of these collections need to be purged.
+      const purgeList = new Set();
+      const purgeVersion = file.block0.version - 1;
+      if (file.changedPages) {
+        file.block0.version = purgeVersion;
+        file.journalPages
+          .filter(pageIndex => file.changedPages.has(pageIndex))
+          .forEach(pageIndex => purgeList.add(pageIndex));
+        file.changedPages = null;
+      }
 
+      this.#idb.run('readwrite', async ({blocks})=> {
+        blocks.put(file.block0);
+        if (purgeList.size) {
           // Blocks to purge are saved in a special IndexedDB object with
           // an "index" of "purge".
           const purgeBlock = await blocks.get([file.path, 'purge', 0]) ?? {
@@ -564,20 +573,13 @@ export class IDBVersionedVFS extends VFS.Base {
             data: new Map()
           };
 
-          // journalPages are pre-existing pages that *may* have been
-          // overwritten. changedPages are written pages. The intersection
-          // of these collections need to be purged.
-          for (const pageIndex of file.journalPages) {
-            if (changedPages.has(pageIndex)) {
-              purgeBlock.data.set(pageIndex, file.block0.version);
-            }
+          for (const pageIndex of purgeList) {
+            purgeBlock.data.set(pageIndex, purgeVersion);
           }
+
           blocks.put(purgeBlock);
           this.#maybePurge(file.path, purgeBlock.data.size);
         }
-
-        // Publish block 0.
-        blocks.put(file.block0);
       });
       return VFS.SQLITE_OK;
     }
