@@ -132,6 +132,7 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
 
+    if (file.flags & VFS.SQLITE_OPEN_READONLY) return VFS.SQLITE_READONLY;
     const block = {
       path: file.path,
       offset: -iOffset,
@@ -146,6 +147,7 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xTruncate ${file.path} ${iSize}`);
 
+    if (file.flags & VFS.SQLITE_OPEN_READONLY) return VFS.SQLITE_READONLY;
     file.fileSize = iSize;
     this.#idb.run('readwrite', ({blocks})=> {
       blocks.delete(this.#bound(file, -Infinity, -iSize));
@@ -184,6 +186,13 @@ export class IDBMinimalVFS extends VFS.Base {
       log(`xLock ${file.path} ${flags}`);
 
       await this.#webLocks.lock(file.path, flags);
+      if (flags === VFS.SQLITE_LOCK_SHARED) {
+        const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
+          return blocks.get(this.#bound(file, -Infinity));
+        });
+        file.fileSize = lastBlock.data.length - lastBlock.offset;
+      }
+
       return VFS.SQLITE_OK;
     });
   }

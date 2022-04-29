@@ -26,6 +26,9 @@ export class WebLocks {
             await this.#acquireWebLock(`${name}-inner`, 'shared');
             this.#releaseWebLock(`${name}-outer`);
             break;
+          default:
+            console.error(`unexpected lock transition ${lockState} -> ${flags}`);
+            return VFS.SQLITE_ERROR;
         }
         break;
       case VFS.SQLITE_LOCK_RESERVED:
