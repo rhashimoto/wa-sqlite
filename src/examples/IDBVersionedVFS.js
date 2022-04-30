@@ -119,7 +119,7 @@ export class IDBVersionedVFS extends VFS.Base {
           }
         }
 
-        pOutFlags.set(0);
+        pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e.message);
