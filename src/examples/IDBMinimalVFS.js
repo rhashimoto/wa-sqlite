@@ -6,9 +6,11 @@ function log(...args) {
   // console.debug(...args);
 }
 
+/** @type {{durability: "default"|"strict"|"relaxed"}} */
 const DEFAULT_OPTIONS = { durability: "default" };
 
 /**
+ * Objects stored in IndexedDB with key [name, offset].
  * @typedef FileBlock
  * @property {string} name
  * @property {number} offset negative of position in file
@@ -39,7 +41,7 @@ export class IDBMinimalVFS extends VFS.Base {
   #webLocks = new WebLocks();
   #options;
 
-  constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
+  constructor(idbDatabaseName, options = DEFAULT_OPTIONS) {
     super();
     this.name = idbDatabaseName;
     this.#options = options;
@@ -76,7 +78,7 @@ export class IDBMinimalVFS extends VFS.Base {
         } else {
           throw new Error(`file not found: ${file.path}`);
         }
-        pOutFlags.set(0);
+        pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e.message);
@@ -132,7 +134,6 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
 
-    if (file.flags & VFS.SQLITE_OPEN_READONLY) return VFS.SQLITE_READONLY;
     const block = {
       path: file.path,
       offset: -iOffset,
@@ -147,7 +148,6 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xTruncate ${file.path} ${iSize}`);
 
-    if (file.flags & VFS.SQLITE_OPEN_READONLY) return VFS.SQLITE_READONLY;
     file.fileSize = iSize;
     this.#idb.run('readwrite', ({blocks})=> {
       blocks.delete(this.#bound(file, -Infinity, -iSize));
