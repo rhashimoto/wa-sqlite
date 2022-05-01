@@ -109,11 +109,6 @@ export class IDBMinimalVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xRead ${file.path} ${pData.value.length} ${iOffset}`);
 
-      if (iOffset >= file.fileSize) {
-        pData.value.fill(0, pData.value.length);
-        return VFS.SQLITE_IOERR_SHORT_READ;
-      }
-
       try {
         /** @type {FileBlock} */
         const block = await this.#idb.run('readonly', ({blocks}) => {
@@ -121,10 +116,18 @@ export class IDBMinimalVFS extends VFS.Base {
         });
 
         const blockOffset = iOffset + block.offset;
-        pData.value.set(block.data.subarray(blockOffset, blockOffset + pData.value.length));
+        const nBytesToCopy = Math.min(
+          Math.max(block.data.length - blockOffset, 0), // source bytes
+          pData.value.length);                          // destination bytes
+        pData.value.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
+
+        if (nBytesToCopy < pData.value.length) {
+          pData.value.fill(0, nBytesToCopy, pData.value.length);
+          return VFS.SQLITE_IOERR_SHORT_READ;
+        }
         return VFS.SQLITE_OK;
       } catch (e) {
-        console.error('assumptions violated', e);
+        console.error(e);
         return VFS.SQLITE_IOERR;
       }
     });
