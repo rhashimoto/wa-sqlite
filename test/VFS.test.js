@@ -5,6 +5,7 @@ import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
 import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
+import { IDBBatchAtomicVFS } from '../src/examples/IDBBatchAtomicVFS.js';
 
 import GOOG from './GOOG.js';
 
@@ -14,6 +15,7 @@ jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
 
 const IDB_VERSIONED_NAME = 'idb-versioned-test';
 const IDB_MINIMAL_NAME = 'idb-minimal-test';
+const IDB_BATCH_ATOMIC_NAME = 'idb-batch-atomic-test';
 
 /**
  * @param {SQLiteAPI} sqlite3 
@@ -568,6 +570,15 @@ class ExploreMinimalVFS extends IDBMinimalVFS {
     return f();
   }
 }
+class ExploreBatchAtomicVFS extends IDBBatchAtomicVFS {
+  constructor(dbName) {
+    super(dbName);
+  }
+
+  handleAsync(f) {
+    return f();
+  }
+}
 
 describe('IDBVersionedVFS', function() {
   let resolveReady;
@@ -650,6 +661,60 @@ describe('IDBMinimalVFS', function() {
     const sql = setup.sql;
 
     const vfs = new ExploreMinimalVFS(IDB_MINIMAL_NAME);
+    const fileId = 0;
+    const flags = VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
+
+    // Load data into the database and record file size.
+    const fileSizes = [];
+    await loadSampleTable(sqlite3, db);
+
+    await vfs.xOpen('foo', fileId, flags, { set() {} });
+    await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
+    await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
+    await vfs.xClose(fileId);
+
+    // Shrink the database and record file size.
+    await sql`DELETE FROM goog WHERE Close > Open`;
+    await sql`VACUUM`;
+
+    await vfs.xOpen('foo', fileId, flags, { set() {} });
+    await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
+    await vfs.xFileSize(fileId, { set(size) { fileSizes.push(size); } });
+    await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
+    await vfs.xClose(fileId);
+
+    expect(fileSizes[1]).toBeLessThan(fileSizes[0]);
+  });
+});
+
+describe('IDBBatchAtomicVFS', function() {
+  let resolveReady;
+  let ready = new Promise(resolve => {
+    resolveReady = resolve;
+  });
+  beforeAll(async function() {
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(IDB_BATCH_ATOMIC_NAME);
+      request.addEventListener('success', () => resolve(request.result));
+      request.addEventListener('error', () => reject(request.error));
+    });
+    
+    /** @type {SQLiteAPI} */
+    const sqlite3 = await getSQLiteAsync();
+    const vfs = new IDBBatchAtomicVFS(IDB_BATCH_ATOMIC_NAME);
+    sqlite3.vfs_register(vfs, false);
+    resolveReady({ sqlite3 , vfs });
+  });
+
+  const setup = shared(ready);
+
+  it('xTruncate reduces filesize', async function() {
+    const sqlite3 = setup.sqlite3;
+    const db = setup.db;
+    const sql = setup.sql;
+
+    const vfs = new ExploreBatchAtomicVFS(IDB_BATCH_ATOMIC_NAME);
     const fileId = 0;
     const flags = VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
 
