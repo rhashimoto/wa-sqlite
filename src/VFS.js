@@ -152,7 +152,7 @@ export class Base {
    * @returns {Promise<number>}
    */
   handleAsync(f) {
-    throw new Error('No Asyncify runtime');
+    return f();
   }
 }
 
