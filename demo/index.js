@@ -8,7 +8,7 @@ import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
+import { IDBBatchAtomicVFS } from '../src/examples/IDBBatchAtomicVFS.js';
 import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
 import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
@@ -38,9 +38,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
     await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
     console.log('IndexedDB cleared by URL parameter');
   }
-})();
 
-(async function() {
   // Initialize SQLite and Monaco in parallel because both are slow.
   const [SQLiteModule, SQLiteAsyncModule, editor] = await Promise.all([
     SQLiteESMFactory(),
@@ -60,7 +58,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   sqlite3a.vfs_register(new MemoryVFS());
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-demo', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IDBVersionedVFS('idb-demo', { durability: 'relaxed' }));
+  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-demo', { durability: 'relaxed' }));
 
   // Create the set of databases with respective runtime and VFS. For
   // each database we generate a template tag function that is used
@@ -124,7 +122,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
   await addTag('mem', sqlite3s, 'memory');
   await addTag('mem-async', sqlite3a, 'memory-async');
   await addTag('idb-minimal', sqlite3a, 'idb-minimal-demo');
-  await addTag('idb', sqlite3a, 'idb-demo');
+  await addTag('idb', sqlite3a, 'idb-batch-atomic-demo');
 
   // The selector widget determines the active template tag function.
   // It is also attached to the window so SQL queries can be easily

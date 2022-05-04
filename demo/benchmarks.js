@@ -8,7 +8,7 @@ import * as SQLite from '../src/sqlite-api.js';
 
 import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IDBVersionedVFS } from '../src/examples/IDBVersionedVFS.js';
+import { IDBBatchAtomicVFS } from '../src/examples/IDBBatchAtomicVFS.js';
 import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 
 const TESTS = [
@@ -34,7 +34,11 @@ const TESTS = [
   // Clear IndexedDB.
   const dbNames = indexedDB.databases
     ? (await indexedDB.databases()).map(database => database.name)
-    : ['benchmark', 'idb-benchmark', 'idb-benchmark-relaxed'];
+    : [
+        'benchmark', 'idb-benchmark', 'idb-benchmark-relaxed',
+        'idb-minimal-benchmark', 'idb-minimal-benchmark-relaxed',
+        'idb-batch-atomic-benchmark', 'idb-batch-atomic-benchmark-relaxed'
+      ];
   await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
 
   const [SQLiteModule, SQLiteAsyncModule] = await Promise.all([
@@ -55,8 +59,8 @@ const TESTS = [
   sqlite3a.vfs_register(new MemoryAsyncVFS());
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark'));
   sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark-relaxed', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IDBVersionedVFS('idb-benchmark'));
-  sqlite3a.vfs_register(new IDBVersionedVFS('idb-benchmark-relaxed', { durability: 'relaxed' }));
+  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark'));
+  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark-relaxed', { durability: 'relaxed' }));
 
   /** @type {Array<[SQLiteAPI, string]>} */
   const configs = [
@@ -66,8 +70,8 @@ const TESTS = [
     [sqlite3a, 'memory-async'],
     [sqlite3a, 'idb-minimal-benchmark'],
     [sqlite3a, 'idb-minimal-benchmark-relaxed'],
-    [sqlite3a, 'idb-benchmark'],
-    [sqlite3a, 'idb-benchmark-relaxed'],
+    [sqlite3a, 'idb-batch-atomic-benchmark'],
+    [sqlite3a, 'idb-batch-atomic-benchmark-relaxed'],
   ];
 
   const button = document.getElementById('start');
