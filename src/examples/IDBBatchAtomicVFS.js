@@ -331,15 +331,17 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             path: file.path,
             offset: 'purge',
             version: 0,
-            data: new Map()
+            data: new Map(),
+            count: 0
           };
 
+          purgeBlock.count += changedPages.size;
           for (const pageIndex of changedPages) {
             purgeBlock.data.set(pageIndex, block0.version);
           }
 
           blocks.put(purgeBlock);
-          this.#maybePurge(file.path, purgeBlock.data.size);
+          this.#maybePurge(file.path, purgeBlock.count);
         });
         return VFS.SQLITE_OK;
 
@@ -486,6 +488,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           }
 
           if (nNewPages === 1) {
+            // Combine multiple old pages into a new page.
             const buffer = new Int8Array(newPageSize);
             for (const oldPage of oldPages) {
               buffer.set(oldPage.data, -(iOffset + oldPage.offset));
@@ -502,6 +505,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             }
             blocks.put(newPage);
           } else {
+            // Split an old page into multiple new pages.
             const oldPage = oldPages[0];
             for (let i = 0; i < nNewPages; ++i) {
               const newPage = {
