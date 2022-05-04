@@ -254,7 +254,7 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
-  #bound(file, begin, end = 0) {
+  #bound(file, begin, end = Infinity) {
     return IDBKeyRange.bound([file.path, begin], [file.path, end]);
   }
 }
