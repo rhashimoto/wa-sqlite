@@ -134,6 +134,8 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           } else {
             throw new Error(`file not found: ${file.path}`);
           }
+        } else if (flags & VFS.SQLITE_OPEN_MAIN_DB) {
+          await this.#reblockIfNeeded(file);
         }
 
         pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
@@ -217,6 +219,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     // this.altWrite(fileId, pData, iOffset);
 
     // Convert the write directly into an IndexedDB object.
+    const prevFileSize = file.block0.fileSize;
     file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.value.length);
     const block = iOffset === 0 ? file.block0 : {
       path: file.path,
@@ -227,8 +230,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     block.data = pData.value.slice();
 
     if (file.changedPages) {
-      // Batch atomic write.
-      file.changedPages.add(-iOffset);
+      // Update the changed list so the old data can eventually be purged.
+      if (prevFileSize === file.block0.fileSize) {
+        file.changedPages.add(-iOffset);
+      }
 
       // Defer writing block 0.
       if (iOffset !== 0) {
@@ -288,7 +293,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       log(`xLock ${file.path} ${flags}`);
 
       // Acquire the lock.
-      const result = this.#webLocks.lock(file.path, flags);
+      const result = await this.#webLocks.lock(file.path, flags);
       if (flags === VFS.SQLITE_LOCK_RESERVED) {
         // Clear blocks from abandoned transactions, i.e. blocks with
         // lower (newer) versions than block 0. This is done on reserved
@@ -326,9 +331,6 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log('xDeviceCharacteristics');
     return VFS.SQLITE_IOCAP_BATCH_ATOMIC |
            VFS.SQLITE_IOCAP_SAFE_APPEND |
-           VFS.SQLITE_IOCAP_SEQUENTIAL |
-           VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
-    return VFS.SQLITE_IOCAP_SAFE_APPEND |
            VFS.SQLITE_IOCAP_SEQUENTIAL |
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
@@ -430,10 +432,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
    * Purge obsolete blocks from a database file.
    * @param {string} name 
    */
-  purge(name) {
+  async purge(name) {
     const start = Date.now();
     const path = new URL(name, 'file://localhost/').pathname;
-    this.#idb.run('readwrite', async ({blocks}) => {
+    await this.#idb.run('readwrite', async ({blocks}) => {
       const purgeBlock = await blocks.get([path, 'purge', 0]);
       if (purgeBlock) {
         for (const [pageOffset, version] of purgeBlock.data) {
@@ -483,6 +485,82 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     return IDBKeyRange.bound(
       [file.path, begin, version],
       [file.path, end, Infinity]);
+  }
+
+  async #reblockIfNeeded(file) {
+    const oldPageSize = file.block0.data.length;
+    if (oldPageSize < 18) return;
+
+    const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
+    const newPageSize = view.getUint16(16);
+    if (newPageSize === oldPageSize) return;
+
+    const maxPageSize = Math.max(oldPageSize, newPageSize);
+    const nOldPages = maxPageSize / oldPageSize;
+    const nNewPages = maxPageSize / newPageSize;
+    const fileSize = file.block0.fileSize;
+
+    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_SHARED);
+    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_RESERVED);
+    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_EXCLUSIVE);
+    try {
+      await this.purge(file.path);
+      this.#idb.run('readwrite', async ({blocks}) => {
+        // Remove abandoned transactions, all blocks with a lower version
+        // than block 0.
+        const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
+          [file.path],
+          [file.path, file.block0.version],
+          false, true));
+        for (const key of keys) {
+          blocks.delete(key);
+        }
+
+        for (let iOffset = 0; iOffset < file.block0.fileSize; iOffset += maxPageSize) {
+          const oldPages = await blocks.getAll(
+            IDBKeyRange.lowerBound([file.path, -(iOffset + maxPageSize), Infinity]),
+            nOldPages);
+          for (const oldPage of oldPages) {
+            blocks.delete([oldPage.path, oldPage.offset, oldPage.version]);
+          }
+
+          if (nNewPages === 1) {
+            const buffer = new Int8Array(newPageSize);
+            for (const oldPage of oldPages) {
+              buffer.set(oldPage.data, -(iOffset + oldPage.offset));
+            }
+            const newPage = {
+              path: file.path,
+              offset: -iOffset,
+              version: 0,
+              data: buffer
+            };
+            if (newPage.offset === 0) {
+              newPage.fileSize = fileSize;
+              file.block0 = newPage;
+            }
+            blocks.put(newPage);
+          } else {
+            const oldPage = oldPages[0];
+            for (let i = 0; i < nNewPages; ++i) {
+              const newPage = {
+                path: oldPage.path,
+                offset: -(iOffset + i * newPageSize),
+                version: 0,
+                data: oldPage.data.subarray(i * newPageSize)
+              }
+              if (newPage.offset === 0) {
+                newPage.fileSize = fileSize;
+                file.block0 = newPage;
+              }
+              blocks.put(newPage);
+            }
+          }
+        }
+      });
+    } finally {
+      await this.#webLocks.unlock(file.path, VFS.SQLITE_LOCK_NONE);
+    }
   }
 }
 
