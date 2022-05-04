@@ -69,32 +69,31 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
-/** @type {Map<number, Int8Array>} */ mapIdToAlt = new Map();
-altWrite(fileId, pData, iOffset) {
-  let alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
-  let maybeFileSize = pData.value.length + iOffset;
-  if (maybeFileSize > alt.length) {
-    const newAlt = new Int8Array(maybeFileSize);
-    newAlt.set(alt);
-    this.mapIdToAlt.set(fileId, alt = newAlt);
-  }
-  alt.set(pData.value, iOffset);
-}
-altRead(fileId, pData, iOffset) {
-  const alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
-  const altData = alt.subarray(iOffset, iOffset + pData.value.length);
-  if (Array.prototype.some.call(altData, (b, i) => b !== pData.value[i])) {
-    console.error(new Error('altRead mismatch'));
-    // debugger;
-    // throw new Error('mismatch');
-  }
-}
-altTruncate(fileId, iSize) {
-  const alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
-  const newAlt = alt.slice(0, iSize);
-  this.mapIdToAlt.set(fileId, newAlt);
-}
-
+// /** @type {Map<number, Int8Array>} */ mapIdToAlt = new Map();
+// altWrite(fileId, pData, iOffset) {
+//   let alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
+//   let maybeFileSize = pData.value.length + iOffset;
+//   if (maybeFileSize > alt.length) {
+//     const newAlt = new Int8Array(maybeFileSize);
+//     newAlt.set(alt);
+//     this.mapIdToAlt.set(fileId, alt = newAlt);
+//   }
+//   alt.set(pData.value, iOffset);
+// }
+// altRead(fileId, pData, iOffset) {
+//   const alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
+//   const altData = alt.subarray(iOffset, iOffset + pData.value.length);
+//   if (Array.prototype.some.call(altData, (b, i) => b !== pData.value[i])) {
+//     console.error(new Error('altRead mismatch'));
+//     // debugger;
+//     // throw new Error('mismatch');
+//   }
+// }
+// altTruncate(fileId, iSize) {
+//   const alt = this.mapIdToAlt.get(fileId) ?? new Int8Array(0);
+//   const newAlt = alt.slice(0, iSize);
+//   this.mapIdToAlt.set(fileId, newAlt);
+// }
 
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
@@ -203,7 +202,7 @@ altTruncate(fileId, iSize) {
           buffer.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
           bufferOffset += nBytesToCopy;
         }
-        this.altRead(fileId, pData, iOffset);
+        // this.altRead(fileId, pData, iOffset);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);
@@ -215,7 +214,7 @@ altTruncate(fileId, iSize) {
   xWrite(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
-    this.altWrite(fileId, pData, iOffset);
+    // this.altWrite(fileId, pData, iOffset);
 
     // Convert the write directly into an IndexedDB object.
     file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.value.length);
@@ -258,20 +257,21 @@ altTruncate(fileId, iSize) {
       blocks.delete(this.#bound(file, -Infinity, -iSize));
       blocks.put(block0);
     });
-    this.altTruncate(fileId, iSize);
+    // this.altTruncate(fileId, iSize);
     return VFS.SQLITE_OK;
   }
 
   xSync(fileId, flags) {
-    return this.handleAsync(async () => {
-      const file = this.#mapIdToFile.get(fileId);
-      log(`xSync ${file.path} ${flags}`);
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xSync ${file.path} ${flags}`);
 
-      if (this.#options.durability !== 'relaxed') {
+    if (this.#options.durability !== 'relaxed') {
+      return this.handleAsync(async () => {
         await this.#idb.sync();
-      }
-      return VFS.SQLITE_OK;
-    });
+        return VFS.SQLITE_OK;
+      });
+    }
+    return VFS.SQLITE_OK;
   }
 
   xFileSize(fileId, pSize64) {
