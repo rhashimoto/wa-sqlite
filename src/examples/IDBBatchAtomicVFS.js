@@ -99,8 +99,6 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           } else {
             throw new Error(`file not found: ${file.path}`);
           }
-        } else if (flags & VFS.SQLITE_OPEN_MAIN_DB) {
-          await this.#reblockIfNeeded(file);
         }
 
         pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
@@ -287,6 +285,12 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log(`xFileControl ${file.path} ${op}`);
 
     switch (op) {
+      case 21: // SQLITE_FCNTL_SYNC
+        return this.handleAsync(async () => {
+          await this.#reblockIfNeeded(file);
+          return VFS.SQLITE_OK;
+        });
+
       case 31: // SQLITE_FCNTL_BEGIN_ATOMIC_WRITE
         return this.handleAsync(async () => {
           // Prepare a new version for IndexedDB blocks.
@@ -307,16 +311,6 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         });
 
       case 32: // SQLITE_FCNTL_COMMIT_ATOMIC_WRITE
-        // Don't accept changes to the page size.
-        if (file.block0.fileSize) {
-          const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
-          const pageSize = view.getUint16(16);
-          if (pageSize !== file.block0.data.length) {
-            console.error('unsupported page size change');
-            return VFS.SQLITE_IOERR;
-          }
-        }
-
         const block0 = Object.assign({}, file.block0);
         block0.data = block0.data.slice();
         const changedPages = file.changedPages;
@@ -354,8 +348,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           });
           return VFS.SQLITE_OK;
         });
+
+      default:
+        return VFS.SQLITE_NOTFOUND;
     }
-    return VFS.SQLITE_NOTFOUND;
   }
 
   xAccess(name, flags, pResOut) {
@@ -455,78 +451,77 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     if (oldPageSize < 18) return;
 
     const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
-    const newPageSize = view.getUint16(16);
+    let newPageSize = view.getUint16(16);
+    if (newPageSize === 1) newPageSize = 65536;
     if (newPageSize === oldPageSize) return;
 
     const maxPageSize = Math.max(oldPageSize, newPageSize);
     const nOldPages = maxPageSize / oldPageSize;
     const nNewPages = maxPageSize / newPageSize;
-    const fileSize = file.block0.fileSize;
 
-    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_SHARED);
-    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_RESERVED);
-    await this.#webLocks.lock(file.path, VFS.SQLITE_LOCK_EXCLUSIVE);
-    try {
-      await this.purge(file.path);
-      await this.#idb.run('readwrite', async ({blocks}) => {
-        // Remove abandoned transactions, all blocks with a lower version
-        // than block 0.
-        const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
-          [file.path],
-          [file.path, file.block0.version],
-          false, true));
-        for (const key of keys) {
-          blocks.delete(key);
+    const newPageCount = view.getUint32(28);
+    const fileSize = newPageCount * newPageSize;
+
+    const version = file.block0.version;
+    await this.#idb.run('readwrite', async ({blocks}) => {
+      // When the block size changes, the entire file is rewritten. We can
+      // (and must) safely delete all blocks older than block 0 which leaves
+      // a single version at every offset.
+      const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
+        [file.path, version + 1],
+        [file.path, Infinity]
+      ));
+      for (const key of keys) {
+        blocks.delete(key);
+      }
+      blocks.delete([file.path, 'purge', 0]);
+
+      for (let iOffset = 0; iOffset < fileSize; iOffset += maxPageSize) {
+        const oldPages = await blocks.getAll(
+          IDBKeyRange.lowerBound([file.path, -(iOffset + maxPageSize), Infinity]),
+          nOldPages);
+        for (const oldPage of oldPages) {
+          blocks.delete([oldPage.path, oldPage.offset, oldPage.version]);
         }
 
-        for (let iOffset = 0; iOffset < file.block0.fileSize; iOffset += maxPageSize) {
-          const oldPages = await blocks.getAll(
-            IDBKeyRange.lowerBound([file.path, -(iOffset + maxPageSize), Infinity]),
-            nOldPages);
+        if (nNewPages === 1) {
+          // Combine multiple old pages into a new page.
+          const buffer = new Int8Array(newPageSize);
           for (const oldPage of oldPages) {
-            blocks.delete([oldPage.path, oldPage.offset, oldPage.version]);
+            buffer.set(oldPage.data, -(iOffset + oldPage.offset));
           }
-
-          if (nNewPages === 1) {
-            // Combine multiple old pages into a new page.
-            const buffer = new Int8Array(newPageSize);
-            for (const oldPage of oldPages) {
-              buffer.set(oldPage.data, -(iOffset + oldPage.offset));
-            }
+          const newPage = {
+            path: file.path,
+            offset: -iOffset,
+            version,
+            data: buffer
+          };
+          if (newPage.offset === 0) {
+            newPage.fileSize = fileSize;
+            file.block0 = newPage;
+          }
+          blocks.put(newPage);
+        } else {
+          // Split an old page into multiple new pages.
+          const oldPage = oldPages[0];
+          for (let i = 0; i < nNewPages; ++i) {
+            const offset = -(iOffset + i * newPageSize);
+            if (-offset >= fileSize) break;
             const newPage = {
-              path: file.path,
-              offset: -iOffset,
-              version: 0,
-              data: buffer
-            };
+              path: oldPage.path,
+              offset,
+              version,
+              data: oldPage.data.subarray(i * newPageSize, (i + 1) * newPageSize)
+            }
             if (newPage.offset === 0) {
               newPage.fileSize = fileSize;
               file.block0 = newPage;
             }
             blocks.put(newPage);
-          } else {
-            // Split an old page into multiple new pages.
-            const oldPage = oldPages[0];
-            for (let i = 0; i < nNewPages; ++i) {
-              const newPage = {
-                path: oldPage.path,
-                offset: -(iOffset + i * newPageSize),
-                version: 0,
-                data: oldPage.data.subarray(i * newPageSize)
-              }
-              if (newPage.offset === 0) {
-                newPage.fileSize = fileSize;
-                file.block0 = newPage;
-              }
-              blocks.put(newPage);
-            }
           }
         }
-      });
-      await this.#idb.sync();
-    } finally {
-      await this.#webLocks.unlock(file.path, VFS.SQLITE_LOCK_NONE);
-    }
+      }
+    });
   }
 }
 
