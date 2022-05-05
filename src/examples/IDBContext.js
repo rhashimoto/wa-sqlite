@@ -146,7 +146,7 @@ class Store {
    */
    getAll(query, count) {
     log(`getAll ${this.store.name}`, query, count);
-    const request = this.store.getAll(query);
+    const request = this.store.getAll(query, count);
     return this.addRequest(request);
   }
 
@@ -167,7 +167,7 @@ class Store {
    */
    getAllKeys(query, count) {
     log(`getAllKeys ${this.store.name}`, query, count);
-    const request = this.store.getAllKeys(query);
+    const request = this.store.getAllKeys(query, count);
     return this.addRequest(request);
   }
 
