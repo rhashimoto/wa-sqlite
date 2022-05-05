@@ -137,31 +137,32 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // Usually a read fits within a single write but there is at least
         // one case - rollback after journal spill - where reads cross
         // write boundaries so we have to allow for that.
-        let bufferOffset = 0;
-        while (bufferOffset < pData.value.length) {
-          // Fetch the IndexedDB block for this file location.
-          const fileOffset = iOffset + bufferOffset;
-          /** @type {FileBlock} */
-          const block = fileOffset < file.block0.data.length ?
-            file.block0 :
-            await this.#idb.run('readonly', ({blocks}) => {
-              return blocks.get(this.#bound(file, -fileOffset));
-            });
+        const result = await this.#idb.run('readonly', async ({blocks}) => {
+          let bufferOffset = 0;
+          while (bufferOffset < pData.value.length) {
+            // Fetch the IndexedDB block for this file location.
+            const fileOffset = iOffset + bufferOffset;
+            /** @type {FileBlock} */
+            const block = fileOffset < file.block0.data.length ?
+              file.block0 :
+              await blocks.get(this.#bound(file, -fileOffset));
 
-          if (!block || block.data.length - block.offset <= fileOffset) {
-            pData.value.fill(0, bufferOffset);
-            return VFS.SQLITE_IOERR_SHORT_READ;
+            if (!block || block.data.length - block.offset <= fileOffset) {
+              pData.value.fill(0, bufferOffset);
+              return VFS.SQLITE_IOERR_SHORT_READ;
+            }
+
+            const buffer = pData.value.subarray(bufferOffset);
+            const blockOffset = fileOffset + block.offset;
+            const nBytesToCopy = Math.min(
+              Math.max(block.data.length - blockOffset, 0), // source bytes
+              buffer.length);                               // destination bytes
+            buffer.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
+            bufferOffset += nBytesToCopy;
           }
-
-          const buffer = pData.value.subarray(bufferOffset);
-          const blockOffset = fileOffset + block.offset;
-          const nBytesToCopy = Math.min(
-            Math.max(block.data.length - blockOffset, 0), // source bytes
-            buffer.length);                               // destination bytes
-          buffer.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
-          bufferOffset += nBytesToCopy;
-        }
-        return VFS.SQLITE_OK;
+          return VFS.SQLITE_OK;
+        });
+        return result;
       } catch (e) {
         console.error(e);
         return VFS.SQLITE_IOERR;
