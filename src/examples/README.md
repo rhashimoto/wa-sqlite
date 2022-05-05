@@ -9,6 +9,11 @@ These are minimal working examples for writing a VFS. First-time implementers sh
 probably start by looking at these classes, as well as the
 [SQLite documentation](https://www.sqlite.org/vfs.html).
 
+### IDBBatchAtomicVFS
+This is a VFS implementation that uses
+[batch atomic writes](https://github.com/rhashimoto/wa-sqlite/discussions/47).
+This is now the featured IndexedDB VFS for the demo and benchmarks.
+
 ### IDBVersionedVFS
 This is a VFS implementation that stores
 [versioned blocks on IndexedDB](https://github.com/rhashimoto/wa-sqlite/discussions/37).

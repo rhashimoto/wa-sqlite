@@ -138,27 +138,27 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // one case - rollback after journal spill - where reads cross
         // write boundaries so we have to allow for that.
         const result = await this.#idb.run('readonly', async ({blocks}) => {
-          let bufferOffset = 0;
-          while (bufferOffset < pData.value.length) {
+          let pDataOffset = 0;
+          while (pDataOffset < pData.value.length) {
             // Fetch the IndexedDB block for this file location.
-            const fileOffset = iOffset + bufferOffset;
+            const fileOffset = iOffset + pDataOffset;
             /** @type {FileBlock} */
             const block = fileOffset < file.block0.data.length ?
               file.block0 :
               await blocks.get(this.#bound(file, -fileOffset));
 
             if (!block || block.data.length - block.offset <= fileOffset) {
-              pData.value.fill(0, bufferOffset);
+              pData.value.fill(0, pDataOffset);
               return VFS.SQLITE_IOERR_SHORT_READ;
             }
 
-            const buffer = pData.value.subarray(bufferOffset);
+            const buffer = pData.value.subarray(pDataOffset);
             const blockOffset = fileOffset + block.offset;
             const nBytesToCopy = Math.min(
               Math.max(block.data.length - blockOffset, 0), // source bytes
               buffer.length);                               // destination bytes
             buffer.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
-            bufferOffset += nBytesToCopy;
+            pDataOffset += nBytesToCopy;
           }
           return VFS.SQLITE_OK;
         });
@@ -174,7 +174,9 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
 
-    // Convert the write directly into an IndexedDB object.
+    // Convert the write directly into an IndexedDB object. Our assumption
+    // is that SQLite will only overwrite data with an xWrite of the same
+    // offset and size unless the database page size changes.
     const prevFileSize = file.block0.fileSize;
     file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.value.length);
     const block = iOffset === 0 ? file.block0 : {
@@ -186,12 +188,14 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     block.data = pData.value.slice();
 
     if (file.changedPages) {
-      // Update the changed list so the old data can eventually be purged.
+      // This write is part of a batch atomic write. All writes in the
+      // batch have a new version, so update the changed list to allow
+      // old versions to be eventually deleted.
       if (prevFileSize === file.block0.fileSize) {
         file.changedPages.add(-iOffset);
       }
 
-      // Defer writing block 0.
+      // Defer writing block 0 to IndexedDB until ready to commit the batch.
       if (iOffset !== 0) {
         this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
       }
@@ -211,8 +215,8 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       data: file.block0.data.slice(0, iSize)
     });
 
-    // Update metadata and delete all blocks beyond the file size. We
-    // expect SQLite to call this outside any journal lifetime.
+    // Update metadata and delete all blocks beyond the file size.
+    // This is never called within a transaction.
     const block0 = Object.assign({}, file.block0);
     this.#idb.run('readwrite', ({blocks})=> {
       blocks.delete(this.#bound(file, -Infinity, -iSize));
@@ -287,6 +291,8 @@ export class IDBBatchAtomicVFS extends VFS.Base {
 
     switch (op) {
       case 21: // SQLITE_FCNTL_SYNC
+        // This is called at the end of each database transaction, whether
+        // it is batch atomic or not. Handle page size change.
         return this.handleAsync(async () => {
           await this.#reblockIfNeeded(file);
           return VFS.SQLITE_OK;
@@ -341,11 +347,13 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         return VFS.SQLITE_OK;
 
       case 33: // SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE
-        // Restore original state.
+        // Restore original state. Objects for the abandoned version will
+        // be left in IndexedDB to be removed by the next atomic write
+        // transaction.
         file.changedPages = null;
         return this.handleAsync(async () => {
-          await this.#idb.run('readonly', async ({blocks}) => {
-            file.block0 = await blocks.get([file.path, 0, file.block0.version + 1]);
+          file.block0 = await this.#idb.run('readonly', async ({blocks}) => {
+            return blocks.get([file.path, 0, file.block0.version + 1]);
           });
           return VFS.SQLITE_OK;
         });
@@ -390,11 +398,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
 
   /**
    * Purge obsolete blocks from a database file.
-   * @param {string} name 
+   * @param {string} path 
    */
-  async purge(name) {
+  async purge(path) {
     const start = Date.now();
-    const path = new URL(name, 'file://localhost/').pathname;
     await this.#idb.run('readwrite', async ({blocks}) => {
       const purgeBlock = await blocks.get([path, 'purge', 0]);
       if (purgeBlock) {
@@ -406,18 +413,18 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         }
         await blocks.delete([path, 'purge', 0]);
       }
-      log(`purge ${name} ${purgeBlock?.data.size ?? 0} pages in ${Date.now() - start} ms`);
+      log(`purge ${path} ${purgeBlock?.data.size ?? 0} pages in ${Date.now() - start} ms`);
     });
   }
 
   /**
    * Conditionally schedule a purge task.
-   * @param {string} name 
+   * @param {string} path 
    * @param {number} nPages 
    */
-  #maybePurge(name, nPages) {
+  #maybePurge(path, nPages) {
     if (this.#options.purge === 'manual' ||
-        this.#pendingPurges.has(name) ||
+        this.#pendingPurges.has(path) ||
         nPages < this.#options.purgeAtLeast) {
       // No purge needed.
       return;
@@ -425,16 +432,16 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     
     if (globalThis.requestIdleCallback) {
       globalThis.requestIdleCallback(() => {
-        this.purge(name);
-        this.#pendingPurges.delete(name)
+        this.purge(path);
+        this.#pendingPurges.delete(path)
       });
     } else {
       setTimeout(() => {
-        this.purge(name);
-        this.#pendingPurges.delete(name)
+        this.purge(path);
+        this.#pendingPurges.delete(path)
       });
     }
-    this.#pendingPurges.add(name);
+    this.#pendingPurges.add(path);
   }
 
   #bound(file, begin, end = 0) {
@@ -447,14 +454,19 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       [file.path, end, Infinity]);
   }
 
+  // The database page size can be changed with PRAGMA page_size and VACUUM.
+  // The updated file will be overwritten with a regular transaction using
+  // the old page size. After that it will be read and written using the
+  // new page size, so the IndexedDB objects must be combined or split
+  // appropriately.
   async #reblockIfNeeded(file) {
     const oldPageSize = file.block0.data.length;
-    if (oldPageSize < 18) return;
+    if (oldPageSize < 18) return; // no page size defined
 
     const view = new DataView(file.block0.data.buffer, file.block0.data.byteOffset);
     let newPageSize = view.getUint16(16);
     if (newPageSize === 1) newPageSize = 65536;
-    if (newPageSize === oldPageSize) return;
+    if (newPageSize === oldPageSize) return; // no page size change
 
     const maxPageSize = Math.max(oldPageSize, newPageSize);
     const nOldPages = maxPageSize / oldPageSize;
@@ -466,7 +478,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     const version = file.block0.version;
     await this.#idb.run('readwrite', async ({blocks}) => {
       // When the block size changes, the entire file is rewritten. We can
-      // (and must) safely delete all blocks older than block 0 which leaves
+      // (and must) safely delete all blocks older than block 0 to leave
       // a single version at every offset.
       const keys = await blocks.index('version').getAllKeys(IDBKeyRange.bound(
         [file.path, version + 1],
@@ -477,7 +489,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       }
       blocks.delete([file.path, 'purge', 0]);
 
+      // Do the conversion in chunks of the larger of the page sizes.
       for (let iOffset = 0; iOffset < fileSize; iOffset += maxPageSize) {
+        // After the old versions have been removed, it is easy to fetch
+        // nOldPages at once.
         const oldPages = await blocks.getAll(
           IDBKeyRange.lowerBound([file.path, -(iOffset + maxPageSize), Infinity]),
           nOldPages);
@@ -485,6 +500,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           blocks.delete([oldPage.path, oldPage.offset, oldPage.version]);
         }
 
+        // Convert to new pages.
         if (nNewPages === 1) {
           // Combine multiple old pages into a new page.
           const buffer = new Int8Array(newPageSize);
