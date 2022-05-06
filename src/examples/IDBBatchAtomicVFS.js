@@ -255,7 +255,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       const result = await this.#webLocks.lock(file.path, flags);
       if (flags === VFS.SQLITE_LOCK_SHARED) {
         // Update block 0 in case another connection changed it.
-        file.block0 = await this.#idb.run('readwrite', async ({blocks}) => {
+        file.block0 = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.get(this.#bound(file, 0));
         });
       }
@@ -352,7 +352,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // transaction.
         file.changedPages = null;
         return this.handleAsync(async () => {
-          file.block0 = await this.#idb.run('readonly', async ({blocks}) => {
+          file.block0 = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get([file.path, 0, file.block0.version + 1]);
           });
           return VFS.SQLITE_OK;
