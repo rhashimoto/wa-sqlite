@@ -43,6 +43,9 @@ export class WebLocks {
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         switch (lockState) {
+          case VFS.SQLITE_LOCK_SHARED:
+            await this.#acquireWebLock(`${name}-outer`, 'exclusive');
+            // intentional case fall-through
           case VFS.SQLITE_LOCK_RESERVED:
             this.#releaseWebLock(`${name}-inner`);
             await this.#acquireWebLock(`${name}-inner`, 'exclusive');
@@ -64,7 +67,7 @@ export class WebLocks {
     const lockState = this.#mapIdToState.get(fileId) ?? VFS.SQLITE_LOCK_NONE;
 
     switch (flags) {
-      case VFS.SQLITE_LOCK_RESERVED:  // only happens with OOB rollback
+      case VFS.SQLITE_LOCK_RESERVED:
         switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:
             this.#releaseWebLock(`${fileId}-inner`);
@@ -74,9 +77,10 @@ export class WebLocks {
         break;
       case VFS.SQLITE_LOCK_SHARED:
         switch (lockState) {
-          case VFS.SQLITE_LOCK_EXCLUSIVE:  // intentional case fall-through
+          case VFS.SQLITE_LOCK_EXCLUSIVE:
             this.#releaseWebLock(`${fileId}-inner`);
             await this.#acquireWebLock(`${fileId}-inner`, 'shared');
+            // intentional case fall-through
           case VFS.SQLITE_LOCK_RESERVED:
             this.#releaseWebLock(`${fileId}-outer`);
             break;
@@ -84,9 +88,10 @@ export class WebLocks {
         break;
       case VFS.SQLITE_LOCK_NONE:
         switch (lockState) {
-          case VFS.SQLITE_LOCK_EXCLUSIVE:  // intentional case fall-through
+          case VFS.SQLITE_LOCK_EXCLUSIVE:
           case VFS.SQLITE_LOCK_RESERVED:
             this.#releaseWebLock(`${fileId}-outer`);
+            // intentional case fall-through
           case VFS.SQLITE_LOCK_SHARED:
             this.#releaseWebLock(`${fileId}-inner`);
             break;
