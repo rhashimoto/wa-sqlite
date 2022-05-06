@@ -39,7 +39,8 @@ function log(...args) {
  * @property {number} flags
  * @property {FileBlock} block0
  * 
-  * @property {Set<number>} [changedPages]
+ * @property {Set<number>} [changedPages]
+ * @property {boolean} [overwrite]
  */
 
 // This sample VFS stores optionally versioned writes to IndexedDB, which
@@ -290,13 +291,24 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log(`xFileControl ${file.path} ${op}`);
 
     switch (op) {
+      case 11: //SQLITE_FCNTL_OVERWRITE
+        file.overwrite = true;
+        return VFS.SQLITE_OK;
+
       case 21: // SQLITE_FCNTL_SYNC
         // This is called at the end of each database transaction, whether
-        // it is batch atomic or not. Handle page size change.
-        return this.handleAsync(async () => {
-          await this.#reblockIfNeeded(file);
-          return VFS.SQLITE_OK;
-        });
+        // it is batch atomic or not.
+        if (file.overwrite) {
+          return this.handleAsync(async () => {
+            await this.#reblockIfNeeded(file);
+            return VFS.SQLITE_OK;
+          });
+        }
+        return VFS.SQLITE_OK;
+
+      case 22: // SQLITE_FCNTL_COMMIT_PHASETWO
+        file.overwrite = false;
+        return VFS.SQLITE_OK;
 
       case 31: // SQLITE_FCNTL_BEGIN_ATOMIC_WRITE
         return this.handleAsync(async () => {
