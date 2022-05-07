@@ -7,7 +7,7 @@ production is not prohibited but that isn't their primary purpose.
 ### MemoryVFS and MemoryAsyncVFS
 These are minimal working examples for writing a VFS. First-time implementers should
 probably start by looking at these classes, as well as the
-[SQLite documentation](https://www.sqlite.org/vfs.html).
+[SQLite VFS documentation](https://www.sqlite.org/vfs.html).
 
 ### IDBBatchAtomicVFS
 This is a VFS implementation that uses
@@ -17,20 +17,20 @@ This is now the featured IndexedDB VFS for the demo and benchmarks.
 ### IDBVersionedVFS
 This is a VFS implementation that stores
 [versioned blocks on IndexedDB](https://github.com/rhashimoto/wa-sqlite/discussions/37).
+It uses an interesting hack to avoid storing journal data.
 
 ### IDBMinimalVFS
 This is another implementation of VFS on IndexedDB that provides less performance
-but is smaller, simpler, and more general. It is described
+but is smaller and simpler, and is a good starting point for building a novel
+IndexedDB VFS. It is described
 [here](https://github.com/rhashimoto/wa-sqlite/discussions/46).
-
-The databases produced by IDBVersionedVFS and IDBMinimalVFS are _not_ compatible.
 
 ### OriginPrivateFileSystemVFS
 This VFS uses the proposed
 [Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
 with the
 [Access Handle](https://github.com/WICG/file-system-access/blob/main/AccessHandle.md)
-dependent proposal. Note that this works only in a Worker and is not implemented
+dependent proposal. Note that OPFS works only in a Worker and is not implemented
 on all browsers.
 
 ## Module examples

@@ -82,7 +82,7 @@ export class IDBMinimalVFS extends VFS.Base {
         pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
         return VFS.SQLITE_OK;
       } catch (e) {
-        console.error(e.message);
+        console.error(e);
         return VFS.SQLITE_CANTOPEN;
       }
     });
@@ -90,18 +90,23 @@ export class IDBMinimalVFS extends VFS.Base {
 
   xClose(fileId) {
     return this.handleAsync(async () => {
-      const file = this.#mapIdToFile.get(fileId);
-      if (file) {
-        log(`xClose ${file.path}`);
+      try {
+        const file = this.#mapIdToFile.get(fileId);
+        if (file) {
+          log(`xClose ${file.path}`);
 
-        this.#mapIdToFile.delete(fileId);
-        if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-          this.#idb.run('readwrite', ({blocks}) => {
-            blocks.delete(this.#bound(file, -Infinity));
-          });
+          this.#mapIdToFile.delete(fileId);
+          if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+            this.#idb.run('readwrite', ({blocks}) => {
+              blocks.delete(this.#bound(file, -Infinity));
+            });
+          }
         }
+        return VFS.SQLITE_OK;
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
       }
-      return VFS.SQLITE_OK;
     });
   }
 
@@ -138,33 +143,43 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
 
-    // Convert the write directly into an IndexedDB object.
-    const block = {
-      path: file.path,
-      offset: -iOffset,
-      data: pData.value.slice()
-    };
-    this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
-    file.fileSize = Math.max(file.fileSize, iOffset + pData.value.length);
-    return VFS.SQLITE_OK;
+    try {
+      // Convert the write directly into an IndexedDB object.
+      const block = {
+        path: file.path,
+        offset: -iOffset,
+        data: pData.value.slice()
+      };
+      this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
+      file.fileSize = Math.max(file.fileSize, iOffset + pData.value.length);
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      console.error(e);
+      return VFS.SQLITE_IOERR;
+    }
   }
 
   xTruncate(fileId, iSize) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xTruncate ${file.path} ${iSize}`);
 
-    file.fileSize = iSize;
-    this.#idb.run('readwrite', ({blocks})=> {
-      blocks.delete(this.#bound(file, -Infinity, -iSize));
-      if (iSize === 0) {
-        blocks.put({
-          path: file.path,
-          offset: 0,
-          data: new Int8Array(0)
-        })
-      }
-    });
-    return VFS.SQLITE_OK;
+    try {
+      file.fileSize = iSize;
+      this.#idb.run('readwrite', ({blocks})=> {
+        blocks.delete(this.#bound(file, -Infinity, -iSize));
+        if (iSize === 0) {
+          blocks.put({
+            path: file.path,
+            offset: 0,
+            data: new Int8Array(0)
+          })
+        }
+      });
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      console.error(e);
+      return VFS.SQLITE_IOERR;
+    }
   }
 
   xSync(fileId, flags) {
@@ -173,8 +188,13 @@ export class IDBMinimalVFS extends VFS.Base {
         const file = this.#mapIdToFile.get(fileId);
         log(`xSync ${file.path} ${flags}`);
 
-        await this.#idb.sync();
-        return VFS.SQLITE_OK;
+        try {
+          await this.#idb.sync();
+          return VFS.SQLITE_OK;
+        } catch (e) {
+          console.error(e);
+          return VFS.SQLITE_IOERR;
+        }
       });
     }
   }
@@ -192,16 +212,21 @@ export class IDBMinimalVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xLock ${file.path} ${flags}`);
 
-      await this.#webLocks.lock(file.path, flags);
-      if (flags === VFS.SQLITE_LOCK_SHARED) {
-        // Update cached file size when lock is acquired.
-        const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(this.#bound(file, -Infinity));
-        });
-        file.fileSize = lastBlock.data.length - lastBlock.offset;
-      }
+      try {
+        await this.#webLocks.lock(file.path, flags);
+        if (flags === VFS.SQLITE_LOCK_SHARED) {
+          // Update cached file size when lock is acquired.
+          const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
+            return blocks.get(this.#bound(file, -Infinity));
+          });
+          file.fileSize = lastBlock.data.length - lastBlock.offset;
+        }
 
-      return VFS.SQLITE_OK;
+        return VFS.SQLITE_OK;
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
+      }
     });
   }
 
@@ -210,8 +235,13 @@ export class IDBMinimalVFS extends VFS.Base {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xUnlock ${fileEntry.path} ${flags}`);
 
-      await this.#webLocks.unlock(fileEntry.path, flags);
-      return VFS.SQLITE_OK;
+      try {
+        await this.#webLocks.unlock(fileEntry.path, flags);
+        return VFS.SQLITE_OK;
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
+      }
     });
   }
 
@@ -232,12 +262,17 @@ export class IDBMinimalVFS extends VFS.Base {
       const path = new URL(name, 'file://localhost/').pathname;
       log(`xAccess ${path} ${flags}`);
 
-      // Check if any block exists.
-      const key = await this.#idb.run('readonly', ({blocks}) => {
-        return blocks.getKey(this.#bound({path}, -Infinity));
-      });
-      pResOut.set(key ? 1 : 0);
-      return VFS.SQLITE_OK;
+      try {
+        // Check if any block exists.
+        const key = await this.#idb.run('readonly', ({blocks}) => {
+          return blocks.getKey(this.#bound({path}, -Infinity));
+        });
+        pResOut.set(key ? 1 : 0);
+        return VFS.SQLITE_OK;
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
+      }
     });
   }
 
@@ -246,11 +281,16 @@ export class IDBMinimalVFS extends VFS.Base {
       const path = new URL(name, 'file://localhost/').pathname;
       log(`xDelete ${path} ${syncDir}`);
 
-      const complete = this.#idb.run('readwrite', ({blocks}) => {
-        return blocks.delete(this.#bound({path}, -Infinity));
-      });
-      if (syncDir) await complete;
-      return VFS.SQLITE_OK;
+      try {
+        const complete = this.#idb.run('readwrite', ({blocks}) => {
+          return blocks.delete(this.#bound({path}, -Infinity));
+        });
+        if (syncDir) await complete;
+        return VFS.SQLITE_OK;
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
+      }
     });
   }
 
