@@ -213,8 +213,8 @@ export class IDBMinimalVFS extends VFS.Base {
       log(`xLock ${file.path} ${flags}`);
 
       try {
-        await this.#webLocks.lock(file.path, flags);
-        if (flags === VFS.SQLITE_LOCK_SHARED) {
+        const result = await this.#webLocks.lock(file.path, flags);
+        if (result === VFS.SQLITE_OK && flags === VFS.SQLITE_LOCK_SHARED) {
           // Update cached file size when lock is acquired.
           const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(this.#bound(file, -Infinity));
@@ -222,7 +222,7 @@ export class IDBMinimalVFS extends VFS.Base {
           file.fileSize = lastBlock.data.length - lastBlock.offset;
         }
 
-        return VFS.SQLITE_OK;
+        return result;
       } catch (e) {
         console.error(e);
         return VFS.SQLITE_IOERR;
