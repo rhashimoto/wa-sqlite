@@ -273,7 +273,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       try {
         // Acquire the lock.
         const result = await this.#webLocks.lock(file.path, flags);
-        if (flags === VFS.SQLITE_LOCK_SHARED) {
+        if (result === VFS.SQLITE_OK && flags === VFS.SQLITE_LOCK_SHARED) {
           // Update block 0 in case another connection changed it.
           file.block0 = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(this.#bound(file, 0));
