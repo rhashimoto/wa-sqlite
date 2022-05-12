@@ -12,6 +12,11 @@ module.exports = function(config) {
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
     frameworks: ['jasmine'],
     plugins: ['karma-jasmine'],
+    client: {
+      jasmine: {
+        random: true
+      }
+    },
 
     // list of files / patterns to load in the browser
     mime: { 'application/wasm': ['wasm'] },
