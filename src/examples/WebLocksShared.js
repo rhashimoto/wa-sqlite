@@ -138,30 +138,6 @@ export class WebLocksShared {
     return VFS.SQLITE_OK
   }
 
-  async #pollOuterLock(name) {
-    while (true) {
-      // Attempt to acquire the lock without blocking.
-      const lock = await new Promise(resolve => {
-        WEB_LOCKS.request(name, { ifAvailable: true }, maybeLock => new Promise(release => {
-          if (maybeLock) {
-            this.#mapNameToReleaser.set(name, release);
-          }
-          resolve(lock);
-        }));
-      });
-      if (lock) return true;
-
-      // Failed to get the lock so check if the reserved lock is taken.
-      const query = await WEB_LOCKS.query();
-      const reservedLockName = `#${name}#`
-      const isReserved = query.held.some(({name}) => name === reservedLockName);
-      if (isReserved) return false;
-
-      // Try again.
-      await new Promise(resolve => setTimeout(resolve, 16));
-    }
-  }
-
   async #acquireWebLock(name, options) {
     if (WEB_LOCKS) {
       const lockName = `${name}`;
