@@ -1,14 +1,12 @@
 import * as VFS from '../VFS.js';
 
 const WEB_LOCKS = navigator['locks'] ?? console.warn('concurrency is unsafe without Web Locks API');
-const DEFAULT_TIMEOUT_SECONDS = 30;
+
+const RETRY_DELAY_MILLIS = 16;
 
 export class WebLocksShared {
   /** @type {Map<number, number>} */ #mapIdToState = new Map();
   /** @type {Map<string, (any) => void>} */ #mapNameToReleaser = new Map();
-
-  /** @type {number} exclusive lock timeout */
-  timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
 
   // Two locks are used, an outer lock and an inner lock, where holding
   // the outer lock is a prerequisite to acquire the inner lock.
@@ -26,8 +24,8 @@ export class WebLocksShared {
       case VFS.SQLITE_LOCK_SHARED:
         switch (lockState) {
           case VFS.SQLITE_LOCK_NONE:
-            await this.#acquireWebLock(`${name}-outer`, 'exclusive');
-            await this.#acquireWebLock(`${name}-inner`, 'shared');
+            await this.#acquireWebLock(`${name}-outer`);
+            await this.#acquireWebLock(`${name}-inner`, { mode: 'shared' });
             this.#releaseWebLock(`${name}-outer`);
             break;
           default:
@@ -38,7 +36,30 @@ export class WebLocksShared {
       case VFS.SQLITE_LOCK_RESERVED:
         switch (lockState) {
           case VFS.SQLITE_LOCK_SHARED:
-            await this.#acquireWebLock(`${name}-outer`, 'exclusive');
+            while (true) {
+              // Attempt to acquire the lock without blocking.
+              const isLocked = await this.#acquireWebLock(`${name}-outer`, { ifAvailable: true });
+              if (isLocked) break;
+
+              // Failed to get the lock so check if the reserved lock is taken.
+              // If it is then another connection is already in the reserved
+              // state so this is deadlock. Return SQLITE_BUSY to inform the
+              // application to rollback.
+              const query = await WEB_LOCKS.query();
+              const reservedLockName = `${name}-reserved`;
+              const isOccupied = query.held.some(({name}) => name === reservedLockName);
+              if (isOccupied) return VFS.SQLITE_BUSY;
+
+              // This might be contention with a connection acquiring a
+              // shared lock which holds the outer lock only briefly, so
+              // try again.
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MILLIS));
+            }
+
+            // Take the reserved lock. This isn't used as a lock - acquiring
+            // it will never block - but instead as a signal to other
+            // connections that the reserved state is occupied.
+            await this.#acquireWebLock(`${name}-reserved`);
             break;
           default:
             console.error(`unexpected lock transition ${lockState} -> ${flags}`);
@@ -48,24 +69,12 @@ export class WebLocksShared {
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         switch (lockState) {
           case VFS.SQLITE_LOCK_SHARED:
-            await this.#acquireWebLock(`${name}-outer`, 'exclusive');
+            await this.#acquireWebLock(`${name}-outer`);
             // intentional case fall-through
           case VFS.SQLITE_LOCK_RESERVED:
             this.#releaseWebLock(`${name}-inner`);
-            try {
-              // There is a potential deadlock if two connections hold a
-              // shared lock and want to upgrade to an exclusive lock. Break
-              // deadlock with a timeout.
-              const abortController = new AbortController();
-              setTimeout(() => abortController.abort(), this.timeoutSeconds * 1000);
-              await this.#acquireWebLock(`${name}-inner`, 'exclusive', abortController.signal);
-            } catch (e) {
-              await this.#acquireWebLock(`${name}-inner`, 'shared');
-              if (lockState === VFS.SQLITE_LOCK_SHARED) {
-                this.#releaseWebLock(`${name}-outer`);
-              }
-              return VFS.SQLITE_BUSY;
-            }
+            await this.#acquireWebLock(`${name}-inner`);
+            this.#releaseWebLock(`${name}-reserved`);
             break;
           default:
             console.error(`unexpected lock transition ${lockState} -> ${flags}`);
@@ -88,7 +97,7 @@ export class WebLocksShared {
         switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:
             this.#releaseWebLock(`${name}-inner`);
-            await this.#acquireWebLock(`${name}-inner`, 'shared');
+            await this.#acquireWebLock(`${name}-inner`, { mode: 'shared' });
             break;
         }
         break;
@@ -96,9 +105,10 @@ export class WebLocksShared {
         switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:
             this.#releaseWebLock(`${name}-inner`);
-            await this.#acquireWebLock(`${name}-inner`, 'shared');
+            await this.#acquireWebLock(`${name}-inner`, { mode: 'shared' });
             // intentional case fall-through
           case VFS.SQLITE_LOCK_RESERVED:
+            this.#releaseWebLock(`${name}-reserved`);
             this.#releaseWebLock(`${name}-outer`);
             break;
         }
@@ -107,6 +117,7 @@ export class WebLocksShared {
         switch (lockState) {
           case VFS.SQLITE_LOCK_EXCLUSIVE:
           case VFS.SQLITE_LOCK_RESERVED:
+            this.#releaseWebLock(`${name}-reserved`);
             this.#releaseWebLock(`${name}-outer`);
             // intentional case fall-through
           case VFS.SQLITE_LOCK_SHARED:
@@ -127,17 +138,46 @@ export class WebLocksShared {
     return VFS.SQLITE_OK
   }
 
-  async #acquireWebLock(name, mode, signal) {
-    if (WEB_LOCKS) {
-      const lockName = `lock-${name}`;
-      return new Promise(async (hasLock, aborted) => {
-        try {
-          await WEB_LOCKS.request(lockName, { mode, signal }, () => new Promise(release => {
-            hasLock();
+  async #pollOuterLock(name) {
+    while (true) {
+      // Attempt to acquire the lock without blocking.
+      const lock = await new Promise(resolve => {
+        WEB_LOCKS.request(name, { ifAvailable: true }, maybeLock => new Promise(release => {
+          if (maybeLock) {
             this.#mapNameToReleaser.set(name, release);
-          }));
+          }
+          resolve(lock);
+        }));
+      });
+      if (lock) return true;
+
+      // Failed to get the lock so check if the reserved lock is taken.
+      const query = await WEB_LOCKS.query();
+      const reservedLockName = `#${name}#`
+      const isReserved = query.held.some(({name}) => name === reservedLockName);
+      if (isReserved) return false;
+
+      // Try again.
+      await new Promise(resolve => setTimeout(resolve, 16));
+    }
+  }
+
+  async #acquireWebLock(name, options) {
+    if (WEB_LOCKS) {
+      const lockName = `${name}`;
+      return new Promise(async (resolve, reject) => {
+        try {
+          await WEB_LOCKS.request(lockName, options, lock => {
+            resolve(lock);
+            if (lock) {
+              return new Promise(release => {
+                this.#mapNameToReleaser.set(name, release);
+              });
+            }
+          });
         } catch(e) {
-          aborted(e);
+          // AbortController signal path.
+          reject(e);
         }
       });
     }
