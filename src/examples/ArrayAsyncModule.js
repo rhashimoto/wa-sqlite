@@ -8,7 +8,7 @@ export class ArrayAsyncModule extends ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzString 
+   * @param {{ allocate: function(number): number, set: function(string): void }} pzString 
    * @returns {number|Promise<number>}
    */
   xCreate(db, appData, argv, pVTab, pzString) {
@@ -20,9 +20,16 @@ export class ArrayAsyncModule extends ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzString 
+   * @param {{ allocate: function(number): number, set: function(string): void }} pzString 
    */
   xConnect(db, appData, argv, pVTab, pzString) {
+    // Allocate space for CREATE TABLE string. SQLite functions cannot be
+    // called within handleAsync, so this allocation must be outside the
+    // asynchronous call. It must be larger than the UTF8 representation
+    // of the string passed to pzString.set() or undefined behavior will
+    // result.
+    pzString.allocate(1024);
+
     return this.handleAsync(async () => {
       return super.xConnect(db, appData, argv, pVTab, pzString);
     });

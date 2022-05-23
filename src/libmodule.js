@@ -12,35 +12,32 @@ const mod_methods = {
     const closedVTabs = hasAsyncify ? new Set() : null;
     const closedCursors = hasAsyncify ? new Set() : null;
 
-    // Ideally this would be a static constant of the Value class, but
-    // the Emscripten optimizer doesn't like that.
-    const MAX_VALUE_STRING_BYTES = 2 ** 17;
-
     class Value {
       constructor(ptr, type) {
         this.ptr = ptr;
         this.type = type;
-
-        if (type === 's' && getValue(ptr, 'i32') === 0) {
-          // Preallocate string buffer for virtual table declaration.
-          // This preallocation is necessary for asynchronous xCreate/xConnect.
-          const p = ccall('sqlite3_malloc', 'number', ['number'], [MAX_VALUE_STRING_BYTES]);
-          setValue(this.ptr, p, 'i32');
-        }
       }
-
-      set(v) {
-        switch (this.type) {
-          case 's':
-            const length = lengthBytesUTF8(v);
-            if (length + 1 > MAX_VALUE_STRING_BYTES) throw new Error('string overflow');
-            const p = getValue(this.ptr, 'i32');
-            stringToUTF8(v, p, MAX_VALUE_STRING_BYTES);
-            break;
-          default:
-            setValue(this.ptr, v, this.type);
-            break;
-        }
+    }
+    Value.prototype['allocate'] = function(size) {
+      // Preallocate string buffer for virtual table declaration.
+      // This preallocation is necessary for asynchronous xCreate/xConnect.
+      let p = getValue(this.ptr, 'i32');
+      if (!p) {
+        p = ccall('sqlite3_malloc', 'number', ['number'], [size]);
+        setValue(this.ptr, p, 'i32');
+      }
+      return p;
+    }
+    Value.prototype['set'] = function(v) {
+      switch (this.type) {
+        case 's':
+          const length = lengthBytesUTF8(v);
+          const p = this['allocate'](length + 1);
+          stringToUTF8(v, p, length + 1);
+          break;
+        default:
+          setValue(this.ptr, v, this.type);
+          break;
       }
     }
 
