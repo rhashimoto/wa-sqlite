@@ -12,19 +12,30 @@ const mod_methods = {
     const closedVTabs = hasAsyncify ? new Set() : null;
     const closedCursors = hasAsyncify ? new Set() : null;
 
+    // Ideally this would be a static constant of the Value class, but
+    // the Emscripten optimizer doesn't like that.
+    const MAX_VALUE_STRING_BYTES = 2 ** 17;
+
     class Value {
       constructor(ptr, type) {
         this.ptr = ptr;
         this.type = type;
+
+        if (type === 's' && getValue(ptr, 'i32') === 0) {
+          // Preallocate string buffer for virtual table declaration.
+          // This preallocation is necessary for asynchronous xCreate/xConnect.
+          const p = ccall('sqlite3_malloc', 'number', ['number'], [MAX_VALUE_STRING_BYTES]);
+          setValue(this.ptr, p, 'i32');
+        }
       }
 
       set(v) {
         switch (this.type) {
           case 's':
             const length = lengthBytesUTF8(v);
-            const p = ccall('sqlite3_malloc', 'number', ['number'], [length + 1]);
-            stringToUTF8(v, p, length + 1);
-            setValue(this.ptr, p, 'i32');
+            if (length + 1 > MAX_VALUE_STRING_BYTES) throw new Error('string overflow');
+            const p = getValue(this.ptr, 'i32');
+            stringToUTF8(v, p, MAX_VALUE_STRING_BYTES);
             break;
           default:
             setValue(this.ptr, v, this.type);

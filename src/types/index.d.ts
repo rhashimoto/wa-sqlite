@@ -595,17 +595,6 @@ declare interface SQLiteAPI {
   data_count(stmt: number): number;
 
   /**
-   * Declare the schema of a virtual table in module
-   * {@link SQLiteModule.xCreate} or {@link SQLiteModule.xConnect}
-   * methods
-   * @see https://www.sqlite.org/c3ref/declare_vtab.html
-   * @param db database pointer
-   * @param zSQL schema declaration
-   * @returns `SQLITE_OK` (throws exception on error)
-   */
-  declare_vtab(db: number, zSQL: string): number;
-
-  /**
    * One-step query execution interface
    * @see https://www.sqlite.org/c3ref/exec.html
    * @param db database pointer
