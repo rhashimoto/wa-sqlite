@@ -25,11 +25,11 @@ export class ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzErr 
+   * @param {{ set: function(string): void}} pzString 
    * @returns {number|Promise<number>}
    */
-  xCreate(db, appData, argv, pVTab, pzErr) {
-    return this.xConnect(db, appData, argv, pVTab, pzErr);
+  xCreate(db, appData, argv, pVTab, pzString) {
+    return this.xConnect(db, appData, argv, pVTab, pzString);
   }
 
   /**
@@ -37,16 +37,22 @@ export class ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzErr 
+   * @param {{ set: function(string): void}} pzString 
    * @returns {number|Promise<number>}
    */
-  xConnect(db, appData, argv, pVTab, pzErr) {
+  xConnect(db, appData, argv, pVTab, pzString) {
     // All virtual tables in this module will use the same array. If
     // different virtual tables could have separate backing stores then
     // we would handle that association using pVTab.
 
     const sql = `CREATE TABLE any (${this.columns.join(',')})`;
-    return this.sqlite3.declare_vtab(db, sql);
+
+    // A VFS written in C would call sqlite3_declare_vtab() here. Making
+    // that reentrant call is problematic with Asyncify, so the programming
+    // model has been changed to use a preallocated string to define
+    // the virtual table schema.
+    pzString.set(sql);
+    return SQLite.SQLITE_OK;
   }
 
   /**

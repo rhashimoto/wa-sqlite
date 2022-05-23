@@ -39,10 +39,17 @@ static int xCreate(
   int argc,
   const char *const*argv,
   sqlite3_vtab **ppVTab,
-  char** pzErr) {
+  char** pzString) {
   *ppVTab = (sqlite3_vtab*)sqlite3_malloc(sizeof(sqlite3_vtab));
-  const int result = modCreate(db, pAux, argc, argv, *ppVTab, pzErr);
-  if (result != SQLITE_OK) {
+  int result = modCreate(db, pAux, argc, argv, *ppVTab, pzString);
+  if (result == SQLITE_OK) {
+    // Ideally the Javascript module would make the call to declare the
+    // table schema, but Asyncify has problems with reentrant calls. As
+    // a workaround the schema is returned via the error string.
+    result = sqlite3_declare_vtab(db, *pzString);
+    sqlite3_free(*pzString);
+    *pzString = 0;
+  } else {
     sqlite3_free(*ppVTab);
     *ppVTab = 0;
   }
@@ -55,10 +62,15 @@ static int xConnect(
   int argc,
   const char *const*argv,
   sqlite3_vtab **ppVTab,
-  char** pzErr) {
+  char** pzString) {
   *ppVTab = (sqlite3_vtab*)sqlite3_malloc(sizeof(sqlite3_vtab));
-  const int result = modConnect(db, pAux, argc, argv, *ppVTab, pzErr);
-  if (result != SQLITE_OK) {
+  int result = modConnect(db, pAux, argc, argv, *ppVTab, pzString);
+  if (result == SQLITE_OK) {
+    // See xCreate comment re schema declaration.
+    result = sqlite3_declare_vtab(db, *pzString);
+    sqlite3_free(*pzString);
+    *pzString = 0;
+  } else {
     sqlite3_free(*ppVTab);
     *ppVTab = 0;
   }

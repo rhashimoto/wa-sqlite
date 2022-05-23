@@ -17,19 +17,27 @@ const mod_methods = {
         this.ptr = ptr;
         this.type = type;
       }
-
-      set(v) {
-        switch (this.type) {
-          case 's':
-            const length = lengthBytesUTF8(v);
-            const p = ccall('sqlite3_malloc', 'number', ['number'], [length + 1]);
-            stringToUTF8(v, p, length + 1);
-            setValue(this.ptr, p, 'i32');
-            break;
-          default:
-            setValue(this.ptr, v, this.type);
-            break;
-        }
+    }
+    Value.prototype['allocate'] = function(size) {
+      // Preallocate string buffer for virtual table declaration.
+      // This preallocation is necessary for asynchronous xCreate/xConnect.
+      let p = getValue(this.ptr, 'i32');
+      if (!p) {
+        p = ccall('sqlite3_malloc', 'number', ['number'], [size]);
+        setValue(this.ptr, p, 'i32');
+      }
+      return p;
+    }
+    Value.prototype['set'] = function(v) {
+      switch (this.type) {
+        case 's':
+          const length = lengthBytesUTF8(v);
+          const p = this['allocate'](length + 1);
+          stringToUTF8(v, p, length + 1);
+          break;
+        default:
+          setValue(this.ptr, v, this.type);
+          break;
       }
     }
 

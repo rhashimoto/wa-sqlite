@@ -2,28 +2,17 @@ import { ArrayModule } from './ArrayModule.js';
 
 // This is an asynchronous subclass of ArrayModule used for testing
 // asynchronous virtual tables.
-//
-// Be aware that implementing an asynchronous module can be tricky
-// because any callbacks back into SQLite (e.g. declare_vtab, value_*,
-// result_*) must be called synchronously, i.e. in the current microtask.
-// This is the case in this example but that is because the code does
-// not actually suspend (e.g. with await).
 export class ArrayAsyncModule extends ArrayModule {
   /**
    * @param {number} db 
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzErr 
+   * @param {{ allocate: function(number): number, set: function(string): void }} pzString 
    * @returns {number|Promise<number>}
    */
-  xCreate(db, appData, argv, pVTab, pzErr) {
-    return this.handleAsync(async () => {
-      // Calling super.xConnect here is not a typo. The superclass method
-      // calls this.xConnect, which would improperly nest handleAsync
-      // calls, so we just call the superclass xConnect directly.
-      return super.xConnect(db, appData, argv, pVTab, pzErr);
-    });
+  xCreate(db, appData, argv, pVTab, pzString) {
+    return this.xConnect(db, appData, argv, pVTab, pzString);
   }
 
   /**
@@ -31,11 +20,18 @@ export class ArrayAsyncModule extends ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzErr 
+   * @param {{ allocate: function(number): number, set: function(string): void }} pzString 
    */
-  xConnect(db, appData, argv, pVTab, pzErr) {
+  xConnect(db, appData, argv, pVTab, pzString) {
+    // Allocate space for CREATE TABLE string. SQLite functions cannot be
+    // called within handleAsync, so this allocation must be outside the
+    // asynchronous call. It must be larger than the UTF8 representation
+    // of the string passed to pzString.set() or undefined behavior will
+    // result.
+    pzString.allocate(1024);
+
     return this.handleAsync(async () => {
-      return super.xConnect(db, appData, argv, pVTab, pzErr);
+      return super.xConnect(db, appData, argv, pVTab, pzString);
     });
   }
 
@@ -62,9 +58,7 @@ export class ArrayAsyncModule extends ArrayModule {
    * @param {number} pVTab 
    */
   xDestroy(pVTab) {
-    return this.handleAsync(async () => {
-      return super.xDestroy(pVTab);
-    });
+    return this.xDisconnect(pVTab);
   }
 
   /**
