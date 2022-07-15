@@ -1,17 +1,16 @@
 # wa-sqlite
-This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems and virtual table modules completely in Javascript. This allows alternative browser storage options such as IndexedDB (and hopefully File System Access eventually).
+This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems and virtual table modules completely in Javascript. This allows alternative browser storage options such as IndexedDB and File System Access. Applications can opt to use either a synchronous or asynchronous (using Asyncify) SQLite library build (an asynchronous build is required for asynchronous extensions).
 
-Sample 
-[IndexedDB](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IDBMinimalVFS.js) and [Origin Private File System](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/OriginPrivateFileSystemVFS.js) virtual file systems and a [virtual table module that accesses Javascript arrays](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js) are provided as proof of concept.
+[IndexedDB](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IDBMinimalVFS.js) and [Origin Private File System](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/OriginPrivateFileSystemVFS.js) virtual file systems and a [virtual table module that accesses Javascript arrays](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js) are among the examples provided as proof of concept.
 
-[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser (for highest IndexedDB performance, consider [exclusive locking](https://github.com/rhashimoto/wa-sqlite/discussions/36)). More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
+[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser. More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
 
 ## Build
 The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the "buildless" branch with pre-built artifacts checked in. This is also recommended when including the project as a dependency (e.g. `yarn add "wa-sqlite@rhashimoto/wa-sqlite#buildless"`).
 
-If you do want to build - e.g. you want to change build flags or use a specific EMSDK version - here are the prerequisites:
+If you do want to build - e.g. you want to change build flags, use a specific EMSDK version, or modify wa-sqlite itself - here are the prerequisites:
 
-* Building on Linux is known to work, compatibility with other platforms is unknown.
+* Building on Debian Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 2.0.26+.
 * `curl`, `make`, `openssl`, `sed`, `unzip`
