@@ -1,3 +1,4 @@
+// Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 const RETRYABLE_EXCEPTIONS = new Set(['TransactionInactiveError', 'InvalidStateError']);
 
 // For debugging.

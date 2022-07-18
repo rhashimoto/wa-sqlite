@@ -1,3 +1,4 @@
+// Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import { ArrayModule } from './ArrayModule.js';
 
 // This is an asynchronous subclass of ArrayModule used for testing

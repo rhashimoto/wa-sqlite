@@ -1,3 +1,4 @@
+// Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
 import { IDBContext } from './IDBContext.js';
 import { WebLocks } from './WebLocks.js';

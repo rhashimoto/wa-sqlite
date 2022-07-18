@@ -1,3 +1,4 @@
+// Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from './sqlite-constants.js';
 export * from './sqlite-constants.js';
 
