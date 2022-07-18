@@ -1,3 +1,4 @@
+// Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
 
 const WEB_LOCKS = navigator['locks'] ?? console.warn('concurrency is unsafe without Web Locks API');
@@ -36,7 +37,7 @@ export class WebLocksShared {
       case VFS.SQLITE_LOCK_RESERVED:
         switch (lockState) {
           case VFS.SQLITE_LOCK_SHARED:
-            while (true) {
+            while (WEB_LOCKS) {
               // Attempt to acquire the lock without blocking.
               const isLocked = await this.#acquireWebLock(`${name}-outer`, { ifAvailable: true });
               if (isLocked) break;
@@ -45,6 +46,12 @@ export class WebLocksShared {
               // If it is then another connection is already in the reserved
               // state so this is deadlock. Return SQLITE_BUSY to inform the
               // application to rollback.
+              // TODO: The reserved lock is not necessary. Instead when
+              // acquiring SQLITE_LOCK_SHARED, first acquire the outer lock
+              // in shared mode. Then when reaching here, use the query to
+              // check the outer lock mode. If the outer lock is in
+              // exclusive mode then we have to break the deadlock, otherwise
+              // retry.
               const query = await WEB_LOCKS.query();
               const reservedLockName = `${name}-reserved`;
               const isOccupied = query.held.some(({name}) => name === reservedLockName);
