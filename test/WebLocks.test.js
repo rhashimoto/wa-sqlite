@@ -13,76 +13,112 @@ function commonSpecs(builder) {
   beforeEach(clearLocks);
   afterEach(clearLocks);
 
-  it('should lock and unlock', async function() {
-    // console.log(JSON.stringify(await navigator.locks.query(), null, 2));
-
-    let result;
+  it('should lock NONE to SHARED', async function() {
     const objectUnderTest = builder('test');
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
 
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    const result = await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+  });
 
-    result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE)
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
-
+  it('should lock SHARED to RESERVED', async function() {
+    const objectUnderTest = builder('test');
     await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+
+    const result = await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_RESERVED);
+  });
 
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_EXCLUSIVE);
+  it('should lock RESERVED to EXCLUSIVE', async function() {
+    const objectUnderTest = builder('test');
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_RESERVED);
+
+    const result = await objectUnderTest.lock(VFS.SQLITE_LOCK_EXCLUSIVE);
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_EXCLUSIVE);
+  });
 
-    result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_SHARED);
+  it('should unlock EXCLUSIVE to SHARED', async function() {
+    const objectUnderTest = builder('test');
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_EXCLUSIVE);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_EXCLUSIVE);
+
+    const result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_SHARED);
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+  });
 
-    result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE)
+  it('should unlock RESERVED to SHARED', async function() {
+    const objectUnderTest = builder('test');
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_RESERVED);
+
+    const result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_SHARED);
+    expect(result).toEqual(VFS.SQLITE_OK);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+  });
+
+  it('should unlock RESERVED to NONE', async function() {
+    const objectUnderTest = builder('test');
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_RESERVED);
+
+    const result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE);
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
-
-    await new Promise(resolve => setTimeout(resolve));
-    const queryResults = await navigator.locks.query();
-    expect(queryResults.held.length).toEqual(0);
-    expect(queryResults.pending.length).toEqual(0);
   });
+
+  it('should unlock SHARED to NONE', async function() {
+    const objectUnderTest = builder('test');
+    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+
+    const result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE);
+    expect(result).toEqual(VFS.SQLITE_OK);
+    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
+  });
+
 
   it('should noop on setting same state', async function() {
     let result;
     const objectUnderTest = builder('test');
 
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_NONE)
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
+    const lockStates = [
+        VFS.SQLITE_LOCK_NONE,
+        VFS.SQLITE_LOCK_SHARED,
+        VFS.SQLITE_LOCK_RESERVED,
+        VFS.SQLITE_LOCK_EXCLUSIVE
+    ];
+    for (const lockState of lockStates) {
+      const result0 = await objectUnderTest.lock(lockState);
+      expect(result0).toEqual(VFS.SQLITE_OK);
+      expect(objectUnderTest.state).toEqual(lockState);
 
-    await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
+      const result1 = await objectUnderTest.lock(lockState);
+      expect(result1).toEqual(VFS.SQLITE_OK);
+      expect(objectUnderTest.state).toEqual(lockState);
+    }
 
-    await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_RESERVED);
+    lockStates.splice(lockStates.indexOf(VFS.SQLITE_LOCK_RESERVED), 1);
 
-    await objectUnderTest.lock(VFS.SQLITE_LOCK_EXCLUSIVE);
-    result = await objectUnderTest.lock(VFS.SQLITE_LOCK_EXCLUSIVE);
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_EXCLUSIVE);
+    for (const lockState of lockStates.reverse()) {
+      const result0 = await objectUnderTest.unlock(lockState);
+      expect(result0).toEqual(VFS.SQLITE_OK);
+      expect(objectUnderTest.state).toEqual(lockState);
 
-    await objectUnderTest.unlock(VFS.SQLITE_LOCK_SHARED);
-    result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_SHARED);
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_SHARED);
-
-    await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE)
-    result = await objectUnderTest.unlock(VFS.SQLITE_LOCK_NONE)
-    expect(result).toEqual(VFS.SQLITE_OK);
-    expect(objectUnderTest.state).toEqual(VFS.SQLITE_LOCK_NONE);
+      const result1 = await objectUnderTest.unlock(lockState);
+      expect(result1).toEqual(VFS.SQLITE_OK);
+      expect(objectUnderTest.state).toEqual(lockState);
+    }
   });
 
   it('should block SHARED request when RESERVED', async function() {
