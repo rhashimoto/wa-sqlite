@@ -191,18 +191,18 @@ describe('WebLocksShared', function() {
   });
 
   it('should retry RESERVED while outer lock is shared', async function() {
+    const objectUnderTest = new WebLocksShared(lockName);
+
     let releaseSharedLock;
     await new Promise(resolve => {
-      navigator.locks.request(lockName + '-outer', { mode: 'shared' }, lock => {
+      navigator.locks.request(objectUnderTest._outerName, { mode: 'shared' }, lock => {
         resolve();
         return new Promise(release => releaseSharedLock = release);
       });
     });
 
-    const objectUnderTest = new WebLocksShared(lockName);
     objectUnderTest.lock(VFS.SQLITE_LOCK_SHARED);
     const reserved = objectUnderTest.lock(VFS.SQLITE_LOCK_RESERVED);
-
     await new Promise(resolve => setTimeout(resolve, 1000));
     expect(objectUnderTest.state).not.toEqual(VFS.SQLITE_LOCK_RESERVED);
 

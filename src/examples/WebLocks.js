@@ -10,9 +10,6 @@ const LOCK_TYPE_MASK =
   VFS.SQLITE_LOCK_EXCLUSIVE;
 
 export class WebLocksBase {
-  get name() { return this.#name }
-  #name;
-
   get state() { return this.#state; }
   #state = VFS.SQLITE_LOCK_NONE;
 
@@ -20,13 +17,6 @@ export class WebLocksBase {
 
   /** @type {Map<string, (value: any) => void>} */ #releasers = new Map();
   /** @type {Promise<0|5|3850>} */ #pending = Promise.resolve(0);
-
-  /**
-   * @param {string} name 
-   */
-  constructor(name) {
-    this.#name = name;
-  }
 
   /**
    * @param {number} flags 
@@ -192,18 +182,19 @@ export class WebLocksExclusive extends WebLocksBase {
    * @param {string} name 
    */
   constructor(name) {
-    super(name);
+    super();
+    this._lockName = name + '-outer';
   }
 
    async _NONEtoSHARED() {
-    await this._acquireWebLock(this.name, {
+    await this._acquireWebLock(this._lockName, {
       mode: 'exclusive',
       signal: this._getTimeoutSignal()
     });
   }
 
   async _SHAREDtoNONE() {
-    this._releaseWebLock(this.name);
+    this._releaseWebLock(this._lockName);
   }
 }
 
@@ -214,7 +205,7 @@ export class WebLocksShared extends WebLocksBase {
    * @param {string} name 
    */
   constructor(name) {
-    super(name);
+    super();
     this._outerName = name + '-outer';
     this._innerName = name + '-inner';
   }
