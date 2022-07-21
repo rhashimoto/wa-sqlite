@@ -1,7 +1,7 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
 import { IDBContext } from './IDBContext.js';
-import { WebLocks } from './WebLocks.js';
+import { WebLocksExclusive as WebLocks } from './WebLocks.js';
 
 function log(...args) {
   // console.debug(...args);
@@ -23,6 +23,7 @@ const DEFAULT_OPTIONS = { durability: "default" };
  * @property {string} path
  * @property {number} flags
  * @property {number} fileSize
+ * @property {WebLocks} locks
  */
 
 /**
@@ -39,7 +40,6 @@ const DEFAULT_OPTIONS = { durability: "default" };
 export class IDBMinimalVFS extends VFS.Base {
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
   /** @type {IDBContext} */ #idb;
-  #webLocks = new WebLocks();
   #options;
 
   constructor(idbDatabaseName, options = DEFAULT_OPTIONS) {
@@ -60,7 +60,8 @@ export class IDBMinimalVFS extends VFS.Base {
         const file = {
           path: url.pathname,
           flags,
-          fileSize: 0
+          fileSize: 0,
+          locks: new WebLocks(url.pathname)
         };
         this.#mapIdToFile.set(fileId, file);
 
@@ -214,8 +215,8 @@ export class IDBMinimalVFS extends VFS.Base {
       log(`xLock ${file.path} ${flags}`);
 
       try {
-        const result = await this.#webLocks.lock(file.path, flags);
-        if (result === VFS.SQLITE_OK && flags === VFS.SQLITE_LOCK_SHARED) {
+        const result = await file.locks.lock(flags);
+        if (result === VFS.SQLITE_OK && file.locks.state === VFS.SQLITE_LOCK_SHARED) {
           // Update cached file size when lock is acquired.
           const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(this.#bound(file, -Infinity));
@@ -233,11 +234,11 @@ export class IDBMinimalVFS extends VFS.Base {
 
   xUnlock(fileId, flags) {
     return this.handleAsync(async () => {
-      const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xUnlock ${fileEntry.path} ${flags}`);
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xUnlock ${file.path} ${flags}`);
 
       try {
-        await this.#webLocks.unlock(fileEntry.path, flags);
+        await file.locks.unlock(flags);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);

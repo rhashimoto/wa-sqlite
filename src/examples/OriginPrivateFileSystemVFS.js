@@ -1,6 +1,6 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
-import { WebLocks } from './WebLocks.js';
+import { WebLocksExclusive as WebLocks } from './WebLocks.js';
 
 const BLOCK_SIZE = 4096;
 
@@ -15,6 +15,7 @@ function log(...args) {
  * @typedef OpenedFileEntry
  * @property {string} filename
  * @property {number} flags
+ * @property {WebLocks} locks
  * @property {FileSystemFileHandle} fileHandle
  * @property {*} accessHandle
  */
@@ -28,8 +29,6 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
   });
 
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
-
-  #webLocks = new WebLocks();
 
   get name() { return 'opfs'; }
 
@@ -50,6 +49,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
           flags,
           fileHandle,
           accessHandle: null,
+          locks: new WebLocks(url.pathname)
         };
         this.#mapIdToFile.set(fileId, fileEntry);
 
@@ -161,7 +161,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xLock ${fileEntry.filename} ${flags}`);
-      await this.#webLocks.lock(fileEntry.filename, flags);
+      await fileEntry.locks.lock(flags);
 
       if (flags === VFS.SQLITE_LOCK_EXCLUSIVE) {
         await this.#getAccessHandle(fileEntry);
@@ -180,7 +180,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
         fileEntry.accessHandle = null;
       }
 
-      await this.#webLocks.unlock(fileEntry.filename, flags);
+      await fileEntry.locks.unlock(flags);
       return VFS.SQLITE_OK;
     });
   }
