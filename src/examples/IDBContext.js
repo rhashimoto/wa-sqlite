@@ -27,6 +27,11 @@ export class IDBContext {
     this.#txOptions = txOptions;
   }
 
+  async close() {
+    const db = await this.#dbReady;
+    db.close();
+  }
+  
   /**
    * Run a function with the provided object stores. The function
    * should be idempotent in case it is passed an expired transaction.

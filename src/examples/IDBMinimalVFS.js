@@ -49,6 +49,11 @@ export class IDBMinimalVFS extends VFS.Base {
     this.#idb = new IDBContext(openDatabase(idbDatabaseName), options);
   }
 
+  closeIDBContext() {
+    this.#idb?.close();
+    this.#idb = null;
+  }
+
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;
