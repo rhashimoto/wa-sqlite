@@ -62,6 +62,15 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  async close() {
+    for (const fileId of this.#mapIdToFile) {
+      await this.xClose(fileId);
+    }
+
+    this.#idb?.close();
+    this.#idb = null;
+  }
+
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;

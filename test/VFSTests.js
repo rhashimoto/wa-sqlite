@@ -12,7 +12,7 @@ in culpa qui officia deserunt mollit anim id est laborum.`
 
 /**
  * 
- * @param {() => any} build 
+ * @param {() => VFS.Base} build 
  * @param {() => void|Promise<void>} clear 
  * @param {Iterable} skip 
  */
@@ -233,7 +233,38 @@ export function configureTests(build, clear, skip = []) {
     
     const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
     if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+      const filename = 'foo';
+      await objectUnderTest.xOpen(
+        filename, FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
+        pOut.pass());
 
+      await transact(objectUnderTest, FILE_ID, null, async function() {
+        const pOut = { value: new Int8Array() }
+        result = await objectUnderTest.xFileControl(
+          FILE_ID,
+          VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE,
+          pOut);
+        expect(result).toBe(VFS.SQLITE_OK);
+
+        const buffer = new TextEncoder().encode(TEXT).buffer;
+        const pData = { value: new Int8Array(buffer), size: buffer.byteLength };
+        result = await objectUnderTest.xWrite(FILE_ID, pData, 0);
+        expect(result).toBe(VFS.SQLITE_OK);
+
+        result = await objectUnderTest.xFileControl(
+          FILE_ID,
+          VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE,
+          pOut);
+        expect(result).toBe(VFS.SQLITE_OK);
+      });
+
+      const pData = { value: new Int8Array(TEXT.length), size: TEXT.length };
+      result = await objectUnderTest.xRead(FILE_ID, pData, 0);
+      expect(result).toBe(VFS.SQLITE_OK);
+
+      const s = new TextDecoder().decode(pData.value);
+      expect(s).toEqual(TEXT);
     }
   });;
 
@@ -242,7 +273,38 @@ export function configureTests(build, clear, skip = []) {
     
     const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
     if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+      const filename = 'foo';
+      await objectUnderTest.xOpen(
+        filename, FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
+        pOut.pass());
 
+      await transact(objectUnderTest, FILE_ID, null, async function() {
+        const pOut = { value: new Int8Array() }
+        result = await objectUnderTest.xFileControl(
+          FILE_ID,
+          VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE,
+          pOut);
+        expect(result).toBe(VFS.SQLITE_OK);
+
+        const buffer = new TextEncoder().encode(TEXT).buffer;
+        const pData = { value: new Int8Array(buffer), size: buffer.byteLength };
+        result = await objectUnderTest.xWrite(FILE_ID, pData, 0);
+        expect(result).toBe(VFS.SQLITE_OK);
+
+        result = await objectUnderTest.xFileControl(
+          FILE_ID,
+          VFS.SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE,
+          pOut);
+        expect(result).toBe(VFS.SQLITE_OK);
+      });
+
+      const pData = { value: new Int8Array(TEXT.length), size: TEXT.length };
+      result = await objectUnderTest.xRead(FILE_ID, pData, 0);
+      expect(result).toBe(VFS.SQLITE_IOERR_SHORT_READ);
+
+      result = await objectUnderTest.xFileSize(FILE_ID, pOut);
+      expect(pOut.value).toBe(0);
     }
   });
 
