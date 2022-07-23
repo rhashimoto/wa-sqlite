@@ -41,7 +41,7 @@ class TestVFS extends IDBBatchAtomicVFS {
   }
 }
 
-fdescribe('IDBBatchAtomicVFS strict', function() {
+describe('IDBBatchAtomicVFS strict', function() {
   configureTests(() => new TestVFS({ durability: 'strict' }), TestVFS.clear);
 });
 
