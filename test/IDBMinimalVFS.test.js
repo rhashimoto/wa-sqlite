@@ -20,7 +20,7 @@ class TestVFS extends IDBMinimalVFS {
   static async clear() {
     // Close all IndexedDB open databases.
     for (const vfs of TestVFS.instances) {
-      vfs.closeIDBContext();
+      await vfs.close();
     }
     TestVFS.instances = [];
 

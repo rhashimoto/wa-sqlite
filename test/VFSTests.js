@@ -1,8 +1,6 @@
 import * as VFS from '../src/VFS.js';
 
-const FILE_ID = 42;
-const FILE_ID1 = 43;
-
+const FILE_ID = 0xdeadbeef;
 const TEXT = `
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
 incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
@@ -12,15 +10,6 @@ eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt
 in culpa qui officia deserunt mollit anim id est laborum.`
   .trim().replace(/\n/g, ' ');
 
-const LOCK_TYPE_MASK =
-  VFS.SQLITE_LOCK_NONE |
-  VFS.SQLITE_LOCK_SHARED |
-  VFS.SQLITE_LOCK_RESERVED |
-  VFS.SQLITE_LOCK_EXCLUSIVE;
-
-export class Skip {
-}
-
 /**
  * 
  * @param {() => any} build 
@@ -28,12 +17,8 @@ export class Skip {
  * @param {Iterable} skip 
  */
 export function configureTests(build, clear, skip = []) {
-  const skipSet = new Set(skip);
-
-  /** @type {VFS.Base} */ let objectUnderTest;
   beforeEach(async function() {
     await clear();
-    objectUnderTest = wrapVFS(await build());
   });
 
   afterEach(async function() {
@@ -48,6 +33,8 @@ export function configureTests(build, clear, skip = []) {
   };
 
   it('should create a file', async function() {
+    const objectUnderTest = await build();
+
     const filename = 'foo';
     await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
     expect(pOut.value).toBeFalsy();
@@ -59,11 +46,20 @@ export function configureTests(build, clear, skip = []) {
     expect(result).toEqual(VFS.SQLITE_OK);
     expect(pOut.value & VFS.SQLITE_OPEN_READONLY).toEqual(0);
 
-    await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
+    result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
+    expect(result).toEqual(VFS.SQLITE_OK);
+    expect(pOut.value).toBeTruthy();
+
+    result = await objectUnderTest.xClose(FILE_ID);
+    expect(result).toEqual(VFS.SQLITE_OK);
+    result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
+    expect(result).toEqual(VFS.SQLITE_OK);
     expect(pOut.value).toBeTruthy();
   });
 
   it('should delete a file', async function() {
+    const objectUnderTest = await build();
+    
     const filename = 'foo';
     await objectUnderTest.xOpen(
       filename, FILE_ID,
@@ -79,6 +75,8 @@ export function configureTests(build, clear, skip = []) {
   });
 
   it('should write and read data', async function() {
+    const objectUnderTest = await build();
+    
     const filename = 'foo';
     await objectUnderTest.xOpen(
       filename, FILE_ID,
@@ -108,115 +106,267 @@ export function configureTests(build, clear, skip = []) {
   });
 
   it('should track file size', async function() {
+    const objectUnderTest = await build();
+    
     const filename = 'foo';
     await objectUnderTest.xOpen(
       filename, FILE_ID,
       VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
       pOut.pass());
 
+    result = await objectUnderTest.xFileSize(FILE_ID, pOut);
+    expect(result).toBe(VFS.SQLITE_OK);
+    expect(pOut.value).toBe(0);
+
+    let expectedSize = 0;
+    for (const s of TEXT.split(/\s/)) {
+      await writeString(objectUnderTest, FILE_ID, s, expectedSize);
+      expectedSize += s.length;
+
+      result = await objectUnderTest.xFileSize(FILE_ID, pOut);
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value).toBe(expectedSize);
+    }
+
+    for (let i = 0; i < 20; ++i) {
+      await writeString(objectUnderTest, FILE_ID, TEXT, expectedSize);
+      expectedSize += TEXT.length;
+
+      result = await objectUnderTest.xFileSize(FILE_ID, pOut);
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value).toBe(expectedSize);
+    }
+  });
+
+  it('should truncate a file', async function() {
+    const objectUnderTest = await build();
+    
+    const filename = 'foo';
+    await objectUnderTest.xOpen(
+      filename, FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
+      pOut.pass());
+
+    let expectedSize = 0;
+    for (let i = 0; i < 20; ++i) {
+      await writeString(objectUnderTest, FILE_ID, TEXT, expectedSize);
+      expectedSize += TEXT.length;
+    }
+
+    const truncatedSize = expectedSize - TEXT.length;
+    result = await objectUnderTest.xTruncate(FILE_ID, truncatedSize);
+    expect(result).toBe(VFS.SQLITE_OK);
+
+    result = await objectUnderTest.xFileSize(FILE_ID, pOut);
+    expect(result).toBe(VFS.SQLITE_OK);
+    expect(pOut.value).toBe(truncatedSize);
+  });
+
+  it('should return a valid sector size', async function() {
+    const objectUnderTest = await build();
+    
+    const filename = 'foo';
+    await objectUnderTest.xOpen(
+      filename, FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
+      pOut.pass());
+
+    result = await objectUnderTest.xSectorSize(FILE_ID);
+    expect(result).toBeGreaterThanOrEqual(512);
+    expect(result).toBeLessThanOrEqual(65536);
+    expect(result & (result - 1)).toBe(0); // power of 2
+  });
+
+  it('should delete on close', async function() {
+    const objectUnderTest = await build();
+    
+    const filename = 'foo';
+    await objectUnderTest.xOpen(
+      filename, FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_DELETEONCLOSE,
+      pOut.pass());
+    await writeString(objectUnderTest, FILE_ID, TEXT, 0);
+    const s = await readString(objectUnderTest, FILE_ID, TEXT.length, 0);
+    expect(s).toEqual(TEXT);
+
+    result = await objectUnderTest.xClose(FILE_ID);
+    expect(result).toBe(VFS.SQLITE_OK);
+
+    result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut);
+    expect(result).toBe(VFS.SQLITE_OK);
+    expect(pOut.value).toBeFalsy();
+  });
+
+  it('should open with null filename', async function() {
+    const objectUnderTest = await build();
+    
+    result = await objectUnderTest.xOpen(
+      null, FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_DELETEONCLOSE,
+      pOut.pass());
+
+    await writeString(objectUnderTest, FILE_ID, TEXT, 0);
+    const s = await readString(objectUnderTest, FILE_ID, TEXT.length, 0);
+    expect(s).toEqual(TEXT);
+
+    result = await objectUnderTest.xClose(FILE_ID);
+    expect(result).toBe(VFS.SQLITE_OK);
+  });
+
+  it('should handle short read from empty file', async function() {
+    const objectUnderTest = await build();
+    
+    result = await objectUnderTest.xOpen(
+      null, FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_DELETEONCLOSE,
+      pOut.pass());
+
+    const pData = { value: new Int8Array(16), size: 16 };
+    pData.value.fill(-1);
+    result = await objectUnderTest.xRead(FILE_ID, pData, 24);
+    expect(result).toBe(VFS.SQLITE_IOERR_SHORT_READ);
+    expect(Array.from(pData.value)).toEqual(new Array(16).fill(0));
+  });
+
+  it('should batch atomic commit if configured', async function() {
+    const objectUnderTest = await build();
+    
+    const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
+    if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+
+    }
+  });;
+
+  it('should batch atomic rollback if configured ', async function() {
+    const objectUnderTest = await build();
+    
+    const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
+    if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+
+    }
+  });
+
+  it('should allow contention', async function() {
+    const objectUnderTest = await build();
+    
+    const nInstances = 8;
+    const nIterations = 5;
+    async function go(filename, fileId) {
+      await objectUnderTest.xOpen(
+        filename,
+        fileId,
+        VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+        pOut.pass());
+      for (let i = 0; i < nIterations; ++i) {
+        const pDataA = { value: new Int8Array(4), size: 4 };
+        const pDataB = { value: new Int8Array(4), size: 4 };
+
+        let maybeBusy;
+        do {
+          maybeBusy = await transact(objectUnderTest, fileId, async function() {
+            // Read two ints.
+            await objectUnderTest.xRead(fileId, pDataA, 0);
+            await new Promise(resolve => setTimeout(resolve));
+            await objectUnderTest.xRead(fileId, pDataB, 4);
+            await new Promise(resolve => setTimeout(resolve));
+
+            expect(Array.from(pDataA.value)).toEqual(Array.from(pDataB.value));
+          }, async function() {
+            // Increment ints.
+            const viewA = new DataView(pDataA.value.buffer);
+            const viewB = new DataView(pDataB.value.buffer);
+            viewA.setInt32(0, viewA.getInt32(0) + 1);
+            viewB.setInt32(0, viewB.getInt32(0) + 1);
+
+            // Store ints.
+            await objectUnderTest.xWrite(fileId, pDataA, 0);
+            await new Promise(resolve => setTimeout(resolve));
+            await objectUnderTest.xWrite(fileId, pDataB, 4);
+            await new Promise(resolve => setTimeout(resolve));
+          });
+        } while (maybeBusy === VFS.SQLITE_BUSY);
+      }
+    }
+
+    await objectUnderTest.xOpen(
+      'foo', FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+      pOut.pass());
+
+    const pData = { value: new Int8Array(4), size: 4 };
+    await objectUnderTest.xWrite(FILE_ID, pData, 0);
+    await objectUnderTest.xWrite(FILE_ID, pData, 4);
+    await objectUnderTest.xClose(FILE_ID);
+
+    const instances = [];
+    for (let i = 0; i < nInstances; ++i) {
+      instances.push(go('foo', i));
+    }
+
+    await Promise.all(instances);
+
+    await objectUnderTest.xOpen(
+      'foo', FILE_ID,
+      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
+      pOut.pass());
+
+    const view = new DataView(pData.value.buffer);
+    await objectUnderTest.xRead(FILE_ID, pData, 0);
+    expect(view.getInt32(0)).toBe(nInstances * nIterations);
+    await objectUnderTest.xRead(FILE_ID, pData, 4);
+    expect(view.getInt32(0)).toBe(nInstances * nIterations);
+    await objectUnderTest.xClose(FILE_ID);
   });
 }
 
 /**
- * 
  * @param {VFS.Base} vfs 
- * @return {VFS.Base}
+ * @param {number} fileId 
+ * @param {(vfs?: VFS.Base, fileId?: number) => Promise<number|void>} [shared]
+ * @param {(vfs?: VFS.Base, fileId?: number) => Promise<number|void>} [exclusive]
+ * @returns {Promise<*>}
  */
-function wrapVFS(vfs) {
-  // Create a Proxy wrapper to track the lock state and add a convenience
-  // function to set the state in one call.
-  let lockState = VFS.SQLITE_LOCK_NONE;
-  return new Proxy(vfs, {
-    get(target, property, receiver) {
-      switch (property) {
-        case 'xLock':
-          return async function(fileId, flags) {
-            const targetState = flags & LOCK_TYPE_MASK;
-            const result = await vfs.xLock(fileId, flags);
-            if (result === VFS.SQLITE_OK) {
-              lockState = targetState;
-            }
-            return result;
-          };
-        
-        case 'xUnlock':
-          return async function(fileId, flags) {
-            const targetState = flags & LOCK_TYPE_MASK;
-            const result = await vfs.xUnlock(fileId, flags);
-            if (result === VFS.SQLITE_OK) {
-              lockState = targetState;
-            }
-            return result;
-          };
-        
-        case 'setLockState':
-          return async function(fileId, targetState) {
-            if (targetState > lockState) {
-              // lock
-              switch (targetState) {
-                case VFS.SQLITE_LOCK_SHARED:
-                  switch (lockState) {
-                    case VFS.SQLITE_LOCK_NONE:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
-                  }
-                  break;
-                
-                case VFS.SQLITE_LOCK_RESERVED:
-                  switch(lockState) {
-                    case VFS.SQLITE_LOCK_NONE:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
-                    case VFS.SQLITE_LOCK_SHARED:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_RESERVED);
-                  }
-                  break;
-        
-                case VFS.SQLITE_LOCK_EXCLUSIVE:
-                  switch(lockState) {
-                    case VFS.SQLITE_LOCK_NONE:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_SHARED);
-                    case VFS.SQLITE_LOCK_SHARED:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_RESERVED);
-                    case VFS.SQLITE_LOCK_EXCLUSIVE:
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE);
-                  }
-                  break;
-              }
-            } else if (targetState < lockState) {
-              // unlock
-              switch (targetState) {
-                case VFS.SQLITE_LOCK_NONE:
-                  switch (lockState) {
-                    case VFS.SQLITE_LOCK_EXCLUSIVE:
-                      await receiver.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED);
-                    case VFS.SQLITE_LOCK_SHARED:
-                      await receiver.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
-                  }
-                  break;
-                
-                case VFS.SQLITE_LOCK_SHARED:
-                  switch (lockState) {
-                    case VFS.SQLITE_LOCK_EXCLUSIVE:
-                      await receiver.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED);
-                  }
-                  break;
+ async function transact(vfs, fileId, shared, exclusive) {
+  try {
+    /** @type {number} */ let result;
+    result = await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED)
+    if (result === VFS.SQLITE_BUSY) return result;
+    if (result !== VFS.SQLITE_OK) throw new Error(`xLock returned ${result}`);
 
-                case VFS.SQLITE_LOCK_RESERVED:
-                  switch (lockState) {
-                    case VFS.SQLITE_LOCK_EXCLUSIVE:
-                      await receiver.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED);
-                      await receiver.xLock(fileId, VFS.SQLITE_LOCK_RESERVED);
-                  }
-                  break;
-              }
-            }
-          };
-
-        default:
-          const value = Reflect.get(target, property, receiver);
-          return typeof value == 'function' ? value.bind(target) : value;
-      }
+    if (shared) {
+      await shared(vfs, fileId);
     }
-  });
+
+    if (exclusive) {
+      result = await vfs.xLock(fileId, VFS.SQLITE_LOCK_RESERVED)
+      if (result === VFS.SQLITE_BUSY) return result;
+      if (result !== VFS.SQLITE_OK) throw new Error(`xLock returned ${result}`);
+
+      result = await vfs.xLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE)
+      if (result === VFS.SQLITE_BUSY) return result;
+      if (result !== VFS.SQLITE_OK) throw new Error(`xLock returned ${result}`);
+
+      await exclusive(vfs, fileId);
+
+      const pOut = { value: new Int8Array() };
+      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, pOut);
+
+      result = await vfs.xSync(fileId, VFS.SQLITE_SYNC_NORMAL);
+      if (result !== VFS.SQLITE_OK) throw new Error(`xSync returned ${result}`);
+
+      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_PHASETWO, pOut);
+      
+      result = await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED);
+      if (result !== VFS.SQLITE_OK) throw new Error(`xUnlock returned ${result}`);
+
+      result = await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
+      if (result !== VFS.SQLITE_OK) throw new Error(`xUnlock returned ${result}`);
+    }
+  } catch (e) {
+    debugger;
+    throw e;
+  }
+  return VFS.SQLITE_OK;
 }
 
 /**
@@ -231,9 +381,6 @@ async function writeString(vfs, fileId, s, iOffset) {
     size: encoded.byteLength,
     value: new Int8Array(encoded.buffer)
   };
-
-  // @ts-ignore
-  await vfs.setLockState(FILE_ID, VFS.SQLITE_LOCK_EXCLUSIVE);
 
   const result = await vfs.xWrite(fileId, pData, iOffset);
   if (result !== VFS.SQLITE_OK) throw new Error('write failed');
@@ -250,9 +397,6 @@ async function readString(vfs, fileId, size, iOffset) {
     size,
     value: new Int8Array(size)
   };
-
-  // @ts-ignore
-  await vfs.setLockState(FILE_ID, VFS.SQLITE_LOCK_SHARED);
 
   const result = await vfs.xRead(fileId, pData, iOffset);
   if (result !== VFS.SQLITE_OK) throw new Error('read failed');

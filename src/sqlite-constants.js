@@ -210,3 +210,8 @@ export const SQLITE_DETERMINISTIC = 0x000000800;
 export const SQLITE_DIRECTONLY    = 0x000080000;
 export const SQLITE_SUBTYPE       = 0x000100000;
 export const SQLITE_INNOCUOUS     = 0x000200000;
+
+// Sync flags
+export const SQLITE_SYNC_NORMAL   = 0x00002;
+export const SQLITE_SYNC_FULL     = 0x00003;
+export const SQLITE_SYNC_DATAONLY = 0x00010;

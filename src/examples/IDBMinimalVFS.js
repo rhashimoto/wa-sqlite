@@ -49,7 +49,11 @@ export class IDBMinimalVFS extends VFS.Base {
     this.#idb = new IDBContext(openDatabase(idbDatabaseName), options);
   }
 
-  closeIDBContext() {
+  async close() {
+    for (const fileId of this.#mapIdToFile) {
+      await this.xClose(fileId);
+    }
+
     this.#idb?.close();
     this.#idb = null;
   }
@@ -204,6 +208,7 @@ export class IDBMinimalVFS extends VFS.Base {
         }
       });
     }
+    return VFS.SQLITE_OK;
   }
 
   xFileSize(fileId, pSize64) {
@@ -217,7 +222,7 @@ export class IDBMinimalVFS extends VFS.Base {
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
-      log(`xLock ${file.path} ${flags}`);
+      log(`xLock ${file.path} ${fileId} ${flags}`);
 
       try {
         const result = await file.locks.lock(flags);
@@ -240,7 +245,7 @@ export class IDBMinimalVFS extends VFS.Base {
   xUnlock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
-      log(`xUnlock ${file.path} ${flags}`);
+      log(`xUnlock ${file.path} ${fileId} ${flags}`);
 
       try {
         await file.locks.unlock(flags);
