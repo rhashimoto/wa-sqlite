@@ -50,7 +50,7 @@ export class IDBMinimalVFS extends VFS.Base {
   }
 
   async close() {
-    for (const fileId of this.#mapIdToFile) {
+    for (const fileId of this.#mapIdToFile.keys()) {
       await this.xClose(fileId);
     }
 

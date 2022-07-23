@@ -1,6 +1,7 @@
 import { IDBMinimalVFS } from "../src/examples/IDBMinimalVFS.js";
-import { configureTests } from "./VFSTests.js";
+import { configureTests, TEST } from "./VFSTests.js";
 
+const SKIP = [TEST.BATCH_ATOMIC];
 const IDB_DATABASE_NAME = 'IDBMinimalVFS_DB';
 
 // jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
@@ -42,9 +43,9 @@ class TestVFS extends IDBMinimalVFS {
 }
 
 describe('IDBMinimalVFS strict', function() {
-  configureTests(() => new TestVFS({ durability: 'strict' }), TestVFS.clear);
+  configureTests(() => new TestVFS({ durability: 'strict' }), TestVFS.clear, SKIP);
 });
 
 describe('IDBMinimalVFS relaxed', function() {
-  configureTests(() => new TestVFS({ durability: 'relaxed' }), TestVFS.clear);
+  configureTests(() => new TestVFS({ durability: 'relaxed' }), TestVFS.clear, SKIP);
 });

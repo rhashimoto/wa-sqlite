@@ -10,13 +10,20 @@ eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt
 in culpa qui officia deserunt mollit anim id est laborum.`
   .trim().replace(/\n/g, ' ');
 
+export const TEST = {
+  BATCH_ATOMIC: 'batch atomic',
+  CONTENTION: 'contenion'
+};
+
 /**
  * 
  * @param {() => VFS.Base} build 
  * @param {() => void|Promise<void>} clear 
- * @param {Iterable} skip 
+ * @param {Iterable} [skip] 
  */
 export function configureTests(build, clear, skip = []) {
+  const skipTests = new Set(skip);
+
   beforeEach(async function() {
     await clear();
   });
@@ -228,11 +235,13 @@ export function configureTests(build, clear, skip = []) {
     expect(Array.from(pData.value)).toEqual(new Array(16).fill(0));
   });
 
-  it('should batch atomic commit if configured', async function() {
-    const objectUnderTest = await build();
-    
-    const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
-    if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+  if (!skipTests.has(TEST.BATCH_ATOMIC)) {
+    it('should batch atomic commit if configured', async function() {
+      const objectUnderTest = await build();
+      
+      const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
+      expect(characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC).toBeTruthy();
+
       const filename = 'foo';
       await objectUnderTest.xOpen(
         filename, FILE_ID,
@@ -265,14 +274,14 @@ export function configureTests(build, clear, skip = []) {
 
       const s = new TextDecoder().decode(pData.value);
       expect(s).toEqual(TEXT);
-    }
-  });;
+    });;
 
-  it('should batch atomic rollback if configured ', async function() {
-    const objectUnderTest = await build();
-    
-    const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
-    if (characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC) {
+    it('should batch atomic rollback', async function() {
+      const objectUnderTest = await build();
+      
+      const characteristics = await objectUnderTest.xDeviceCharacteristics(FILE_ID);
+      expect(characteristics & VFS.SQLITE_IOCAP_BATCH_ATOMIC).toBeTruthy();
+
       const filename = 'foo';
       await objectUnderTest.xOpen(
         filename, FILE_ID,
@@ -305,80 +314,82 @@ export function configureTests(build, clear, skip = []) {
 
       result = await objectUnderTest.xFileSize(FILE_ID, pOut);
       expect(pOut.value).toBe(0);
-    }
-  });
+    });
+  } // skip check
 
-  it('should allow contention', async function() {
-    const objectUnderTest = await build();
-    
-    const nInstances = 8;
-    const nIterations = 5;
-    async function go(filename, fileId) {
-      await objectUnderTest.xOpen(
-        filename,
-        fileId,
-        VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
-        pOut.pass());
-      for (let i = 0; i < nIterations; ++i) {
-        const pDataA = { value: new Int8Array(4), size: 4 };
-        const pDataB = { value: new Int8Array(4), size: 4 };
+  if (!skipTests.has(TEST.CONTENTION)) {
+    it('should allow contention', async function() {
+      const objectUnderTest = await build();
+      
+      const nInstances = 8;
+      const nIterations = 5;
+      async function go(filename, fileId) {
+        await objectUnderTest.xOpen(
+          filename,
+          fileId,
+          VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+          pOut.pass());
+        for (let i = 0; i < nIterations; ++i) {
+          const pDataA = { value: new Int8Array(4), size: 4 };
+          const pDataB = { value: new Int8Array(4), size: 4 };
 
-        let maybeBusy;
-        do {
-          maybeBusy = await transact(objectUnderTest, fileId, async function() {
-            // Read two ints.
-            await objectUnderTest.xRead(fileId, pDataA, 0);
-            await new Promise(resolve => setTimeout(resolve));
-            await objectUnderTest.xRead(fileId, pDataB, 4);
-            await new Promise(resolve => setTimeout(resolve));
+          let maybeBusy;
+          do {
+            maybeBusy = await transact(objectUnderTest, fileId, async function() {
+              // Read two ints.
+              await objectUnderTest.xRead(fileId, pDataA, 0);
+              await new Promise(resolve => setTimeout(resolve));
+              await objectUnderTest.xRead(fileId, pDataB, 4);
+              await new Promise(resolve => setTimeout(resolve));
 
-            expect(Array.from(pDataA.value)).toEqual(Array.from(pDataB.value));
-          }, async function() {
-            // Increment ints.
-            const viewA = new DataView(pDataA.value.buffer);
-            const viewB = new DataView(pDataB.value.buffer);
-            viewA.setInt32(0, viewA.getInt32(0) + 1);
-            viewB.setInt32(0, viewB.getInt32(0) + 1);
+              expect(Array.from(pDataA.value)).toEqual(Array.from(pDataB.value));
+            }, async function() {
+              // Increment ints.
+              const viewA = new DataView(pDataA.value.buffer);
+              const viewB = new DataView(pDataB.value.buffer);
+              viewA.setInt32(0, viewA.getInt32(0) + 1);
+              viewB.setInt32(0, viewB.getInt32(0) + 1);
 
-            // Store ints.
-            await objectUnderTest.xWrite(fileId, pDataA, 0);
-            await new Promise(resolve => setTimeout(resolve));
-            await objectUnderTest.xWrite(fileId, pDataB, 4);
-            await new Promise(resolve => setTimeout(resolve));
-          });
-        } while (maybeBusy === VFS.SQLITE_BUSY);
+              // Store ints.
+              await objectUnderTest.xWrite(fileId, pDataA, 0);
+              await new Promise(resolve => setTimeout(resolve));
+              await objectUnderTest.xWrite(fileId, pDataB, 4);
+              await new Promise(resolve => setTimeout(resolve));
+            });
+          } while (maybeBusy === VFS.SQLITE_BUSY);
+        }
       }
-    }
 
-    await objectUnderTest.xOpen(
-      'foo', FILE_ID,
-      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
-      pOut.pass());
+      await objectUnderTest.xOpen(
+        'foo', FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+        pOut.pass());
 
-    const pData = { value: new Int8Array(4), size: 4 };
-    await objectUnderTest.xWrite(FILE_ID, pData, 0);
-    await objectUnderTest.xWrite(FILE_ID, pData, 4);
-    await objectUnderTest.xClose(FILE_ID);
+      const pData = { value: new Int8Array(4), size: 4 };
+      await objectUnderTest.xWrite(FILE_ID, pData, 0);
+      await objectUnderTest.xWrite(FILE_ID, pData, 4);
+      await objectUnderTest.xClose(FILE_ID);
 
-    const instances = [];
-    for (let i = 0; i < nInstances; ++i) {
-      instances.push(go('foo', i));
-    }
+      const instances = [];
+      for (let i = 0; i < nInstances; ++i) {
+        instances.push(go('foo', i));
+      }
 
-    await Promise.all(instances);
+      await Promise.all(instances);
 
-    await objectUnderTest.xOpen(
-      'foo', FILE_ID,
-      VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
-      pOut.pass());
+      await objectUnderTest.xOpen(
+        'foo', FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
+        pOut.pass());
 
-    const view = new DataView(pData.value.buffer);
-    await objectUnderTest.xRead(FILE_ID, pData, 0);
-    expect(view.getInt32(0)).toBe(nInstances * nIterations);
-    await objectUnderTest.xRead(FILE_ID, pData, 4);
-    expect(view.getInt32(0)).toBe(nInstances * nIterations);
-    await objectUnderTest.xClose(FILE_ID);
-  });
+      const view = new DataView(pData.value.buffer);
+      await objectUnderTest.xRead(FILE_ID, pData, 0);
+      expect(view.getInt32(0)).toBe(nInstances * nIterations);
+      await objectUnderTest.xRead(FILE_ID, pData, 4);
+      expect(view.getInt32(0)).toBe(nInstances * nIterations);
+      await objectUnderTest.xClose(FILE_ID);
+    });
+  } // skip check
 }
 
 /**

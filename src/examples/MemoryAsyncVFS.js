@@ -11,6 +11,12 @@ export class MemoryAsyncVFS extends MemoryVFS {
     super();
   }
 
+  async close() {
+    for (const fileId of this.mapIdToFile.keys()) {
+      await this.xClose(fileId);
+    }
+  }
+
   /**
    * @param {string?} name 
    * @param {number} fileId 
