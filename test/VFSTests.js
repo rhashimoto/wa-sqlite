@@ -319,15 +319,14 @@ export function configureTests(build, clear, skip = []) {
 
   if (!skipTests.has(TEST.CONTENTION)) {
     it('should allow contention', async function() {
-      const objectUnderTest = await build();
-      
       const nInstances = 8;
       const nIterations = 5;
       async function go(filename, fileId) {
+        const objectUnderTest = await build();
         await objectUnderTest.xOpen(
           filename,
           fileId,
-          VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+          VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
           pOut.pass());
         for (let i = 0; i < nIterations; ++i) {
           const pDataA = { value: new Int8Array(4), size: 4 };
@@ -360,14 +359,18 @@ export function configureTests(build, clear, skip = []) {
         }
       }
 
+      const objectUnderTest = await build();
       await objectUnderTest.xOpen(
         'foo', FILE_ID,
-        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_JOURNAL,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
         pOut.pass());
 
       const pData = { value: new Int8Array(4), size: 4 };
-      await objectUnderTest.xWrite(FILE_ID, pData, 0);
-      await objectUnderTest.xWrite(FILE_ID, pData, 4);
+      await transact(objectUnderTest, FILE_ID, null, async function() {
+        await objectUnderTest.xWrite(FILE_ID, pData, 0);
+        await objectUnderTest.xWrite(FILE_ID, pData, 4);
+      });
+
       await objectUnderTest.xClose(FILE_ID);
 
       const instances = [];
@@ -382,11 +385,14 @@ export function configureTests(build, clear, skip = []) {
         VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
         pOut.pass());
 
-      const view = new DataView(pData.value.buffer);
-      await objectUnderTest.xRead(FILE_ID, pData, 0);
-      expect(view.getInt32(0)).toBe(nInstances * nIterations);
-      await objectUnderTest.xRead(FILE_ID, pData, 4);
-      expect(view.getInt32(0)).toBe(nInstances * nIterations);
+      await transact(objectUnderTest, FILE_ID, async function() {
+        const view = new DataView(pData.value.buffer);
+        await objectUnderTest.xRead(FILE_ID, pData, 0);
+        expect(view.getInt32(0)).toBe(nInstances * nIterations);
+        await objectUnderTest.xRead(FILE_ID, pData, 4);
+        expect(view.getInt32(0)).toBe(nInstances * nIterations);
+      });
+
       await objectUnderTest.xClose(FILE_ID);
     });
   } // skip check

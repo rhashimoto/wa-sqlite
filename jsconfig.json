@@ -3,7 +3,8 @@
   "compilerOptions": {
     "checkJs": true,
     "target":"es2020",
+    "module": "es2020",
     "moduleResolution": "node",
-    "lib": ["DOM", "ESNext"]
+    "lib": ["DOM", "ESNext", "WebWorker"]
   }
 }

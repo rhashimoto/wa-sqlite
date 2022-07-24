@@ -32,6 +32,12 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
 
   get name() { return 'opfs'; }
 
+  async close() {
+    for (const fileId of this.#mapIdToFile.keys()) {
+      await this.xClose(fileId);
+    }
+  }
+
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;
