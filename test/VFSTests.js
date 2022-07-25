@@ -494,11 +494,13 @@ export function configureTests(build, clear, skip = []) {
  * @returns {Promise<*>}
  */
  async function transact(vfs, fileId, shared, exclusive) {
+  const cleanup = [];
   try {
     /** @type {number} */ let result;
     result = await vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED)
     if (result === VFS.SQLITE_BUSY) return result;
     if (result !== VFS.SQLITE_OK) throw new Error(`xLock returned ${result}`);
+    cleanup.push(() => vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE));
 
     if (shared) {
       await shared(vfs, fileId);
@@ -512,6 +514,7 @@ export function configureTests(build, clear, skip = []) {
       result = await vfs.xLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE)
       if (result === VFS.SQLITE_BUSY) return result;
       if (result !== VFS.SQLITE_OK) throw new Error(`xLock returned ${result}`);
+      cleanup.push(() => vfs.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED));
 
       await exclusive(vfs, fileId);
 
@@ -522,16 +525,15 @@ export function configureTests(build, clear, skip = []) {
       if (result !== VFS.SQLITE_OK) throw new Error(`xSync returned ${result}`);
 
       result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_PHASETWO, pOut);
-      
-      result = await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED);
-      if (result !== VFS.SQLITE_OK) throw new Error(`xUnlock returned ${result}`);
-
-      result = await vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE);
-      if (result !== VFS.SQLITE_OK) throw new Error(`xUnlock returned ${result}`);
     }
   } catch (e) {
     debugger;
     throw e;
+  }
+  finally {
+    while (cleanup.length) {
+      await cleanup.pop()();
+    }
   }
   return VFS.SQLITE_OK;
 }
