@@ -1,6 +1,4 @@
-// @ts-ignore
 import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
-// @ts-ignore
 import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 
