@@ -1,7 +1,10 @@
 import { IDBMinimalVFS } from "../src/examples/IDBMinimalVFS.js";
 import { configureTests, TEST } from "./VFSTests.js";
 
-const SKIP = [TEST.BATCH_ATOMIC];
+const SKIP = [
+  TEST.BATCH_ATOMIC,
+  TEST.REBLOCK
+];
 const IDB_DATABASE_NAME = 'IDBMinimalVFS_DB';
 
 // jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;

@@ -14,7 +14,8 @@ module.exports = function(config) {
     plugins: ['karma-jasmine'],
     client: {
       jasmine: {
-        random: true
+        random: true,
+        timeoutInterval: 30_000
       }
     },
 

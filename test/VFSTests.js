@@ -10,9 +10,13 @@ eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt
 in culpa qui officia deserunt mollit anim id est laborum.`
   .trim().replace(/\n/g, ' ');
 
+// These flags can be used to suppress particular tests for a VFS
+// subclass. For example, most subclasses will not need batch atomic
+// write and rollback testing.
 export const TEST = {
   BATCH_ATOMIC: 'batch atomic',
-  CONTENTION: 'contenion'
+  CONTENTION: 'contenion',
+  REBLOCK: 'reblock'
 };
 
 /**
@@ -396,6 +400,90 @@ export function configureTests(build, clear, skip = []) {
       await objectUnderTest.xClose(FILE_ID);
     });
   } // skip check
+
+  if (!skipTests.has(TEST.REBLOCK)) {
+    it('should handle page size change', async function() {
+      const objectUnderTest = await build();
+      await objectUnderTest.xOpen(
+        'foo', FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
+        pOut.pass());
+
+      const pageSizes = [4096, 8192, 65536, 4096, 512];
+      const data = new Int8Array(65536 * 4);
+      (function() {
+        const dataView = new DataView(data.buffer);
+        for (let i = 0; i < data.byteLength; i += 4) {
+          dataView.setUint32(i, Math.random() * (2 ** 32));
+        }
+      })();
+
+      // File will always contain a configuration page followed by 256 KB of
+      // data.
+      async function writeFile(pageSize, writeSize) {
+        // Create in-memory file image.
+        const nWrites = Math.trunc((pageSize + data.byteLength + writeSize - 1) / writeSize);
+        const allFileData = new Int8Array(writeSize * nWrites);
+        allFileData.set(data, pageSize);
+
+        // Set file header values.
+        const nPages = Math.trunc((pageSize + data.byteLength + pageSize - 1) / pageSize);
+        const dataView = new DataView(allFileData.buffer);
+        dataView.setUint16(16, pageSize < 65536 ? pageSize : 1);
+        dataView.setUint32(28, nPages)
+
+        // Write the file in writeSize chunks.
+        for (let i = 0; i < nWrites; ++i) {
+          const offset = i * writeSize;
+          const chunk = allFileData.subarray(offset, offset + writeSize);
+          await objectUnderTest.xWrite(FILE_ID, { value: chunk, size: writeSize }, offset);
+        }
+      }
+
+      // Fill at initial page size.
+      let pageSize = pageSizes[0];
+      await transact(objectUnderTest, FILE_ID, null, async function() {
+        await writeFile(pageSize, pageSize);
+      });
+
+      for (const newPageSize of pageSizes) {
+        // Overwrite with new page data at the old page size.
+        await transact(objectUnderTest, FILE_ID, null, async function() {
+          // As SQLite does, signal overwrite of the entire file.
+          await objectUnderTest.xFileControl(FILE_ID, VFS.SQLITE_FCNTL_OVERWRITE, pOut);
+
+          await writeFile(newPageSize, pageSize);
+        });
+
+        pageSize = newPageSize;
+
+        await transact(objectUnderTest, FILE_ID, async function() {
+          // Read page size.
+          const pageData = new Int8Array(2);
+          await objectUnderTest.xRead(
+            FILE_ID,
+            { value: pageData, size: pageData.byteLength },
+            16);
+
+          const dataView = new DataView(pageData.buffer);
+          expect(dataView.getUint16(0)).toEqual(pageSize < 65536 ? pageSize : 1);
+
+          // Read data one sector at a time.
+          const readSize = 512;
+          const readData = new Int8Array(data.byteLength);
+          const readCount = data.byteLength / readSize;
+          for (let i = 0; i < readCount; ++i) {
+            const offset = i * readSize;
+            await objectUnderTest.xRead(
+              FILE_ID,
+              { value: readData.subarray(offset, offset + readSize), size: readSize },
+              pageSize + offset);
+          }
+          expect(readData.every((value, index) => value === data[index])).toBeTrue();
+        });
+      }
+    });
+  }
 }
 
 /**
