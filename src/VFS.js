@@ -104,7 +104,7 @@ export class Base {
    * @returns {number|Promise<number>}
    */
   xSectorSize(fileId) {
-    return 0;
+    return 512;
   }
 
   /**

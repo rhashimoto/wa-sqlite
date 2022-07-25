@@ -1,6 +1,6 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
-import { WebLocks } from './WebLocks.js';
+import { WebLocksExclusive as WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const SECTOR_SIZE = 512;
@@ -39,6 +39,7 @@ function log(...args) {
  * @property {string} path
  * @property {number} flags
  * @property {FileBlock} block0
+ * @property {WebLocks} locks
  * 
  * Extra state for database files:
  * @property {number[]} [journalPages]
@@ -64,7 +65,6 @@ export class IDBVersionedVFS extends VFS.Base {
   /** @type {Map<string, OpenedFileEntry>} */ #mapPathToFile = new Map();
 
   /** @type {IDBContext} */ #idb;
-  #webLocks = new WebLocks();
   /** @type {Set<string>} */ #pendingPurges = new Set();
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
@@ -86,7 +86,8 @@ export class IDBVersionedVFS extends VFS.Base {
         const file = {
           path: url.pathname,
           flags,
-          block0: null
+          block0: null,
+          locks: new WebLocks(url.pathname)
         };
         this.#mapIdToFile.set(fileId, file);
         this.#mapPathToFile.set(file.path, file);
@@ -489,8 +490,8 @@ export class IDBVersionedVFS extends VFS.Base {
       log(`xLock ${file.path} ${flags}`);
 
       // Acquire the lock.
-      const result = this.#webLocks.lock(file.path, flags);
-      if (flags === VFS.SQLITE_LOCK_RESERVED && !this.#isJournal(file)) {
+      const result = file.locks.lock(flags);
+      if (file.locks.state === VFS.SQLITE_LOCK_RESERVED && !this.#isJournal(file)) {
         // Clear blocks from abandoned transactions, i.e. blocks with
         // lower (newer) versions than block 0. This is done on reserved
         // locking which is after changes by other connections can be made,
@@ -514,7 +515,7 @@ export class IDBVersionedVFS extends VFS.Base {
       const file = this.#mapIdToFile.get(fileId);
       log(`xUnlock ${file.path} ${flags}`);
       
-      return this.#webLocks.unlock(file.path, flags);
+      return file.locks.unlock(flags);
     });
   }
 

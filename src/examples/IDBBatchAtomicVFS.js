@@ -1,6 +1,6 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from '../VFS.js';
-import { WebLocks } from './WebLocks.js';
+import { WebLocksExclusive as WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const SECTOR_SIZE = 512;
@@ -38,6 +38,7 @@ function log(...args) {
  * @property {string} path
  * @property {number} flags
  * @property {FileBlock} block0
+ * @property {WebLocks} locks
  * 
  * @property {Set<number>} [changedPages]
  * @property {boolean} [overwrite]
@@ -50,7 +51,6 @@ export class IDBBatchAtomicVFS extends VFS.Base {
   /** @type {Map<number, OpenedFileEntry>} */ #mapIdToFile = new Map();
 
   /** @type {IDBContext} */ #idb;
-  #webLocks = new WebLocks();
   /** @type {Set<string>} */ #pendingPurges = new Set();
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
@@ -60,6 +60,15 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     this.#idb = new IDBContext(openDatabase(idbDatabaseName), {
       durability: this.#options.durability
     });
+  }
+
+  async close() {
+    for (const fileId of this.#mapIdToFile.keys()) {
+      await this.xClose(fileId);
+    }
+
+    this.#idb?.close();
+    this.#idb = null;
   }
 
   xOpen(name, fileId, flags, pOutFlags) {
@@ -73,7 +82,8 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         /** @type {OpenedFileEntry} */ const file = {
           path: url.pathname,
           flags,
-          block0: null
+          block0: null,
+          locks: new WebLocks(url.pathname)
         };
         this.#mapIdToFile.set(fileId, file);
 
@@ -272,8 +282,8 @@ export class IDBBatchAtomicVFS extends VFS.Base {
 
       try {
         // Acquire the lock.
-        const result = await this.#webLocks.lock(file.path, flags);
-        if (result === VFS.SQLITE_OK && flags === VFS.SQLITE_LOCK_SHARED) {
+        const result = await file.locks.lock(flags);
+        if (result === VFS.SQLITE_OK && file.locks.state === VFS.SQLITE_LOCK_SHARED) {
           // Update block 0 in case another connection changed it.
           file.block0 = await this.#idb.run('readonly', ({blocks}) => {
             return blocks.get(this.#bound(file, 0));
@@ -293,7 +303,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       log(`xUnlock ${file.path} ${flags}`);
       
       try {
-        return this.#webLocks.unlock(file.path, flags);
+        return file.locks.unlock(flags);
       } catch(e) {
         console.error(e);
         return VFS.SQLITE_IOERR;

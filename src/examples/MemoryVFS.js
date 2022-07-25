@@ -16,6 +16,12 @@ export class MemoryVFS extends VFS.Base {
     super();
   }
 
+  close() {
+    for (const fileId of this.mapIdToFile.keys()) {
+      this.xClose(fileId);
+    }
+  }
+
   /**
    * @param {string?} name 
    * @param {number} fileId 
