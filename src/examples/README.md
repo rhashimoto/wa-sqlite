@@ -17,7 +17,9 @@ This is now the featured IndexedDB VFS for the demo and benchmarks.
 ### IDBVersionedVFS
 This is a VFS implementation that stores
 [versioned blocks on IndexedDB](https://github.com/rhashimoto/wa-sqlite/discussions/37).
-It uses an interesting hack to avoid storing journal data.
+It uses an interesting hack to avoid storing journal data. No further development
+is planned for this class as IDBBatchAtomicVFS provides most of the same advantages
+with a cleaner approach.
 
 ### IDBMinimalVFS
 This is another implementation of VFS on IndexedDB that provides less performance
@@ -30,8 +32,8 @@ This VFS uses the proposed
 [Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
 with the
 [Access Handle](https://github.com/WICG/file-system-access/blob/main/AccessHandle.md)
-dependent proposal. Note that OPFS works only in a Worker and is not implemented
-on all browsers.
+dependent proposal. Note that OPFS works only in a Worker and is [not supported
+on all browsers](https://caniuse.com/native-filesystem-api).
 
 ## Module examples
 ### ArrayModule and ArrayAsyncModule
