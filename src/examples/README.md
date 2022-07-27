@@ -32,8 +32,8 @@ This VFS uses the proposed
 [Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
 with the
 [Access Handle](https://github.com/WICG/file-system-access/blob/main/AccessHandle.md)
-dependent proposal. Note that OPFS works only in a Worker and is [not supported
-on all browsers](https://caniuse.com/native-filesystem-api).
+dependent proposal. Note that OPFS works only in a Worker and at this writing is
+[not supported on all browsers](https://caniuse.com/native-filesystem-api).
 
 ## Module examples
 ### ArrayModule and ArrayAsyncModule
@@ -44,22 +44,19 @@ array as a SQLite table.
 
 ## Utility examples
 ### WebLocks
-This is a helper class for VFS implementers that use the
+There are two helper classes for VFS implementers that use the
 [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)
 to provide
 [SQLite locking semantics](https://www.sqlite.org/lockingv3.html)
-for the `xLock()` and `xUnlock()` methods. The IDB VFS classes and OriginPrivateFileSystemVFS
-show how to incorporate it.
+for the `xLock()` and `xUnlock()` methods. Both classes provide the
+same interface so either one can be used. The IDB VFS classes and
+OriginPrivateFileSystemVFS show how.
 
-The implementation uses a single exclusive lock, so only one connection can
+WebLocksExclusive uses a single exclusive lock, so only one connection can
 access the database file at a time, i.e. multiple concurrent readers are
 not supported.
 
-### WebLocksShared
-This is an alternative Web Locks helper class that uses the same API as
-WebLocks, but it does allow multiple concurrent readers with shared
-locking.
-
+WebLocksShared uses shared locking to allow multiple concurrent readers.
 Be aware that using this locking implementation means that applications
 will need to handle exceptions with a `SQLITE_BUSY` code by rolling back
 and replaying any open transaction.
@@ -67,7 +64,7 @@ and replaying any open transaction.
 ### IDBContext
 This is a helper class for IndexedDB VFS implementers that scopes
 IndexedDB transactions to reduce the number of transactions needed.
-See its use in IndexedDbVFS and IDBMinimalVFS.
+See its use in IDBBatchAtomicVFS and IDBMinimalVFS.
 
 ### tag
 This is a template tag function generator that can be used to
