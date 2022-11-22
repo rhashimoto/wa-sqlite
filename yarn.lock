@@ -147,6 +147,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@socket.io/component-emitter@npm:~3.1.0":
+  version: 3.1.0
+  resolution: "@socket.io/component-emitter@npm:3.1.0"
+  checksum: db069d95425b419de1514dffe945cc439795f6a8ef5b9465715acf5b8b50798e2c91b8719cbf5434b3fe7de179d6cdcd503c277b7871cb3dd03febb69bdd50fa
+  languageName: node
+  linkType: hard
+
 "@tootallnate/once@npm:2":
   version: 2.0.0
   resolution: "@tootallnate/once@npm:2.0.0"
@@ -177,13 +184,6 @@ __metadata:
   version: 5.2.0
   resolution: "@types/command-line-args@npm:5.2.0"
   checksum: 423121d2d083765f5b78d090115f3be82d53a39cec9de63719cbd07021e6330fab19b75e2290af1f7dda84efd7964dc498eb10b2b465991de27045db95aa1eef
-  languageName: node
-  linkType: hard
-
-"@types/component-emitter@npm:^1.2.10":
-  version: 1.2.11
-  resolution: "@types/component-emitter@npm:1.2.11"
-  checksum: 0e081c5f7a4b113af3732f67ad9ebb487d5c239d440d96938ff9a679d18bb9337a513638e12b5b02a7a921494eef18c5a4d78f1188bc43a12290edd74c42a9c7
   languageName: node
   linkType: hard
 
@@ -832,13 +832,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"component-emitter@npm:~1.3.0":
-  version: 1.3.0
-  resolution: "component-emitter@npm:1.3.0"
-  checksum: b3c46de38ffd35c57d1c02488355be9f218e582aec72d72d1b8bbec95a3ac1b38c96cd6e03ff015577e68f550fbb361a3bfdbd9bb248be9390b7b3745691be6b
-  languageName: node
-  linkType: hard
-
 "concat-map@npm:0.0.1":
   version: 0.0.1
   resolution: "concat-map@npm:0.0.1"
@@ -1080,9 +1073,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"engine.io@npm:~6.1.0":
-  version: 6.1.3
-  resolution: "engine.io@npm:6.1.3"
+"engine.io@npm:~6.2.1":
+  version: 6.2.1
+  resolution: "engine.io@npm:6.2.1"
   dependencies:
     "@types/cookie": ^0.4.1
     "@types/cors": ^2.8.12
@@ -1094,7 +1087,7 @@ __metadata:
     debug: ~4.3.1
     engine.io-parser: ~5.0.3
     ws: ~8.2.3
-  checksum: 7c0ddb6a63806cea2277028b49e39c30d7e968c69f53bfbb89466d808079d43aa9b037f0d3c10436ff1f87f31a801ec7d10a2fdba61f86f13c6bea4d035fe2a5
+  checksum: 626d7a77f2f6d3e1f888c43932e2f34222201b6c0bc4bcbb0ead054cc170a1df3bf0d6f8b34432e68d7223346b7aa5ed34fbda1e706ef02b7801789465e34f40
   languageName: node
   linkType: hard
 
@@ -2550,35 +2543,34 @@ __metadata:
   languageName: node
   linkType: hard
 
-"socket.io-adapter@npm:~2.3.3":
-  version: 2.3.3
-  resolution: "socket.io-adapter@npm:2.3.3"
-  checksum: 73890e0a33e48a9e4be83e5fa2b8ea9728d2a35ae2fed373cad4d6744c6512c0e1c735e7820df9821e58c4738dc355bdaec5aae30bc56f4d6a41d999596d0c82
+"socket.io-adapter@npm:~2.4.0":
+  version: 2.4.0
+  resolution: "socket.io-adapter@npm:2.4.0"
+  checksum: a84639946dce13547b95f6e09fe167cdcd5d80941afc2e46790cc23384e0fd3c901e690ecc9bdd600939ce6292261ee15094a0b486f797ed621cfc8783d87a0c
   languageName: node
   linkType: hard
 
-"socket.io-parser@npm:~4.0.4":
-  version: 4.0.5
-  resolution: "socket.io-parser@npm:4.0.5"
+"socket.io-parser@npm:~4.2.1":
+  version: 4.2.1
+  resolution: "socket.io-parser@npm:4.2.1"
   dependencies:
-    "@types/component-emitter": ^1.2.10
-    component-emitter: ~1.3.0
+    "@socket.io/component-emitter": ~3.1.0
     debug: ~4.3.1
-  checksum: 8b60cf3abb9c3571f90cf894d40f41459ab007e6cee7ca8ee28ab107d76ded4a72ca5c4e5dcb82d996d4f78b3689dd3eb36ba0b39a66e25e2e9a9afa276c81c5
+  checksum: 2582202f22538d7e6b4436991378cb4cea3b2f8219cda24923ae35afd291ab5ad6120e7d093e41738256b6c6ad10c667dd25753c2d9a2340fead04e9286f152d
   languageName: node
   linkType: hard
 
 "socket.io@npm:^4.2.0":
-  version: 4.4.1
-  resolution: "socket.io@npm:4.4.1"
+  version: 4.5.4
+  resolution: "socket.io@npm:4.5.4"
   dependencies:
     accepts: ~1.3.4
     base64id: ~2.0.0
     debug: ~4.3.2
-    engine.io: ~6.1.0
-    socket.io-adapter: ~2.3.3
-    socket.io-parser: ~4.0.4
-  checksum: a559ae52359f1ca3ce5a347368cf985c72259e1ab1bf2bf769ca0add5db34e2a86f4e183a58f37f32676ec482c71fedb7b08d873dc31cf581f5ba0797a8382fe
+    engine.io: ~6.2.1
+    socket.io-adapter: ~2.4.0
+    socket.io-parser: ~4.2.1
+  checksum: b5456d361b26f28ad343915cbb2f9ec468071a034a39e54382956a5f50dad00ab1b97a5519269c394e077f04ee9d9e04230fff39280baac6828a84b07b0e85d4
   languageName: node
   linkType: hard
 
