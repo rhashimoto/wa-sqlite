@@ -181,7 +181,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
       const fileEntry = this.#mapIdToFile.get(fileId);
       log(`xUnlock ${fileEntry.filename} ${flags}`);
 
-      if (flags === VFS.SQLITE_LOCK_NONE) {
+      if (flags !== VFS.SQLITE_LOCK_EXCLUSIVE) {
         await fileEntry.accessHandle?.close();
         fileEntry.accessHandle = null;
       }
