@@ -509,7 +509,9 @@ export function Factory(Module) {
     const row = [];
     const nColumns = sqlite3.data_count(stmt);
     for (let i = 0; i < nColumns; ++i) {
-      row.push(sqlite3.column(stmt, i));
+      const value = sqlite3.column(stmt, i);
+      // @ts-ignore
+      row.push(value?.buffer ? value.slice() : value);
     }
     return row;
   };

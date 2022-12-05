@@ -384,6 +384,25 @@ function shared(sqlite3Ready) {
     `, row => sum = row[0]);
     expect(sum).toBe(5 * 6 / 2);
   });
+
+  it('should fetch blob column', async function() {
+    await sqlite3.exec(
+      db, `
+      CREATE TABLE t (x);
+      INSERT INTO t VALUES (X''), (X'2a'), (X'000102'), (X'deadbeef');
+    `);
+
+    // With callback.
+    const rows = [];
+    await sqlite3.exec(db, `SELECT * FROM t`, function(row) {
+      rows.push(row);
+    });
+
+    expect(Array.from(rows[0][0])).toEqual([]);
+    expect(Array.from(rows[1][0])).toEqual([42]);
+    expect(Array.from(rows[2][0])).toEqual([0, 1, 2]);
+    expect(Array.from(rows[3][0])).toEqual([...new Int8Array([0xde, 0xad, 0xbe, 0xef])]);
+  });
 }
 
 describe('sqlite-api', function() {
