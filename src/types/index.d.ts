@@ -598,6 +598,9 @@ declare interface SQLiteAPI {
 
   /**
    * One-step query execution interface
+   * 
+   * The implementation of this function uses {@link row}, which makes a
+   * copy of blobs.
    * @see https://www.sqlite.org/c3ref/exec.html
    * @param db database pointer
    * @param zSQL queries
@@ -751,6 +754,10 @@ declare interface SQLiteAPI {
 
    /**
     * Get all column data for a row from a prepared statement step
+    * 
+    * This convenience function will return a copy of any blob, unlike
+    * {@link column_blob} which returns a value referencing volatile WASM
+    * memory with short validity.
     * @param stmt prepared statement pointer
     * @returns row data
     */

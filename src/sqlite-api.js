@@ -510,8 +510,11 @@ export function Factory(Module) {
     const nColumns = sqlite3.data_count(stmt);
     for (let i = 0; i < nColumns; ++i) {
       const value = sqlite3.column(stmt, i);
+
+      // Copy blob if aliasing volatile WebAssembly memory. This avoids an
+      // unnecessary copy if users monkey patch column_blob to copy.
       // @ts-ignore
-      row.push(value?.buffer ? value.slice() : value);
+      row.push(value?.buffer === Module.HEAP8.buffer ? value.slice() : value);
     }
     return row;
   };
