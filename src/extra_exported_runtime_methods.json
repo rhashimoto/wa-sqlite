@@ -1,6 +1,7 @@
 [
   "ccall",
   "cwrap",
+  "getTempRet0",
   "getValue",
   "setValue",
   "UTF8ToString",

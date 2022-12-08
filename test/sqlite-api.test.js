@@ -95,6 +95,7 @@ function shared(sqlite3Ready) {
 
     result = await sqlite3.finalize(prepared.stmt);
     expect(result).toBe(SQLite.SQLITE_OK);
+    sqlite3.str_finish(str);
 
     const results = [];
     await sqlite3.exec(
@@ -222,7 +223,7 @@ function shared(sqlite3Ready) {
     // Apply the function to each row.
     const values = [];
     await sqlite3.exec(db, `SELECT MyFunc(0, value) FROM tbl`, row => {
-      // Blob results do not remain valid so copy to retain.
+      // Convert Int8Array to Array for comparison.
       const value = row[0] instanceof Int8Array ? Array.from(row[0]) : row[0];
       values.push(value);
     });
@@ -402,6 +403,115 @@ function shared(sqlite3Ready) {
     expect(Array.from(rows[1][0])).toEqual([42]);
     expect(Array.from(rows[2][0])).toEqual([0, 1, 2]);
     expect(Array.from(rows[3][0])).toEqual([...new Int8Array([0xde, 0xad, 0xbe, 0xef])]);
+  });
+
+  it('should handle 64-bit integer with {bind,column}_int64', async function() {
+    /** @type {[string, bigint][]} */
+    const entries = [
+      ['0', 0n],
+      ['1', 1n],
+      ['2^31 - 1', 0x7fffffffn],
+      ['2^31', 0x80000000n],
+      ['2^32 - 1', 0xffffffffn],
+      ['2^32', 0x100000000n],
+      ['2^63 - 1', 0x7fffffffffffffffn],
+      ['2^63', -0x8000000000000000n],
+      ['2^64 - 1', -1n],
+      ['MAX_SAFE_INTEGER', BigInt(Number.MAX_SAFE_INTEGER)],
+      ['MIN_SAFE_INTEGER', BigInt(Number.MIN_SAFE_INTEGER)],
+    ];
+    await sqlite3.exec(db, `CREATE TABLE t (key PRIMARY KEY, value)`);
+    for await (const stmt of sqlite3.statements(db, 'INSERT INTO t VALUES (?, ?)')) {
+      for (const [key, value] of entries) {
+        await sqlite3.reset(stmt);
+        sqlite3.bind(stmt, 1, key);
+        sqlite3.bind_int64(stmt, 2, value);
+        await sqlite3.step(stmt);
+
+        for await (const s of sqlite3.statements(db, `SELECT value FROM t WHERE key='${key}'`)) {
+          await sqlite3.step(s);
+          const result = sqlite3.column_int64(s, 0)
+          expect(result).toEqual(value);
+        }
+      }
+    }
+  });
+
+  it('should handle 64-bit integer with {bind,column}', async function() {
+    /** @type {[string, bigint][]} */
+    const entries = [
+      ['0', 0n],
+      ['1', 1n],
+      ['2^31 - 1', 0x7fffffffn],
+      ['2^31', 0x80000000n],
+      ['2^32 - 1', 0xffffffffn],
+      ['2^32', 0x100000000n],
+      ['2^63 - 1', 0x7fffffffffffffffn],
+      ['2^63', -0x8000000000000000n],
+      ['2^64 - 1', -1n],
+      ['MAX_SAFE_INTEGER', BigInt(Number.MAX_SAFE_INTEGER)],
+      ['MIN_SAFE_INTEGER', BigInt(Number.MIN_SAFE_INTEGER)],
+    ];
+    await sqlite3.exec(db, `CREATE TABLE t (key PRIMARY KEY, value)`);
+    for await (const stmt of sqlite3.statements(db, 'INSERT INTO t VALUES (?, ?)')) {
+      for (const [key, value] of entries) {
+        await sqlite3.reset(stmt);
+        sqlite3.bind(stmt, 1, key);
+        sqlite3.bind(stmt, 2, value);
+        await sqlite3.step(stmt);
+
+        for await (const s of sqlite3.statements(db, `SELECT value FROM t WHERE key='${key}'`)) {
+          await sqlite3.step(s);
+          const result = /** @type {number|bigint} */ (sqlite3.column(s, 0));
+
+          const upcast = BigInt(result);
+          if (upcast >= BigInt(Number.MIN_SAFE_INTEGER) &&
+              upcast <= BigInt(Number.MAX_SAFE_INTEGER)) {
+            expect(typeof result).toEqual('number');
+          } else {
+            expect(typeof result).toEqual('bigint');
+          }
+          expect(upcast).toEqual(value);
+        }
+      }
+    }
+  });
+
+  it('should handle 64-bit integer in custom function', async function() {
+    function f_int64(context, values) {
+      const value = sqlite3.value_int64(values[0]);
+      sqlite3.result_int64(context, value);
+    }
+    function f_generic(context, values) {
+      const value = sqlite3.value(values[0]);
+      sqlite3.result(context, value);
+    }
+    sqlite3.create_function(
+      db, "f_int64", 1, SQLite.SQLITE_UTF8, 0, f_int64, null, null);
+    sqlite3.create_function(
+      db, "f_generic", 1, SQLite.SQLITE_UTF8, 0, f_generic, null, null);
+
+    /** @type {[string, bigint][]} */
+    const entries = [
+      ['0', 0n],
+      ['1', 1n],
+      ['2^31 - 1', 0x7fffffffn],
+      ['2^31', 0x80000000n],
+      ['2^32 - 1', 0xffffffffn],
+      ['2^32', 0x100000000n],
+      ['2^63 - 1', 0x7fffffffffffffffn],
+      ['2^63', -0x8000000000000000n],
+      ['2^64 - 1', -1n],
+      ['MAX_SAFE_INTEGER', BigInt(Number.MAX_SAFE_INTEGER)],
+      ['MIN_SAFE_INTEGER', BigInt(Number.MIN_SAFE_INTEGER)],
+    ];
+    for (const [key, value] of entries) {
+      await sqlite3.exec(db, `SELECT f_int64(${value}), f_generic(${value})`, function(row) {
+        expect(row[0]).toEqual(row[1]);
+        expect(BigInt(/** @type {bigint|number} */ (row[0]))).toEqual(value);
+        expect(BigInt(/** @type {bigint|number} */ (row[1]))).toEqual(value);
+      });
+    }
   });
 }
 
