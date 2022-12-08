@@ -3,6 +3,9 @@
 import * as SQLite from './sqlite-constants.js';
 export * from './sqlite-constants.js';
 
+const MAX_INT64 = 0x7fffffffffffffffn;
+const MIN_INT64 = -0x8000000000000000n;
+
 export class SQLiteError extends Error {
   constructor(message, code) {
     super(message);
@@ -37,6 +40,40 @@ export function Factory(Module) {
     Module.stringToUTF8(s, zts, n + 1);
     return zts;
   }
+
+  /**
+   * Concatenate 32-bit numbers into a 64-bit (signed) BigInt.
+   * @param {number} lo32
+   * @param {number} hi32
+   * @returns {bigint}
+   */
+  function cvt32x2ToBigInt(lo32, hi32) {
+    return (BigInt(hi32) << 32n) | (BigInt(lo32) & 0xffffffffn);
+  }
+
+  /**
+   * Concatenate 32-bit numbers and return as number or BigInt, depending
+   * on the value.
+   * @param {number} lo32 
+   * @param {number} hi32 
+   * @returns {number|bigint}
+   */
+  const cvt32x2AsSafe = (function() {
+    const hiMax = BigInt(Number.MAX_SAFE_INTEGER) >> 32n;
+    const hiMin = BigInt(Number.MIN_SAFE_INTEGER) >> 32n;
+
+    return function(lo32, hi32) {
+      if (hi32 > hiMax || hi32 < hiMin) {
+        // Can't be expressed as a Number so use BigInt.
+        return cvt32x2ToBigInt(lo32, hi32);
+      } else {
+        // Combine the upper and lower 32-bit numbers. The complication is
+        // that lo32 is a signed integer which makes manipulating its bits
+        // a little tricky - the sign bit gets handled separately.
+        return (hi32 * 0x100000000) + (lo32 & 0x7fffffff) - (lo32 & 0x80000000);
+      }
+    }
+  })();
 
   const databases = new Set();
   function verifyDatabase(db) {
@@ -82,6 +119,8 @@ export function Factory(Module) {
           return sqlite3.bind_blob(stmt, i, value);
         } else if (value === null) {
           return sqlite3.bind_null(stmt, i);
+        } else if (typeof value === 'bigint') {
+          return sqlite3.bind_int64(stmt, i, value);
         } else if (value === undefined) {
           // Existing binding (or NULL) will be used.
           return SQLite.SQLITE_NOTICE;
@@ -134,7 +173,24 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
+      if (value > 0x7fffffff || value < -0x80000000) return SQLite.SQLITE_RANGE;
+
       const result = f(stmt, i, value);
+      // trace(fname, result);
+      return check(fname, result, mapStmtToDB.get(stmt));
+    };
+  })();
+
+  sqlite3.bind_int64 = (function() {
+    const fname = 'sqlite3_bind_int64';
+    const f = Module.cwrap(fname, ...decl('nnnn:n'));
+    return function(stmt, i, value) {
+      verifyStatement(stmt);
+      if (value > MAX_INT64 || value < MIN_INT64) return SQLite.SQLITE_RANGE;
+
+      const lo32 = value & 0xffffffffn;
+      const hi32 = value >> 32n;
+      const result = f(stmt, i, Number(lo32), Number(hi32));
       // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
@@ -205,7 +261,9 @@ export function Factory(Module) {
       case SQLite.SQLITE_FLOAT:
         return sqlite3.column_double(stmt, iCol);
       case SQLite.SQLITE_INTEGER:
-        return sqlite3.column_int(stmt, iCol);
+        const lo32 = sqlite3.column_int(stmt, iCol);
+        const hi32 = Module.getTempRet0();
+        return cvt32x2AsSafe(lo32, hi32);
       case SQLite.SQLITE_NULL:
         return null;
       case SQLite.SQLITE_TEXT:
@@ -262,11 +320,26 @@ export function Factory(Module) {
   })();
 
   sqlite3.column_int = (function() {
-    const fname = 'sqlite3_column_int';
+    // Retrieve int64 but use only the lower 32 bits. The upper 32-bits are
+    // accessible with Module.getTempRet0().
+    const fname = 'sqlite3_column_int64';
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  sqlite3.column_int64 = (function() {
+    const fname = 'sqlite3_column_int64';
+    const f = Module.cwrap(fname, ...decl('nn:n'));
+    return function(stmt, iCol) {
+      verifyStatement(stmt);
+      const lo32 = f(stmt, iCol);
+      const hi32 = Module.getTempRet0();
+      const result = cvt32x2ToBigInt(lo32, hi32);
       // trace(fname, result);
       return result;
     };
@@ -451,6 +524,8 @@ export function Factory(Module) {
           sqlite3.result_blob(context, value);
         } else if (value === null) {
           sqlite3.result_null(context);
+        } else if (typeof value === 'bigint') {
+          return sqlite3.result_int64(context, value);
         } else {
           console.warn('unknown result converted to null', value);
           sqlite3.result_null(context);
@@ -485,6 +560,18 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(context, value) {
       f(context, value); // void return
+    };
+  })();
+
+  sqlite3.result_int64 = (function() {
+    const fname = 'sqlite3_result_int64';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(context, value) {
+      if (value > MAX_INT64 || value < MIN_INT64) return SQLite.SQLITE_RANGE;
+
+      const lo32 = value & 0xffffffffn;
+      const hi32 = value >> 32n;
+      f(context, Number(lo32), Number(hi32)); // void return
     };
   })();
 
@@ -626,7 +713,9 @@ export function Factory(Module) {
       case SQLite.SQLITE_FLOAT:
         return sqlite3.value_double(pValue);
       case SQLite.SQLITE_INTEGER:
-        return sqlite3.value_int(pValue);
+        const lo32 = sqlite3.value_int(pValue);
+        const hi32 = Module.getTempRet0();
+        return cvt32x2AsSafe(lo32, hi32);
       case SQLite.SQLITE_NULL:
         return null;
       case SQLite.SQLITE_TEXT:
@@ -669,10 +758,22 @@ export function Factory(Module) {
   })();
 
   sqlite3.value_int = (function() {
-    const fname = 'sqlite3_value_int';
+    const fname = 'sqlite3_value_int64';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  sqlite3.value_int64 = (function() {
+    const fname = 'sqlite3_value_int64';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pValue) {
+      const lo32 = f(pValue);
+      const hi32 = Module.getTempRet0();
+      const result = cvt32x2ToBigInt(lo32, hi32);
       // trace(fname, result);
       return result;
     };
@@ -727,7 +828,7 @@ function trace(...args) {
 // Helper function to use a more compact signature specification.
 function decl(s) {
   const result = [];
-  const m = s.match(/([ns]*):([ns])/);
+  const m = s.match(/([ns@]*):([ns@])/);
   switch (m[2]) {
     case 'n': result.push('number'); break;
     case 's': result.push('string'); break;

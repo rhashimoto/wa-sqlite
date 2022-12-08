@@ -15,7 +15,7 @@
  * each element converted to a byte); SQLite always returns blob data as
  * `Int8Array`
  */
-type SQLiteCompatibleType = number|string|Int8Array|Array<number>|null;
+type SQLiteCompatibleType = number|string|Int8Array|Array<number>|BigInt|null;
 
 /**
  * SQLite Virtual File System object
@@ -397,6 +397,18 @@ declare interface SQLiteAPI {
   bind_int(stmt: number, i: number, value: number): number;
 
    /**
+   * Bind number to prepared statement parameter
+   * 
+   * Note that binding indices begin with 1.
+   * @see https://www.sqlite.org/c3ref/bind_blob.html
+   * @param stmt prepared statement pointer
+   * @param i binding index
+   * @param value 
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+   bind_int64(stmt: number, i: number, value: bigint): number;
+
+    /**
    * Bind null to prepared statement
    * 
    * Note that binding indices begin with 1.
@@ -460,7 +472,10 @@ declare interface SQLiteAPI {
    * The type is determined by calling {@link column_type}, which may
    * not match the type declared in `CREATE TABLE`. Note that if the column
    * value is a blob then as with `column_blob` the result may be invalid
-   * after the next SQLite call.
+   * after the next SQLite call; copy if it needs to be retained.
+   * 
+   * Integer values are returned as Number if within the min/max safe
+   * integer bounds, otherwise they are returned as BigInt.
    * @param stmt prepared statement pointer
    * @param i column index
    * @returns column value
@@ -516,6 +531,15 @@ declare interface SQLiteAPI {
   column_int(stmt: number, i: number): number;
 
   /**
+   * Extract a column value from a row after a prepared statment {@link step}
+   * @see https://www.sqlite.org/c3ref/column_blob.html
+   * @param stmt prepared statement pointer
+   * @param i column index
+   * @returns column value
+   */
+  column_int64(stmt: number, i: number): bigint;
+
+   /**
    * Get a column name for a prepared statement
    * @see https://www.sqlite.org/c3ref/column_blob.html
    * @param stmt prepared statement pointer
@@ -600,7 +624,8 @@ declare interface SQLiteAPI {
    * One-step query execution interface
    * 
    * The implementation of this function uses {@link row}, which makes a
-   * copy of blobs.
+   * copy of blobs and returns BigInt for integers outside the safe integer
+   * bounds for Number.
    * @see https://www.sqlite.org/c3ref/exec.html
    * @param db database pointer
    * @param zSQL queries
@@ -741,6 +766,14 @@ declare interface SQLiteAPI {
    * Set the result of a function or vtable column
    * @see https://sqlite.org/c3ref/result_blob.html
    * @param context context pointer
+   * @param value 
+   */
+  result_int64(context: number, value: bigint): void;
+
+  /**
+   * Set the result of a function or vtable column
+   * @see https://sqlite.org/c3ref/result_blob.html
+   * @param context context pointer
    */
   result_null(context: number): void;
 
@@ -757,7 +790,8 @@ declare interface SQLiteAPI {
     * 
     * This convenience function will return a copy of any blob, unlike
     * {@link column_blob} which returns a value referencing volatile WASM
-    * memory with short validity.
+    * memory with short validity. Like {@link column}, it will return a
+    * BigInt for integers outside the safe integer bounds for Number.
     * @param stmt prepared statement pointer
     * @returns row data
     */
@@ -884,6 +918,9 @@ declare interface SQLiteAPI {
    * This is a convenience function that calls the appropriate `value_*`
    * function based on its type. Note that if the value is a blob then as
    * with `value_blob` the result may be invalid after the next SQLite call.
+   * 
+   * Integer values are returned as Number if within the min/max safe
+   * integer bounds, otherwise they are returned as BigInt.
    * @param pValue `sqlite3_value` pointer
    * @returns value
    */
@@ -924,6 +961,14 @@ declare interface SQLiteAPI {
    * @returns value
    */
   value_int(pValue: number): number;
+
+  /**
+   * Extract a value from `sqlite3_value`
+   * @see https://sqlite.org/c3ref/value_blob.html
+   * @param pValue `sqlite3_value` pointer
+   * @returns value
+   */
+   value_int64(pValue: number): bigint;
 
   /**
    * Extract a value from `sqlite3_value`
