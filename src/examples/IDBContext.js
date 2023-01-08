@@ -101,14 +101,8 @@ export class IDBContext {
   }
 
   async sync() {
-    const request = this.#request;
-    if (request?.readyState === 'pending') {
-      await new Promise(done => {
-        request.addEventListener('success', done);
-        request.addEventListener('error', done);
-      });
-      request.transaction.commit();
-    }
+    // Wait until all previously queued request functions have run.
+    await new Promise(resolve => this.run('readwrite', resolve));
     return this.#txComplete;
   }
 
