@@ -2064,10 +2064,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"monaco-editor@npm:^0.23.0":
-  version: 0.23.0
-  resolution: "monaco-editor@npm:0.23.0"
-  checksum: 73162db12ed684f1c3ce918578dcd3d160cb5681981fd687992d54347a411f4fbedca3d3c685017e4f2791342419a8903ef960885da68016844855dcab9c53f3
+"monaco-editor@npm:^0.34.1":
+  version: 0.34.1
+  resolution: "monaco-editor@npm:0.34.1"
+  checksum: 4c6b35d7c566ec414b758cdd45dfb08d6fe46e2e8fdeed88b619a52c47592ce6df476d9490a58e5d450339c4a93f09d500adc9c017a348179277b98aa6009fa4
   languageName: node
   linkType: hard
 
@@ -2907,14 +2907,14 @@ __metadata:
     jasmine-core: ^3.7.1
     karma: ^6.3.14
     karma-jasmine: ^4.0.1
-    monaco-editor: ^0.23.0
+    monaco-editor: ^0.34.1
     sinon: ^11.0.0
     typedoc: ^0.22.11
     typescript: ^4.2.4
   dependenciesMeta:
     karma@6.3.16:
       unplugged: true
-    monaco-editor@0.23.0:
+    monaco-editor@0.34.1:
       unplugged: true
     sinon@11.1.2:
       unplugged: true
