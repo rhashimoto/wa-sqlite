@@ -647,6 +647,14 @@ declare interface SQLiteAPI {
   finalize(stmt: number): Promise<number>;
 
   /**
+   * Test for autocommit mode
+   * @see https://sqlite.org/c3ref/get_autocommit.html
+   * @param db database pointer
+   * @returns Non-zero if autocommit mode is on, zero otherwise
+   */
+  get_autocommit(db: number): number;
+
+  /**
    * Get SQLite library version
    * @see https://www.sqlite.org/c3ref/libversion.html
    * @returns version string, e.g. '3.35.5'

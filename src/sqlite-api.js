@@ -445,6 +445,15 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.get_autocommit = (function() {
+    const fname = 'sqlite3_get_autocommit';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(db) {
+      const result = f(db);
+      return result;
+    };
+  })();
+
   sqlite3.libversion = (function() {
     const fname = 'sqlite3_libversion';
     const f = Module.cwrap(fname, ...decl(':s'));
