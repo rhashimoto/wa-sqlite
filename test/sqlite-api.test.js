@@ -513,6 +513,16 @@ function shared(sqlite3Ready) {
       });
     }
   });
+
+  it('get_autocommit', async function() {
+    expect(sqlite3.get_autocommit(db)).toBeTruthy();
+
+    await sqlite3.exec(db, 'BEGIN TRANSACTION');
+    expect(sqlite3.get_autocommit(db)).toBeFalsy();
+
+    await sqlite3.exec(db, 'ROLLBACK');
+    expect(sqlite3.get_autocommit(db)).toBeTruthy();
+  });
 }
 
 describe('sqlite-api', function() {
