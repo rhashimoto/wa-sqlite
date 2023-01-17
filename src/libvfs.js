@@ -11,7 +11,7 @@ const vfs_methods = {
       const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'],
         [vfs.name]);
       if (vfsAlreadyRegistered) {
-        throw Error(`VFS '${vfs}' already registered`);
+        throw Error(`VFS '${vfs.name}' already registered`);
       }
 
       if (hasAsyncify) {
