@@ -421,9 +421,10 @@ export function Factory(Module) {
 
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
-      const columns = callback ? sqlite3.column_names(stmt) : null;
+      let columns;
       while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
         if (callback) {
+          columns = columns ?? sqlite3.column_names(stmt);
           const row = sqlite3.row(stmt);
           await callback(row, columns);
         }
