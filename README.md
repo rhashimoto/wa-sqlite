@@ -44,7 +44,7 @@ Javascript wrappers for core SQLITE C API functions (and some others) are provid
   hello();
 ```
 
-The [implementation of `sqlite3.exec`](https://github.com/rhashimoto/wa-sqlite/blob/109ed971e236d65e630744d73fcadc5fee8b897b/src/sqlite-api.js#L356-L367) may be of interest to anyone wanting more fine-grained use of SQLite statement objects (e.g. for binding parameters, explicit column datatypes, etc.).
+The [implementation of `sqlite3.exec`](https://github.com/rhashimoto/wa-sqlite/blob/b5824ac0031da81712bee42671a917b252737c45/src/sqlite-api.js#L422-L434) may be of interest to anyone wanting more fine-grained use of SQLite statement objects (e.g. for binding parameters, explicit column datatypes, etc.).
 
 [API reference](https://rhashimoto.github.io/wa-sqlite/docs/)
 
@@ -67,4 +67,4 @@ CREATE TABLE IF NOT EXISTS tbl AS SELECT * FROM goog;
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
 
 ## License
-GNU General Public License v3, unless explicitly arranged.
+GNU General Public License v3, unless explicitly arranged. Contact licensing@shoestringresearch.com.
