@@ -67,4 +67,6 @@ CREATE TABLE IF NOT EXISTS tbl AS SELECT * FROM goog;
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
 
 ## License
-GNU General Public License v3, unless explicitly arranged. Contact licensing@shoestringresearch.com.
+MIT License as of February 10, 2023, changed by generous sponsors
+[Fleet Device Management](https://fleetdm.com/) and [Reflect](https://reflect.app/).
+Existing licensees may continue under the GPLv3 or switch to the new license.
