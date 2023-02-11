@@ -6,7 +6,7 @@ import { MemoryVFS } from '../src/examples/MemoryVFS.js';
 
 import GOOG from './GOOG.js';
 
-import sinon from '../.yarn/unplugged/sinon-npm-11.1.2-5325724cb2/node_modules/sinon/pkg/sinon-esm.js';
+import sinon from '../.yarn/unplugged/sinon-npm-15.0.1-115ae39e4c/node_modules/sinon/pkg/sinon-esm.js';
 
 /**
  * @param {SQLiteAPI} sqlite3 

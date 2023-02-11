@@ -1,6 +1,7 @@
 // Karma configuration
 // Generated on Tue Apr 20 2021 22:15:36 GMT-0700 (Pacific Daylight Time)
 
+process.env.CHROME_BIN = require('puppeteer').executablePath();
 module.exports = function(config) {
   config.set({
 
@@ -11,7 +12,7 @@ module.exports = function(config) {
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
     frameworks: ['jasmine'],
-    plugins: ['karma-jasmine'],
+    plugins: ['karma-jasmine', 'karma-chrome-launcher'],
     client: {
       jasmine: {
         random: true,
@@ -45,7 +46,7 @@ module.exports = function(config) {
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['progress'],
+    reporters: [],
 
 
     // web server port
@@ -62,7 +63,7 @@ module.exports = function(config) {
 
 
     // enable / disable watching file and executing tests whenever any file changes
-    autoWatch: true,
+    autoWatch: false,
 
 
     // start these browsers
@@ -72,7 +73,7 @@ module.exports = function(config) {
 
     // Continuous Integration mode
     // if true, Karma captures browsers, runs the tests and exits
-    singleRun: false,
+    singleRun: true,
 
     // Concurrency level
     // how many browser should be started simultaneous
