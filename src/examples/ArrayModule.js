@@ -25,11 +25,11 @@ export class ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzString 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pzErr 
+   * @returns {number}
    */
-  xCreate(db, appData, argv, pVTab, pzString) {
-    return this.xConnect(db, appData, argv, pVTab, pzString);
+  xCreate(db, appData, argv, pVTab, pzErr) {
+    return this.xConnect(db, appData, argv, pVTab, pzErr);
   }
 
   /**
@@ -37,28 +37,23 @@ export class ArrayModule {
    * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
    * @param {Array<string>} argv 
    * @param {number} pVTab 
-   * @param {{ set: function(string): void}} pzString 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pzErr 
+   * @returns {number}
    */
-  xConnect(db, appData, argv, pVTab, pzString) {
+  xConnect(db, appData, argv, pVTab, pzErr) {
     // All virtual tables in this module will use the same array. If
     // different virtual tables could have separate backing stores then
     // we would handle that association using pVTab.
 
     const sql = `CREATE TABLE any (${this.columns.join(',')})`;
-
-    // A VFS written in C would call sqlite3_declare_vtab() here. Making
-    // that reentrant call is problematic with Asyncify, so the programming
-    // model has been changed to use a preallocated string to define
-    // the virtual table schema.
-    pzString.set(sql);
+    this.sqlite3.declare_vtab(db, sql);
     return SQLite.SQLITE_OK;
   }
 
   /**
    * @param {number} pVTab 
    * @param {SQLiteModuleIndexInfo} indexInfo 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xBestIndex(pVTab, indexInfo) {
     // All the code here is for an optional optimization. If we simply
@@ -112,7 +107,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pVTab 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDisconnect(pVTab) {
     return SQLite.SQLITE_OK;
@@ -120,7 +115,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pVTab 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDestroy(pVTab) {
     return SQLite.SQLITE_OK;
@@ -129,7 +124,7 @@ export class ArrayModule {
   /**
    * @param {number} pVTab 
    * @param {number} pCursor 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xOpen(pVTab, pCursor) {
     this.mapCursorToState.set(pCursor, {});
@@ -138,7 +133,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xClose(pCursor) {
     this.mapCursorToState.delete(pCursor);
@@ -150,7 +145,7 @@ export class ArrayModule {
    * @param {number} idxNum 
    * @param {string?} idxStr 
    * @param {Array<number>} values 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xFilter(pCursor, idxNum, idxStr, values) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -186,7 +181,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xNext(pCursor) {
     // Advance to the next valid row or EOF.
@@ -198,7 +193,7 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xEof(pCursor) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -209,7 +204,7 @@ export class ArrayModule {
    * @param {number} pCursor 
    * @param {number} pContext 
    * @param {number} iCol 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xColumn(pCursor, pContext, iCol) {
     const cursorState = this.mapCursorToState.get(pCursor);
@@ -220,12 +215,12 @@ export class ArrayModule {
 
   /**
    * @param {number} pCursor 
-   * @param {{ set: function(number): void}} pRowid 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pRowid 
+   * @returns {number}
    */
   xRowid(pCursor, pRowid) {
     const cursorState = this.mapCursorToState.get(pCursor);
-    pRowid.set(cursorState.index);
+    pRowid.setBigInt64(0, BigInt(cursorState.index), true);
     return SQLite.SQLITE_OK;
   }
 
@@ -234,8 +229,8 @@ export class ArrayModule {
   /**
    * @param {number} pVTab 
    * @param {Array<number>} values sqlite3_value pointers
-   * @param {{ set: function(number): void}} pRowid 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pRowid 
+   * @returns {number}
    */
   xUpdate(pVTab, values, pRowid) {
     let index = this.sqlite3.value_type(values[0]) === SQLite.SQLITE_NULL ?
@@ -253,7 +248,7 @@ export class ArrayModule {
 
       if (index === null) {
         // Insert row.
-        pRowid.set(this.rows.length);
+        pRowid.setBigInt64(0, BigInt(this.rows.length), true);
         this.rows.push(row);
       } else {
         // Update row.

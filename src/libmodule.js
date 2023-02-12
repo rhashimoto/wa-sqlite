@@ -12,33 +12,38 @@ const mod_methods = {
     const closedVTabs = hasAsyncify ? new Set() : null;
     const closedCursors = hasAsyncify ? new Set() : null;
 
-    class Value {
-      constructor(ptr, type) {
-        this.ptr = ptr;
-        this.type = type;
-      }
-    }
-    Value.prototype['allocate'] = function(size) {
-      // Preallocate string buffer for virtual table declaration.
-      // This preallocation is necessary for asynchronous xCreate/xConnect.
-      let p = getValue(this.ptr, 'i32');
-      if (!p) {
-        p = ccall('sqlite3_malloc', 'number', ['number'], [size]);
-        setValue(this.ptr, p, 'i32');
-      }
-      return p;
-    }
-    Value.prototype['set'] = function(v) {
-      switch (this.type) {
-        case 's':
-          const length = lengthBytesUTF8(v);
-          const p = this['allocate'](length + 1);
-          stringToUTF8(v, p, length + 1);
-          break;
-        default:
-          setValue(this.ptr, v, this.type);
-          break;
-      }
+    /**
+     * Wrapped DataView for pointer arguments.
+     * Pointers to a single value are passed using DataView. A Proxy
+     * wrapper prevents use of incorrect type or endianness.
+     * @param {'Int32'|'BigInt64'} type 
+     * @param {number} byteOffset 
+     * @returns {DataView}
+     */
+    function makeTypedDataView(type, byteOffset) {
+      const byteLength = type === 'Int32' ? 4 : 8;
+      const getter = `get${type}`;
+      const setter = `set${type}`;
+      return new Proxy(new DataView(HEAPU8.buffer, byteOffset, byteLength), {
+        get(target, prop) {
+          if (prop === getter) {
+            return function(byteOffset, littleEndian) {
+              if (!littleEndian) throw new Error('must be little endian');
+              return target[prop](byteOffset, littleEndian);
+            }
+          }
+          if (prop === setter) {
+            return function(byteOffset, value, littleEndian) {
+              if (!littleEndian) throw new Error('must be little endian');
+              return target[prop](byteOffset, value, littleEndian);
+            }
+          }
+          if (typeof prop === 'string' && (prop.match(/^(get)|(set)/))) {
+            throw new Error('invalid type');
+          }
+          return target[prop];
+        }
+      });
     }
 
     /** Field offsets within SQLite C structs.
@@ -192,7 +197,7 @@ const mod_methods = {
       }
       argv = Array.from(new Uint32Array(HEAPU8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
-      return m.module['xCreate'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
+      return m.module['xCreate'](db, m.appData, argv, pVTab, makeTypedDataView('Int32', pzErr));
     };
 
     _modConnect = function(db, pModuleId, argc, argv, pVTab, pzErr) {
@@ -206,7 +211,7 @@ const mod_methods = {
       }
       argv = Array.from(new Uint32Array(HEAPU8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
-      return m.module['xConnect'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
+      return m.module['xConnect'](db, m.appData, argv, pVTab, makeTypedDataView('Int32', pzErr));
     };
 
     _modBestIndex = function(pVTab, pIndexInfo) {
@@ -283,13 +288,13 @@ const mod_methods = {
 
     _modRowid = function(pCursor, pRowid) {
       const m = mapCursorToModule.get(pCursor);
-      return m.module['xRowid'](pCursor, new Value(pRowid, 'i64'));
+      return m.module['xRowid'](pCursor, makeTypedDataView('BigInt64', pRowid));
     };
 
     _modUpdate = function(pVTab, argc, argv, pRowid) {
       const m = mapVTabToModule.get(pVTab);
       argv = new Uint32Array(HEAPU8.buffer, argv, argc);
-      return m.module['xUpdate'](pVTab, argv, new Value(pRowid, 'i64'));
+      return m.module['xUpdate'](pVTab, argv, makeTypedDataView('BigInt64', pRowid));
     };
 
     _modBegin = function(pVTab) {

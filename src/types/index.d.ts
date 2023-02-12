@@ -158,8 +158,8 @@ declare interface SQLiteModule {
     appData,
     argv: string[],
     pVTab: number,
-    pzErr: { set(value: string): void }
-  ): number|Promise<number>;
+    pzErr: DataView
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xconnect_method
@@ -169,33 +169,33 @@ declare interface SQLiteModule {
     appData,
     argv: string[],
     pVTab: number,
-    pzErr: { set(value: string): void }
-  ): number|Promise<number>;
+    pzErr: DataView
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xbestindex_method
    */
-  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number|Promise<number>;
+  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xdisconnect_method
    */
-  xDisconnect(pVTab: number): number|Promise<number>;
+  xDisconnect(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xdestroy_method
    */
-  xDestroy(pVTab: number): number|Promise<number>;
+  xDestroy(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xopen_method
    */
-  xOpen(pVTab: number, pCursor: number): number|Promise<number>;
+  xOpen(pVTab: number, pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xclose_method
    */
-  xClose(pCursor: number): number|Promise<number>;
+  xClose(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xfilter_method
@@ -205,27 +205,27 @@ declare interface SQLiteModule {
     idxNum: number,
     idxString: string|null,
     values: number[]
-  ): number|Promise<number>;
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xnext_method
    */
-  xNext(pCursor: number): number|Promise<number>;
+  xNext(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xeof_method
    */
-  xEof(pCursor: number): number|Promise<number>;
+  xEof(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xcolumn_method
    */
-  xColumn(pCursor: number, pContext: number, iCol: number): number|Promise<number>;
+  xColumn(pCursor: number, pContext: number, iCol: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrowid_method
    */
-  xRowid(pCursor: number, pRowid: { set(value: number): void }): number|Promise<number>;
+  xRowid(pCursor: number, pRowid: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xupdate_method
@@ -233,32 +233,32 @@ declare interface SQLiteModule {
   xUpdate?(
     pVTab: number,
     values: number[],
-    pRowId: { set(value: number): void }): number|Promise<number>;
+    pRowId: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xbegin_method
    */
-  xBegin?(pVTab: number): number|Promise<number>;
+  xBegin?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xsync_method
    */
-  xSync?(pVTab: number): number|Promise<number>;
+  xSync?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xcommit_method
    */
-  xCommit?(pVTab: number): number|Promise<number>;
+  xCommit?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrollback_method
    */
-  xRollback?(pVTab: number): number|Promise<number>;
+  xRollback?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrename_method
    */
-  xRename?(pVTab: number, zNew: string): number|Promise<number>;
+  xRename?(pVTab: number, zNew: string): number;
 }
 
 /**
@@ -619,6 +619,17 @@ declare interface SQLiteAPI {
    * @returns number of columns
    */
   data_count(stmt: number): number;
+
+  /**
+   * Declare the schema of a virtual table in module
+   * {@link SQLiteModule.xCreate} or {@link SQLiteModule.xConnect}
+   * methods
+   * @see https://www.sqlite.org/c3ref/declare_vtab.html
+   * @param db database pointer
+   * @param zSQL schema declaration
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  declare_vtab(db: number, zSQL: string): number;
 
   /**
    * One-step query execution interface

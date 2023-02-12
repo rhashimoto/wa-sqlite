@@ -419,6 +419,15 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.declare_vtab = (function() {
+    const fname = 'sqlite3_declare_vtab';
+    const f = Module.cwrap(fname, ...decl('ns:n'));
+    return function(pVTab, zSQL) {
+      const result = f(pVTab, zSQL);
+      return check('sqlite3_declare_vtab', result);
+    }
+  })();
+    
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       let columns;
