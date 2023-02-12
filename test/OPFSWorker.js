@@ -27,7 +27,7 @@ addEventListener('message', async function({data}) {
     response = { result, args: data.args };
   } catch(e) {
     console.error(e);
-    response = { error: e.message };
+    response = { error: Object.fromEntries(Object.getOwnPropertyNames(e).map(k => [k, e[k]])) };
   }
   postMessage(response);
 });

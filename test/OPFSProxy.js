@@ -18,7 +18,7 @@ export function makeOPFSProxy() {
               resolve(data);
             }, { once: true });
           });
-          if (response.error) throw new Error(response.error);
+          if (response.error) throw Object.assign(new Error(), response.error);
 
           // Copy changed Uint8Array and DataView contents.
           response.args.forEach((responseArg, i) => {
