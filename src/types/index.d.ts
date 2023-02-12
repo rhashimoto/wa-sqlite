@@ -11,11 +11,11 @@
  *  Javascript types that SQLite can use
  * 
  * C integer and floating-point types both map to/from Javascript `number`.
- * Blob data can be provided to SQLite as `Int8Array` or `number[]` (with
+ * Blob data can be provided to SQLite as `Uint8Array` or `number[]` (with
  * each element converted to a byte); SQLite always returns blob data as
- * `Int8Array`
+ * `Uint8Array`
  */
-type SQLiteCompatibleType = number|string|Int8Array|Array<number>|BigInt|null;
+type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|BigInt|null;
 
 /**
  * SQLite Virtual File System object
@@ -370,7 +370,7 @@ declare interface SQLiteAPI {
    * @param value 
    * @returns `SQLITE_OK` (throws exception on error)
    */
-  bind_blob(stmt: number, i: number, value: Int8Array|Array<number>): number;
+  bind_blob(stmt: number, i: number, value: Uint8Array|Array<number>): number;
 
   /**
    * Bind number to prepared statement parameter
@@ -493,7 +493,7 @@ declare interface SQLiteAPI {
    * @param i column index
    * @returns column value
    */
-  column_blob(stmt: number, i: number): Int8Array;
+  column_blob(stmt: number, i: number): Uint8Array;
 
   /**
    * Get storage size for column text or blob
@@ -752,7 +752,7 @@ declare interface SQLiteAPI {
    * @param context context pointer
    * @param value 
    */
-  result_blob(context: number, value: Int8Array|number[]): void;
+  result_blob(context: number, value: Uint8Array|number[]): void;
 
   /**
    * Set the result of a function or vtable column
@@ -944,7 +944,7 @@ declare interface SQLiteAPI {
    * @param pValue `sqlite3_value` pointer
    * @returns value
    */
-  value_blob(pValue: number): Int8Array;
+  value_blob(pValue: number): Uint8Array;
 
   /**
    * Get blob or text size for value

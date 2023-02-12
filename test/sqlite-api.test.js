@@ -64,7 +64,7 @@ function shared(sqlite3Ready) {
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
 
     let result;
-    const cBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const cBlob = new Uint8Array([8, 6, 7, 5, 3, 0, 9]);
     const cDouble = Math.PI;
     const cInt = 42;
     const cNull = null;
@@ -105,7 +105,7 @@ function shared(sqlite3Ready) {
       function(rowData, columnNames) {
         rowData = rowData.map(value => {
           // Blob results do not remain valid so copy to retain.
-          return value instanceof Int8Array ? Array.from(value) : value;
+          return value instanceof Uint8Array ? Array.from(value) : value;
         });
         results.push(rowData);
       });
@@ -193,7 +193,7 @@ function shared(sqlite3Ready) {
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
 
     let result;
-    const vBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const vBlob = new Uint8Array([8, 6, 7, 5, 3, 0, 9]);
     const vDouble = Math.PI;
     const vInt = 42;
     const vNull = null;
@@ -223,8 +223,8 @@ function shared(sqlite3Ready) {
     // Apply the function to each row.
     const values = [];
     await sqlite3.exec(db, `SELECT MyFunc(0, value) FROM tbl`, row => {
-      // Convert Int8Array to Array for comparison.
-      const value = row[0] instanceof Int8Array ? Array.from(row[0]) : row[0];
+      // Convert Uint8Array to Array for comparison.
+      const value = row[0] instanceof Uint8Array ? Array.from(row[0]) : row[0];
       values.push(value);
     });
     const expected = [Array.from(vBlob), vDouble, vInt, vNull, vText];
@@ -402,7 +402,7 @@ function shared(sqlite3Ready) {
     expect(Array.from(rows[0][0])).toEqual([]);
     expect(Array.from(rows[1][0])).toEqual([42]);
     expect(Array.from(rows[2][0])).toEqual([0, 1, 2]);
-    expect(Array.from(rows[3][0])).toEqual([...new Int8Array([0xde, 0xad, 0xbe, 0xef])]);
+    expect(Array.from(rows[3][0])).toEqual([...new Uint8Array([0xde, 0xad, 0xbe, 0xef])]);
   });
 
   it('should handle 64-bit integer with {bind,column}_int64', async function() {
