@@ -48,7 +48,7 @@ const mod_methods = {
     _modStruct = function(zName, iSize, nFields, pOffsets) {
       mapStructToLayout.set(UTF8ToString(zName), {
         size: iSize,
-        offsets: Array.from(new Uint32Array(HEAP8.buffer, pOffsets, nFields))
+        offsets: Array.from(new Uint32Array(HEAPU8.buffer, pOffsets, nFields))
       });
     };
 
@@ -190,7 +190,7 @@ const mod_methods = {
           mapVTabToModule.delete(vTab);
         }
       }
-      argv = Array.from(new Uint32Array(HEAP8.buffer, argv, argc))
+      argv = Array.from(new Uint32Array(HEAPU8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
       return m.module['xCreate'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
     };
@@ -204,7 +204,7 @@ const mod_methods = {
           mapVTabToModule.delete(vTab);
         }
       }
-      argv = Array.from(new Uint32Array(HEAP8.buffer, argv, argc))
+      argv = Array.from(new Uint32Array(HEAPU8.buffer, argv, argc))
         .map(p => UTF8ToString(p));
       return m.module['xConnect'](db, m.appData, argv, pVTab, new Value(pzErr, 's'));
     };
@@ -267,7 +267,7 @@ const mod_methods = {
     _modFilter = function(pCursor, idxNum, idxStr, argc, argv) {
       const m = mapCursorToModule.get(pCursor);
       idxStr = idxStr ? UTF8ToString(idxStr) : null;
-      argv = new Uint32Array(HEAP8.buffer, argv, argc);
+      argv = new Uint32Array(HEAPU8.buffer, argv, argc);
       return m.module['xFilter'](pCursor, idxNum, idxStr, argv);
     };
 
@@ -288,7 +288,7 @@ const mod_methods = {
 
     _modUpdate = function(pVTab, argc, argv, pRowid) {
       const m = mapVTabToModule.get(pVTab);
-      argv = new Uint32Array(HEAP8.buffer, argv, argc);
+      argv = new Uint32Array(HEAPU8.buffer, argv, argc);
       return m.module['xUpdate'](pVTab, argv, new Value(pRowid, 'i64'));
     };
 

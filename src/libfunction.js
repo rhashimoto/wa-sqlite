@@ -42,14 +42,14 @@ const fn_methods = {
     _jsFunc = function(pApp, pContext, iCount, ppValues) {
       const f = mapIdToFunction.get(pApp);
       mapContextToAppData.set(pContext, f.appData);
-      f.f(pContext, new Uint32Array(HEAP8.buffer, ppValues, iCount));
+      f.f(pContext, new Uint32Array(HEAPU8.buffer, ppValues, iCount));
       mapContextToAppData.delete(pContext);
     }
 
     _jsStep = function(pApp, pContext, iCount, ppValues) {
       const f = mapIdToFunction.get(pApp);
       mapContextToAppData.set(pContext, f.appData);
-      f.step(pContext, new Uint32Array(HEAP8.buffer, ppValues, iCount));
+      f.step(pContext, new Uint32Array(HEAPU8.buffer, ppValues, iCount));
       mapContextToAppData.delete(pContext);
     }
 

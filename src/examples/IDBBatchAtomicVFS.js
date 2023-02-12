@@ -659,7 +659,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // Convert to new pages.
         if (nNewPages === 1) {
           // Combine nOldPages old pages into a new page.
-          const buffer = new Int8Array(newPageSize);
+          const buffer = new Uint8Array(newPageSize);
           for (const oldPage of oldPages) {
             buffer.set(oldPage.data, -(iOffset + oldPage.offset));
           }

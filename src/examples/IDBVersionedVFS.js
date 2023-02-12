@@ -47,7 +47,7 @@ function log(...args) {
  * 
  * Extra state for journal files:
  * @property {number} [cachedPageIndex]
- * @property {Int8Array} [cachedPageEntry]
+ * @property {Uint8Array} [cachedPageEntry]
  */
 
 // Use IndexedDB as a versioned block device. Each object in IndexedDB holds
@@ -818,7 +818,7 @@ function openDatabase(idbDatabaseName) {
                 const block = cursor.value;
                 block.name = `/${block.name}`;
                 block.version = 0;
-                block.data = new Int8Array(block.data);
+                block.data = new Uint8Array(block.data);
                 blocks.put(cursor.value);
                 cursor.continue();
               } else {

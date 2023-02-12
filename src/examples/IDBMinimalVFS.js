@@ -91,7 +91,7 @@ export class IDBMinimalVFS extends VFS.Base {
           const block = {
             path: file.path,
             offset: 0,
-            data: new Int8Array(0),
+            data: new Uint8Array(0),
           };
           this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
         } else {
@@ -210,7 +210,7 @@ export class IDBMinimalVFS extends VFS.Base {
           blocks.put({
             path: file.path,
             offset: 0,
-            data: new Int8Array(0)
+            data: new Uint8Array(0)
           })
         }
       });
