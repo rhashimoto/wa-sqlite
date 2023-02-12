@@ -1228,119 +1228,109 @@ declare module 'wa-sqlite/src/VFS.js' {
      * @param {number} fileId
      * @returns {number|Promise<number>}
      */
-    xClose(fileId: number): number | Promise<number>;
+    xClose(fileId: number): number;
     /**
      * @param {number} fileId
-     * @param {{ size: number, value: Int8Array }} pData
+     * @param {Uint8Array} pData
      * @param {number} iOffset
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
     xRead(fileId: number, pData: {
         size: number;
-        value: Int8Array;
-    }, iOffset: number): number | Promise<number>;
+        value: Uint8Array;
+    }, iOffset: number): number;
     /**
      * @param {number} fileId
-     * @param {{ size: number, value: Int8Array }} pData
+     * @param {Uint8Array} pData
      * @param {number} iOffset
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
     xWrite(fileId: number, pData: {
         size: number;
-        value: Int8Array;
-    }, iOffset: number): number | Promise<number>;
+        value: Uint8Array;
+    }, iOffset: number): number;
     /**
      * @param {number} fileId
      * @param {number} iSize
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xTruncate(fileId: number, iSize: number): number | Promise<number>;
+    xTruncate(fileId: number, iSize: number): number;
     /**
      * @param {number} fileId
      * @param {*} flags
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xSync(fileId: number, flags: any): number | Promise<number>;
+    xSync(fileId: number, flags: any): number;
     /**
      * @param {number} fileId
-     * @param {{ set: function(number): void }} pSize64
+     * @param {DataView} pSize64
      * @returns {number|Promise<number>}
      */
-    xFileSize(fileId: number, pSize64: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
-    /**
-     * @param {number} fileId
-     * @param {number} flags
-     * @returns {number|Promise<number>}
-     */
-    xLock(fileId: number, flags: number): number | Promise<number>;
+    xFileSize(fileId: number, pSize64: DataView): number;
     /**
      * @param {number} fileId
      * @param {number} flags
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xUnlock(fileId: number, flags: number): number | Promise<number>;
-    /**
-     * @param {number} fileId
-     * @param {{ set: function(number): void }} pResOut
-     * @returns {number|Promise<number>}
-     */
-    xCheckReservedLock(fileId: number, pResOut: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xLock(fileId: number, flags: number): number;
     /**
      * @param {number} fileId
      * @param {number} flags
-     * @param {{ value: Int8Array }} pOut
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xFileControl(fileId: number, flags: number, pOut: {
-        value: Int8Array;
-    }): number | Promise<number>;
+    xUnlock(fileId: number, flags: number): number;
     /**
      * @param {number} fileId
-     * @returns {number|Promise<number>}
+     * @param {DataView} pResOut
+     * @returns {number}
      */
-    xSectorSize(fileId: number): number | Promise<number>;
+    xCheckReservedLock(fileId: number, pResOut: DataView): number;
     /**
      * @param {number} fileId
-     * @returns {number|Promise<number>}
+     * @param {number} flags
+     * @param {DataView} pArg
+     * @returns {number}
      */
-    xDeviceCharacteristics(fileId: number): number | Promise<number>;
+    xFileControl(fileId: number, flags: number, pArg: DataView): number;
+    /**
+     * @param {number} fileId
+     * @returns {number}
+     */
+    xSectorSize(fileId: number): number;
+    /**
+     * @param {number} fileId
+     * @returns {number}
+     */
+    xDeviceCharacteristics(fileId: number): number;
     /**
      * @param {string?} name
      * @param {number} fileId
      * @param {number} flags
-     * @param {{ set: function(number): void }} pOutFlags
-     * @returns {number|Promise<number>}
+     * @param {DataView} pOutFlags
+     * @returns {number}
      */
-    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: DataView): number;
     /**
      *
      * @param {string} name
      * @param {number} syncDir
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xDelete(name: string, syncDir: number): number | Promise<number>;
+    xDelete(name: string, syncDir: number): number;
     /**
      * @param {string} name
      * @param {number} flags
-     * @param {{ set: function(number): void }} pResOut
-     * @returns {number|Promise<number>}
+     * @param {DataView} pResOut
+     * @returns {number}
      */
-    xAccess(name: string, flags: number, pResOut: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xAccess(name: string, flags: number, pResOut: DataView): number;
     /**
      * Handle asynchronous operation. This implementation will be overriden on
      * registration by an Asyncify build.
      * @param {function(): Promise<number>} f
-     * @returns {Promise<number>}
+     * @returns {number}
      */
-    handleAsync(f: () => Promise<number>): Promise<number>;
+    handleAsync(f: () => Promise<number>): number;
   }
 }
 
