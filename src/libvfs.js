@@ -31,29 +31,41 @@ const vfs_methods = {
       return result;
     };
 
+    /**
+     * Wrapped DataView for pointer arguments.
+     * Pointers to a single value are passed using DataView. A Proxy
+     * wrapper prevents use of incorrect type or endianness.
+     * @param {'Int32'|'BigInt64'} type 
+     * @param {number} byteOffset 
+     * @returns {DataView}
+     */
+    function makeTypedDataView(type, byteOffset) {
+      const byteLength = type === 'Int32' ? 4 : 8;
+      const getter = `get${type}`;
+      const setter = `set${type}`;
+      return new Proxy(new DataView(HEAPU8.buffer, byteOffset, byteLength), {
+        get(target, prop) {
+          if (prop === getter) {
+            return function(byteOffset, littleEndian) {
+              if (!littleEndian) throw new Error('must be little endian');
+              return target[prop](byteOffset, littleEndian);
+            }
+          }
+          if (prop === setter) {
+            return function(byteOffset, value, littleEndian) {
+              if (!littleEndian) throw new Error('must be little endian');
+              return target[prop](byteOffset, value, littleEndian);
+            }
+          }
+          if (typeof prop === 'string' && (prop.match(/^(get)|(set)/))) {
+            throw new Error('invalid type');
+          }
+          return target[prop];
+        }
+      });
+    }
+
     const closedFiles = hasAsyncify ? new Set() : null;
-
-    class Value {
-      constructor(ptr, type) {
-        this.ptr = ptr;
-        this.type = type;
-      }
-
-      set(v) {
-        setValue(this.ptr, v, this.type);
-      }
-    }
-
-    class Array {
-      constructor(ptr, size) {
-        this.ptr = ptr;
-        this.size = size;
-      }
-
-      get value() {
-        return new Int8Array(HEAP8.buffer, this.ptr, this.size);
-      }
-    }
 
     // int xClose(sqlite3_file* file);
     _vfsClose = function(file) {
@@ -75,13 +87,15 @@ const vfs_methods = {
     // int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsRead = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xRead'](file, new Array(pData, iAmt), getValue(iOffset, 'i64'));
+      const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
+      return vfs['xRead'](file, pDataArray, getValue(iOffset, 'i64'));
     }
 
     // int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsWrite = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xWrite'](file, new Array(pData, iAmt), getValue(iOffset, 'i64'));
+      const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
+      return vfs['xWrite'](file, pDataArray, getValue(iOffset, 'i64'));
     }
 
     // int xTruncate(sqlite3_file* file, sqlite3_int64 size);
@@ -99,7 +113,8 @@ const vfs_methods = {
     // int xFileSize(sqlite3_file* file, sqlite3_int64* pSize);
     _vfsFileSize = function(file, pSize) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xFileSize'](file, new Value(pSize, 'i64'));
+      const pSizeView = makeTypedDataView('BigInt64', pSize);
+      return vfs['xFileSize'](file, pSizeView);
     }
 
     // int xLock(sqlite3_file* file, int flags);
@@ -117,13 +132,15 @@ const vfs_methods = {
     // int xCheckReservedLock(sqlite3_file* file, int* pResOut);
     _vfsCheckReservedLock = function(file, pResOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xCheckReservedLock'](file, new Value(pResOut, 'i32'));
+      const pResOutView = makeTypedDataView('Int32', pResOut);
+      return vfs['xCheckReservedLock'](file, pResOutView);
     }
 
     // int xFileControl(sqlite3_file* file, int flags, void* pOut);
     _vfsFileControl = function(file, flags, pOut) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xFileControl'](file, flags, new Array(pOut));
+      const pOutView = new DataView(HEAPU8.buffer, pOut);
+      return vfs['xFileControl'](file, flags, pOutView);
     }
 
     // int xSectorSize(sqlite3_file* file);
@@ -159,11 +176,11 @@ const vfs_methods = {
         let state = 1;
         const charCodes = [];
         while (state) {
-          const charCode = HEAP8[pName++];
+          const charCode = HEAPU8[pName++];
           if (charCode) {
             charCodes.push(charCode);
           } else {
-            if (!HEAP8[pName]) state = null;
+            if (!HEAPU8[pName]) state = null;
             switch (state) {
               case 1: // path
                 charCodes.push('?'.charCodeAt(0));
@@ -180,12 +197,13 @@ const vfs_methods = {
             }
           }
         }
-        name = new TextDecoder().decode(new Int8Array(charCodes));
+        name = new TextDecoder().decode(new Uint8Array(charCodes));
       } else if (zName) {
         name = UTF8ToString(zName);
       }
 
-      return vfs['xOpen'](name, file, flags, new Value(pOutFlags, 'i32'));
+      const pOutFlagsView = makeTypedDataView('Int32', pOutFlags);
+      return vfs['xOpen'](name, file, flags, pOutFlagsView);
     }
 
     // int xDelete(sqlite3_vfs* vfs, const char *zName, int syncDir);
@@ -197,7 +215,8 @@ const vfs_methods = {
     // int xAccess(sqlite3_vfs* vfs, const char *zName, int flags, int *pResOut);
     _vfsAccess = function(vfsId, zName, flags, pResOut) {
       const vfs = mapIdToVFS.get(vfsId);
-      return vfs['xAccess'](UTF8ToString(zName), flags, new Value(pResOut, 'i32'));
+      const pResOutView = makeTypedDataView('Int32', pResOut);
+      return vfs['xAccess'](UTF8ToString(zName), flags, pResOutView);
     }
   }
 };

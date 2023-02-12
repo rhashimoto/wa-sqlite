@@ -21,8 +21,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pOutFlags 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pOutFlags 
+   * @returns {number}
    */
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => super.xOpen(name, fileId, flags, pOutFlags));
@@ -30,7 +30,7 @@ export class MemoryAsyncVFS extends MemoryVFS {
 
   /**
    * @param {number} fileId 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xClose(fileId) {
     return this.handleAsync(async () => super.xClose(fileId));
@@ -38,9 +38,9 @@ export class MemoryAsyncVFS extends MemoryVFS {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => super.xRead(fileId, pData, iOffset));
@@ -48,9 +48,9 @@ export class MemoryAsyncVFS extends MemoryVFS {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xWrite(fileId, pData, iOffset) {
     return this.handleAsync(async () => super.xWrite(fileId, pData, iOffset));
@@ -59,7 +59,7 @@ export class MemoryAsyncVFS extends MemoryVFS {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xTruncate(fileId, iSize) {
     return this.handleAsync(async () => super.xTruncate(fileId, iSize));
@@ -67,8 +67,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
 
   /**
    * @param {number} fileId 
-   * @param {{ set: function(number): void }} pSize64 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pSize64 
+   * @returns {number}
    */
   xFileSize(fileId, pSize64) {
     return this.handleAsync(async () => super.xFileSize(fileId, pSize64));
@@ -78,7 +78,7 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDelete(name, syncDir) {
     return this.handleAsync(async () => super.xDelete(name, syncDir));
@@ -87,8 +87,8 @@ export class MemoryAsyncVFS extends MemoryVFS {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pResOut 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pResOut 
+   * @returns {number}
    */
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => super.xAccess(name, flags, pResOut));

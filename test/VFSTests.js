@@ -37,35 +37,50 @@ export function configureTests(build, clear, skip = []) {
   });
 
   let result;
-  const pOut = {
-    value: null,
-    set(value) { this.value = value; },
-    pass() { this.value = null; return this; }
-  };
+
+  class Value extends DataView {
+    constructor() {
+      super(new ArrayBuffer(8));
+    }
+
+    get value32() {
+      return this.getInt32(0, true);
+    }
+
+    get value64() {
+      return Number(this.getBigInt64(0, true));
+    }
+
+    pass() {
+      this.setInt32(0, -1, true);
+      return this;
+    }
+  }
+  const pOut = new Value();
 
   it('should create a file', async function() {
     const objectUnderTest = await build();
 
     const filename = 'foo';
     await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
-    expect(pOut.value).toBeFalsy();
+    expect(pOut.value32).toBeFalsy();
 
     result = await objectUnderTest.xOpen(
       filename, FILE_ID,
       VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE,
       pOut.pass());
     expect(result).toEqual(VFS.SQLITE_OK);
-    expect(pOut.value & VFS.SQLITE_OPEN_READONLY).toEqual(0);
+    expect(pOut.value32 & VFS.SQLITE_OPEN_READONLY).toEqual(0);
 
     result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
     expect(result).toEqual(VFS.SQLITE_OK);
-    expect(pOut.value).toBeTruthy();
+    expect(pOut.value32).toBeTruthy();
 
     result = await objectUnderTest.xClose(FILE_ID);
     expect(result).toEqual(VFS.SQLITE_OK);
     result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
     expect(result).toEqual(VFS.SQLITE_OK);
-    expect(pOut.value).toBeTruthy();
+    expect(pOut.value32).toBeTruthy();
   });
 
   it('should delete a file', async function() {
@@ -78,11 +93,11 @@ export function configureTests(build, clear, skip = []) {
       pOut.pass());
     await objectUnderTest.xClose(FILE_ID);
     await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
-    expect(pOut.value).toBeTruthy();
+    expect(pOut.value32).toBeTruthy();
 
     await objectUnderTest.xDelete(filename, 1);
     await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut.pass());
-    expect(pOut.value).toBeFalsy();
+    expect(pOut.value32).toBeFalsy();
   });
 
   it('should write and read data', async function() {
@@ -127,7 +142,7 @@ export function configureTests(build, clear, skip = []) {
 
     result = await objectUnderTest.xFileSize(FILE_ID, pOut);
     expect(result).toBe(VFS.SQLITE_OK);
-    expect(pOut.value).toBe(0);
+    expect(pOut.value64).toBe(0);
 
     let expectedSize = 0;
     for (const s of TEXT.split(/\s/)) {
@@ -136,7 +151,7 @@ export function configureTests(build, clear, skip = []) {
 
       result = await objectUnderTest.xFileSize(FILE_ID, pOut);
       expect(result).toBe(VFS.SQLITE_OK);
-      expect(pOut.value).toBe(expectedSize);
+      expect(pOut.value64).toBe(expectedSize);
     }
 
     for (let i = 0; i < 20; ++i) {
@@ -145,7 +160,7 @@ export function configureTests(build, clear, skip = []) {
 
       result = await objectUnderTest.xFileSize(FILE_ID, pOut);
       expect(result).toBe(VFS.SQLITE_OK);
-      expect(pOut.value).toBe(expectedSize);
+      expect(pOut.value64).toBe(expectedSize);
     }
   });
 
@@ -170,7 +185,7 @@ export function configureTests(build, clear, skip = []) {
 
     result = await objectUnderTest.xFileSize(FILE_ID, pOut);
     expect(result).toBe(VFS.SQLITE_OK);
-    expect(pOut.value).toBe(truncatedSize);
+    expect(pOut.value64).toBe(truncatedSize);
   });
 
   it('should return a valid sector size', async function() {
@@ -205,7 +220,7 @@ export function configureTests(build, clear, skip = []) {
 
     result = await objectUnderTest.xAccess(filename, VFS.SQLITE_ACCESS_EXISTS, pOut);
     expect(result).toBe(VFS.SQLITE_OK);
-    expect(pOut.value).toBeFalsy();
+    expect(pOut.value32).toBeFalsy();
   });
 
   it('should open with null filename', async function() {
@@ -232,11 +247,11 @@ export function configureTests(build, clear, skip = []) {
       VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_DELETEONCLOSE,
       pOut.pass());
 
-    const pData = { value: new Int8Array(16), size: 16 };
-    pData.value.fill(-1);
+    const pData = new Uint8Array(16);
+    pData.fill(-1);
     result = await objectUnderTest.xRead(FILE_ID, pData, 24);
     expect(result).toBe(VFS.SQLITE_IOERR_SHORT_READ);
-    expect(Array.from(pData.value)).toEqual(new Array(16).fill(0));
+    expect(Array.from(pData)).toEqual(new Array(16).fill(0));
   });
 
   if (!skipTests.has(TEST.BATCH_ATOMIC)) {
@@ -253,7 +268,7 @@ export function configureTests(build, clear, skip = []) {
         pOut.pass());
 
       await transact(objectUnderTest, FILE_ID, null, async function() {
-        const pOut = { value: new Int8Array() }
+        const pOut = new DataView(new ArrayBuffer(0));
         result = await objectUnderTest.xFileControl(
           FILE_ID,
           VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE,
@@ -261,7 +276,7 @@ export function configureTests(build, clear, skip = []) {
         expect(result).toBe(VFS.SQLITE_OK);
 
         const buffer = new TextEncoder().encode(TEXT).buffer;
-        const pData = { value: new Int8Array(buffer), size: buffer.byteLength };
+        const pData = new Uint8Array(buffer);
         result = await objectUnderTest.xWrite(FILE_ID, pData, 0);
         expect(result).toBe(VFS.SQLITE_OK);
 
@@ -272,11 +287,11 @@ export function configureTests(build, clear, skip = []) {
         expect(result).toBe(VFS.SQLITE_OK);
       });
 
-      const pData = { value: new Int8Array(TEXT.length), size: TEXT.length };
+      const pData = new Uint8Array(TEXT.length);
       result = await objectUnderTest.xRead(FILE_ID, pData, 0);
       expect(result).toBe(VFS.SQLITE_OK);
 
-      const s = new TextDecoder().decode(pData.value);
+      const s = new TextDecoder().decode(pData);
       expect(s).toEqual(TEXT);
     });;
 
@@ -293,7 +308,7 @@ export function configureTests(build, clear, skip = []) {
         pOut.pass());
 
       await transact(objectUnderTest, FILE_ID, null, async function() {
-        const pOut = { value: new Int8Array() }
+        const pOut = new DataView(new ArrayBuffer(0));
         result = await objectUnderTest.xFileControl(
           FILE_ID,
           VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE,
@@ -301,7 +316,7 @@ export function configureTests(build, clear, skip = []) {
         expect(result).toBe(VFS.SQLITE_OK);
 
         const buffer = new TextEncoder().encode(TEXT).buffer;
-        const pData = { value: new Int8Array(buffer), size: buffer.byteLength };
+        const pData = new Uint8Array(buffer);
         result = await objectUnderTest.xWrite(FILE_ID, pData, 0);
         expect(result).toBe(VFS.SQLITE_OK);
 
@@ -312,12 +327,12 @@ export function configureTests(build, clear, skip = []) {
         expect(result).toBe(VFS.SQLITE_OK);
       });
 
-      const pData = { value: new Int8Array(TEXT.length), size: TEXT.length };
+      const pData = new Uint8Array(TEXT.length);
       result = await objectUnderTest.xRead(FILE_ID, pData, 0);
       expect(result).toBe(VFS.SQLITE_IOERR_SHORT_READ);
 
       result = await objectUnderTest.xFileSize(FILE_ID, pOut);
-      expect(pOut.value).toBe(0);
+      expect(pOut.value64).toBe(0);
     });
   } // skip check
 
@@ -333,8 +348,8 @@ export function configureTests(build, clear, skip = []) {
           VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
           pOut.pass());
         for (let i = 0; i < nIterations; ++i) {
-          const pDataA = { value: new Int8Array(4), size: 4 };
-          const pDataB = { value: new Int8Array(4), size: 4 };
+          const pDataA = new Uint8Array(4);
+          const pDataB = new Uint8Array(4);
 
           let maybeBusy;
           do {
@@ -345,11 +360,11 @@ export function configureTests(build, clear, skip = []) {
               await objectUnderTest.xRead(fileId, pDataB, 4);
               await new Promise(resolve => setTimeout(resolve));
 
-              expect(Array.from(pDataA.value)).toEqual(Array.from(pDataB.value));
+              expect(Array.from(pDataA)).toEqual(Array.from(pDataB));
             }, async function() {
               // Increment ints.
-              const viewA = new DataView(pDataA.value.buffer);
-              const viewB = new DataView(pDataB.value.buffer);
+              const viewA = new DataView(pDataA.buffer);
+              const viewB = new DataView(pDataB.buffer);
               viewA.setInt32(0, viewA.getInt32(0) + 1);
               viewB.setInt32(0, viewB.getInt32(0) + 1);
 
@@ -369,7 +384,7 @@ export function configureTests(build, clear, skip = []) {
         VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
         pOut.pass());
 
-      const pData = { value: new Int8Array(4), size: 4 };
+      const pData = new Uint8Array(4);
       await transact(objectUnderTest, FILE_ID, null, async function() {
         await objectUnderTest.xWrite(FILE_ID, pData, 0);
         await objectUnderTest.xWrite(FILE_ID, pData, 4);
@@ -390,7 +405,7 @@ export function configureTests(build, clear, skip = []) {
         pOut.pass());
 
       await transact(objectUnderTest, FILE_ID, async function() {
-        const view = new DataView(pData.value.buffer);
+        const view = new DataView(pData.buffer);
         await objectUnderTest.xRead(FILE_ID, pData, 0);
         expect(view.getInt32(0)).toBe(nInstances * nIterations);
         await objectUnderTest.xRead(FILE_ID, pData, 4);
@@ -410,7 +425,7 @@ export function configureTests(build, clear, skip = []) {
         pOut.pass());
 
       const pageSizes = [4096, 8192, 65536, 4096, 512];
-      const data = new Int8Array(65536 * 4);
+      const data = new Uint8Array(65536 * 4);
       (function() {
         const dataView = new DataView(data.buffer);
         for (let i = 0; i < data.byteLength; i += 4) {
@@ -423,7 +438,7 @@ export function configureTests(build, clear, skip = []) {
       async function writeFile(pageSize, writeSize) {
         // Create in-memory file image.
         const nWrites = Math.trunc((pageSize + data.byteLength + writeSize - 1) / writeSize);
-        const allFileData = new Int8Array(writeSize * nWrites);
+        const allFileData = new Uint8Array(writeSize * nWrites);
         allFileData.set(data, pageSize);
 
         // Set file header values.
@@ -436,7 +451,7 @@ export function configureTests(build, clear, skip = []) {
         for (let i = 0; i < nWrites; ++i) {
           const offset = i * writeSize;
           const chunk = allFileData.subarray(offset, offset + writeSize);
-          await objectUnderTest.xWrite(FILE_ID, { value: chunk, size: writeSize }, offset);
+          await objectUnderTest.xWrite(FILE_ID, chunk, offset);
         }
       }
 
@@ -459,24 +474,21 @@ export function configureTests(build, clear, skip = []) {
 
         await transact(objectUnderTest, FILE_ID, async function() {
           // Read page size.
-          const pageData = new Int8Array(2);
-          await objectUnderTest.xRead(
-            FILE_ID,
-            { value: pageData, size: pageData.byteLength },
-            16);
+          const pageData = new Uint8Array(2);
+          await objectUnderTest.xRead(FILE_ID, pageData, 16);
 
           const dataView = new DataView(pageData.buffer);
           expect(dataView.getUint16(0)).toEqual(pageSize < 65536 ? pageSize : 1);
 
           // Read data one sector at a time.
           const readSize = 512;
-          const readData = new Int8Array(data.byteLength);
+          const readData = new Uint8Array(data.byteLength);
           const readCount = data.byteLength / readSize;
           for (let i = 0; i < readCount; ++i) {
             const offset = i * readSize;
             await objectUnderTest.xRead(
               FILE_ID,
-              { value: readData.subarray(offset, offset + readSize), size: readSize },
+              readData.subarray(offset, offset + readSize),
               pageSize + offset);
           }
           expect(readData.every((value, index) => value === data[index])).toBeTrue();
@@ -518,13 +530,13 @@ export function configureTests(build, clear, skip = []) {
 
       await exclusive(vfs, fileId);
 
-      const pOut = { value: new Int8Array() };
-      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, pOut);
+      const pArg = new DataView(new ArrayBuffer(0));
+      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, pArg);
 
       result = await vfs.xSync(fileId, VFS.SQLITE_SYNC_NORMAL);
       if (result !== VFS.SQLITE_OK) throw new Error(`xSync returned ${result}`);
 
-      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_PHASETWO, pOut);
+      result = await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_PHASETWO, pArg);
     }
   } catch (e) {
     debugger;
@@ -546,10 +558,7 @@ export function configureTests(build, clear, skip = []) {
  */
 async function writeString(vfs, fileId, s, iOffset) {
   const encoded = new TextEncoder().encode(s);
-  const pData = {
-    size: encoded.byteLength,
-    value: new Int8Array(encoded.buffer)
-  };
+  const pData = new Uint8Array(encoded.buffer);
 
   const result = await vfs.xWrite(fileId, pData, iOffset);
   if (result !== VFS.SQLITE_OK) throw new Error('write failed');
@@ -562,12 +571,9 @@ async function writeString(vfs, fileId, s, iOffset) {
  * @param {number} iOffset 
  */
 async function readString(vfs, fileId, size, iOffset) {
-  const pData = {
-    size,
-    value: new Int8Array(size)
-  };
+  const pData = new Uint8Array(size);
 
   const result = await vfs.xRead(fileId, pData, iOffset);
   if (result !== VFS.SQLITE_OK) throw new Error('read failed');
-  return new TextDecoder().decode(pData.value);
+  return new TextDecoder().decode(pData);
 }

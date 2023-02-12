@@ -38,73 +38,73 @@ declare interface SQLiteVFS {
   mxPathName?: number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xClose(fileId: number): number|Promise<number>;
+  xClose(fileId: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xRead(
     fileId: number,
-    pData: { size: number, value: Int8Array},
+    pData: Uint8Array,
     iOffset: number
-  ): number|Promise<number>;
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xWrite(
     fileId: number,
-    pData: { size: number, value: Int8Array},
+    pData: Uint8Array,
     iOffset: number
-  ): number|Promise<number>;
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xTruncate(fileId: number, iSize: number): number|Promise<number>;
+  xTruncate(fileId: number, iSize: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xSync(fileId: number, flags: number): number|Promise<number>;
+  xSync(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileSize(
     fileId: number,
-    pSize64: { set(value: number): void }
-  ): number|Promise<number>;
+    pSize64: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xLock(fileId: number, flags: number): number|Promise<number>;
+  xLock(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xUnlock(fileId: number, flags: number): number|Promise<number>;
+  xUnlock(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xCheckReservedLock(
     fileId: number,
-    pResOut: { set(value: number): void }
-  ): number|Promise<number>;
+    pResOut: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileControl(
     fileId: number,
     flags: number,
-    pOut: { value: Int8Array }
-  ): number|Promise<number>;
+    pOut: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xDeviceCharacteristics(fileId: number): number|Promise<number>;
+  xDeviceCharacteristics(fileId: number): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xOpen(
     name: string|null,
     fileId: number,
     flags: number,
-    pOutFlags: { set(value: number): void }
-  ): number|Promise<number>;
+    pOutFlags: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xDelete(name: string, syncDir: number): number|Promise<number>;
+  xDelete(name: string, syncDir: number): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xAccess(
     name: string,
     flags: number,
-    pResOut: { set(value): void }
-  ): number|Promise<number>;
+    pResOut: DataView
+  ): number;
 }
 
 /**

@@ -10,7 +10,7 @@ declare function getValue(ptr: number, type: string): number;
 declare function setValue(ptr: number, value: number, type: string): number;
 declare function mergeInto(library: object, methods: object): void;
 
-declare var HEAP8: Int8Array;
+declare var HEAPU8: Uint8Array;
 declare var LibraryManager;
 declare var Module;
 declare var _vfsAccess;

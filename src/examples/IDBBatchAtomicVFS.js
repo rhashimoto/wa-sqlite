@@ -28,7 +28,7 @@ function log(...args) {
  * @property {string} path
  * @property {number} offset negative of position in file
  * @property {number} version
- * @property {Int8Array} data
+ * @property {Uint8Array} data
  *
  * @property {number} [fileSize] Only present on block 0
 */
@@ -71,6 +71,13 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     this.#idb = null;
   }
 
+  /**
+   * @param {string?} name 
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @param {DataView} pOutFlags 
+   * @returns {number}
+   */
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;
@@ -98,7 +105,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
               path: file.path,
               offset: 0,
               version: 0,
-              data: new Int8Array(0),
+              data: new Uint8Array(0),
               fileSize: 0
             };
 
@@ -109,7 +116,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             throw new Error(`file not found: ${file.path}`);
           }
         }
-        pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
+        pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY, true);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);
@@ -118,6 +125,10 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xClose(fileId) {
     return this.handleAsync(async () => {
       try {
@@ -140,10 +151,16 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
-      log(`xRead ${file.path} ${pData.value.length} ${iOffset}`);
+      log(`xRead ${file.path} ${pData.byteLength} ${iOffset}`);
 
       try {
         // Read as many blocks as necessary to satisfy the read request.
@@ -152,24 +169,24 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // write boundaries so we have to allow for that.
         const result = await this.#idb.run('readonly', async ({blocks}) => {
           let pDataOffset = 0;
-          while (pDataOffset < pData.value.length) {
+          while (pDataOffset < pData.byteLength) {
             // Fetch the IndexedDB block for this file location.
             const fileOffset = iOffset + pDataOffset;
             /** @type {FileBlock} */
-            const block = fileOffset < file.block0.data.length ?
+            const block = fileOffset < file.block0.data.byteLength ?
               file.block0 :
               await blocks.get(this.#bound(file, -fileOffset));
 
-            if (!block || block.data.length - block.offset <= fileOffset) {
-              pData.value.fill(0, pDataOffset);
+            if (!block || block.data.byteLength - block.offset <= fileOffset) {
+              pData.fill(0, pDataOffset);
               return VFS.SQLITE_IOERR_SHORT_READ;
             }
 
-            const buffer = pData.value.subarray(pDataOffset);
+            const buffer = pData.subarray(pDataOffset);
             const blockOffset = fileOffset + block.offset;
             const nBytesToCopy = Math.min(
-              Math.max(block.data.length - blockOffset, 0), // source bytes
-              buffer.length);                               // destination bytes
+              Math.max(block.data.byteLength - blockOffset, 0), // source bytes
+              buffer.byteLength);                               // destination bytes
             buffer.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
             pDataOffset += nBytesToCopy;
           }
@@ -183,9 +200,15 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xWrite(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
+    log(`xWrite ${file.path} ${pData.byteLength} ${iOffset}`);
 
     try {
       // Convert the write directly into an IndexedDB object. Our assumption
@@ -193,14 +216,14 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       // offset and size unless the database page size changes, except when
       // changing database page size which is handled by #reblockIfNeeded().
       const prevFileSize = file.block0.fileSize;
-      file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.value.length);
+      file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.byteLength);
       const block = iOffset === 0 ? file.block0 : {
         path: file.path,
         offset: -iOffset,
         version: file.block0.version,
         data: null
       };
-      block.data = pData.value.slice();
+      block.data = pData.slice();
 
       if (file.changedPages) {
         // This write is part of a batch atomic write. All writes in the
@@ -225,6 +248,11 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} iSize 
+   * @returns {number}
+   */
   xTruncate(fileId, iSize) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xTruncate ${file.path} ${iSize}`);
@@ -249,6 +277,11 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {*} flags 
+   * @returns {number}
+   */
   xSync(fileId, flags) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xSync ${file.path} ${flags}`);
@@ -267,14 +300,24 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pSize64 
+   * @returns {number}
+   */
   xFileSize(fileId, pSize64) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xFileSize ${file.path}`);
 
-    pSize64.set(file.block0.fileSize)
+    pSize64.setBigInt64(0, BigInt(file.block0.fileSize), true)
     return VFS.SQLITE_OK;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
@@ -297,6 +340,11 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xUnlock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
@@ -311,11 +359,19 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xSectorSize(fileId) {
     log('xSectorSize');
     return SECTOR_SIZE;
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
     return VFS.SQLITE_IOCAP_BATCH_ATOMIC |
@@ -324,6 +380,12 @@ export class IDBBatchAtomicVFS extends VFS.Base {
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} op 
+   * @param {DataView} pArg 
+   * @returns {number}
+   */
   xFileControl(fileId, op, pArg) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xFileControl ${file.path} ${op}`);
@@ -440,6 +502,12 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} flags 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
       try {
@@ -450,7 +518,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         const key = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.getKey(this.#bound({path}, 0));
         });
-        pResOut.set(key ? 1 : 0);
+        pResOut.setInt32(0, key ? 1 : 0, true);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);
@@ -459,6 +527,11 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} syncDir 
+   * @returns {number}
+   */
   xDelete(name, syncDir) {
     return this.handleAsync(async () => {
       const path = new URL(name, 'file://localhost/').pathname;
