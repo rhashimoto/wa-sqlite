@@ -5,9 +5,9 @@ name: wa-sqlite CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "breaking-changes" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "breaking-changes" ]
 
 env:
   EM_VERSION: 3.1.31
