@@ -10,11 +10,12 @@ const MONACO_VS = '/.yarn/unplugged/monaco-editor-npm-0.34.1-03d887d213/node_mod
 
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
-CREATE TABLE tbl (x PRIMARY KEY, y);
+CREATE TABLE IF NOT EXISTS tbl (x PRIMARY KEY, y);
 REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
 SELECT y * y FROM tbl WHERE x = 'bar';
 `.trim();
 
+// Define the selectable configurations.
 const DATABASE_CONFIGS = new Map([
   {
     label: 'unix / standard',
@@ -60,7 +61,12 @@ const DATABASE_CONFIGS = new Map([
 window.addEventListener('DOMContentLoaded', async function() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('clear')) {
-    // TODO
+    localStorage.clear();
+    const worker = new Worker('./clean-worker.js', { type: 'module' });
+    await new Promise(resolve => {
+      worker.addEventListener('message', resolve);
+    });
+    worker.terminate();
   }
 
   // Load the Monaco editor
@@ -78,10 +84,10 @@ window.addEventListener('DOMContentLoaded', async function() {
     editor.onDidChangeModelContent(function() {
       clearTimeout(change);
       change = setTimeout(function() {
-        localStorage.setItem('wa-sqlite demo', editor.getValue());
+        localStorage.setItem('wa-sqlite demo sql', editor.getValue());
       }, 1000);
     });
-    editor.setValue(localStorage.getItem('wa-sqlite demo') ?? DEFAULT_SQL);
+    editor.setValue(localStorage.getItem('wa-sqlite demo sql') ?? DEFAULT_SQL);
 
     return editor;
   });
@@ -93,12 +99,17 @@ window.addEventListener('DOMContentLoaded', async function() {
     option.value = key;
     option.textContent = config.label;
     select.appendChild(option);
+
+    // Restore the last used config.
+    const savedConfig = localStorage.getItem('wa-sqlite demo config');
+    if (savedConfig === key) {
+      option.selected = true;
+    }
   }
 
   // Handle new VFS selection.
   let sql, worker;
   select.addEventListener('change', async (event) => {
-    console.log(select.value);
     button.disabled = true;
 
     // Restart the worker.
@@ -110,12 +121,14 @@ window.addEventListener('DOMContentLoaded', async function() {
     const workerProxy = Comlink.wrap(worker);
     sql = await workerProxy(config);
 
+    // Remember the config for next page load.
+    localStorage.setItem('wa-sqlite demo config', select.value);
+
     // Also expose the query function for use in the debug console.
     window['sql'] = sql;
 
     button.disabled = false;
   });
-  /** @type {HTMLOptionElement} */(select.firstElementChild).selected = true;
   select.dispatchEvent(new CustomEvent('change'));
 
   // Execute SQL on button click.
