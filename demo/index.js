@@ -2,18 +2,21 @@
 // @ts-ignore
 import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
 
-// This is the path to the local monaco-editor installed via devDependencies.
-// This will need to be changed if using a package manager other than Yarn 2.
-// The value can also reference an external CDN, e.g.
-// https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs
-const MONACO_VS = '/.yarn/unplugged/monaco-editor-npm-0.34.1-03d887d213/node_modules/monaco-editor/dev/vs';
+// This is the path to the Monaco editor distribution. For development
+// this loads from the local server (uses Yarn 2 path).
+const MONACO_VS = false && location.hostname.endsWith('localhost') ?
+  '/.yarn/unplugged/monaco-editor-npm-0.34.1-03d887d213/node_modules/monaco-editor/dev/vs' :
+  'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs';
 
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
-CREATE TABLE IF NOT EXISTS tbl (x PRIMARY KEY, y);
-REPLACE INTO tbl VALUES ('foo', 6), ('bar', 7);
-SELECT y * y FROM tbl WHERE x = 'bar';
-`.trim();
+
+-- Example virtual table with some stock prices.
+CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
+
+-- Copy virtual table into a native table (on the current VFS):
+CREATE TABLE IF NOT EXISTS copied AS SELECT * FROM goog;
+SELECT * FROM copied LIMIT 5;`.trim();
 
 // Define the selectable configurations.
 const DATABASE_CONFIGS = new Map([
@@ -58,6 +61,9 @@ const DATABASE_CONFIGS = new Map([
   }
 ].map(obj => [obj.label, obj]));
 
+const CONFIG_KEY = 'wa-sqlite demo config';
+const SQL_KEY = 'wa-sqlite demo sql';
+
 window.addEventListener('DOMContentLoaded', async function() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('clear')) {
@@ -71,7 +77,7 @@ window.addEventListener('DOMContentLoaded', async function() {
 
   // Load the Monaco editor
   const button = /** @type {HTMLButtonElement} */(document.getElementById('execute'));
-  const editorReady = createEditor().then(editor => {
+  const editorReady = createMonacoEditor().then(editor => {
     // Change the button text with selection.
     editor.onDidChangeCursorSelection(({selection}) => {
       button.textContent = selection.isEmpty() ?
@@ -84,15 +90,15 @@ window.addEventListener('DOMContentLoaded', async function() {
     editor.onDidChangeModelContent(function() {
       clearTimeout(change);
       change = setTimeout(function() {
-        localStorage.setItem('wa-sqlite demo sql', editor.getValue());
+        localStorage.setItem(SQL_KEY, editor.getValue());
       }, 1000);
     });
-    editor.setValue(localStorage.getItem('wa-sqlite demo sql') ?? DEFAULT_SQL);
+    editor.setValue(localStorage.getItem(SQL_KEY) ?? DEFAULT_SQL);
 
     return editor;
   });
 
-  // Populate the VFS selector.
+  // Populate the database configuration selector.
   const select = /** @type {HTMLSelectElement} */(document.getElementById('vfs'));
   for (const [key, config] of DATABASE_CONFIGS) {
     const option = document.createElement('option');
@@ -101,14 +107,14 @@ window.addEventListener('DOMContentLoaded', async function() {
     select.appendChild(option);
 
     // Restore the last used config.
-    const savedConfig = localStorage.getItem('wa-sqlite demo config');
+    const savedConfig = localStorage.getItem(CONFIG_KEY);
     if (savedConfig === key) {
       option.selected = true;
     }
   }
 
   // Handle new VFS selection.
-  let sql, worker;
+  let worker;
   select.addEventListener('change', async (event) => {
     button.disabled = true;
 
@@ -119,13 +125,10 @@ window.addEventListener('DOMContentLoaded', async function() {
     // Configure the worker database.
     const config = DATABASE_CONFIGS.get(select.value);
     const workerProxy = Comlink.wrap(worker);
-    sql = await workerProxy(config);
+    window['sql'] = await workerProxy(config);
 
     // Remember the config for next page load.
-    localStorage.setItem('wa-sqlite demo config', select.value);
-
-    // Also expose the query function for use in the debug console.
-    window['sql'] = sql;
+    localStorage.setItem(CONFIG_KEY, select.value);
 
     button.disabled = false;
   });
@@ -151,7 +154,8 @@ window.addEventListener('DOMContentLoaded', async function() {
 
     let time = Date.now();
     try {
-      // Execute the SQL using the template tag function.
+      // Execute the SQL using the template tag proxy from the Worker.
+      const sql = window['sql'];
       const results = await sql`${queries}`;
       results.map(formatTable).forEach(table => output.append(table));
     } catch (e) {
@@ -165,7 +169,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   });
 });
 
-async function createEditor() {
+async function createMonacoEditor() {
   // Insert a script element to bootstrap the monaco loader.
   await new Promise(resolve => {
     const loader = document.createElement('script');
