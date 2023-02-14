@@ -3,6 +3,7 @@ import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
 import * as SQLite from '../src/sqlite-api.js';
 
 import GOOG from '../test/GOOG.js';
+import { createTag } from "../src/examples/tag.js";
 import { ArrayModule } from "../src/examples/ArrayModule.js";
 import { ArrayAsyncModule } from "../src/examples/ArrayAsyncModule.js";
 
@@ -85,69 +86,9 @@ async function open(config) {
     },
     null, null);
 
-  // Helper function for the query() interface.
-  async function execute(sql, bindings) {
-    const results = [];
-    for await (const stmt of sqlite3.statements(db, sql)) {
-      let columns;
-      for (const binding of bindings ?? [[]]) {
-        sqlite3.reset(stmt);
-        if (bindings) {
-          sqlite3.bind_collection(stmt, binding);
-        }
-
-        const rows = [];
-        while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
-          const row = sqlite3.row(stmt);
-          rows.push(row);
-        }
-  
-        columns = columns ?? sqlite3.column_names(stmt)
-        if (columns.length) {
-          results.push({ columns, rows });
-        }
-      }
-  
-      // When binding parameters, only a single statement is executed.
-      if (bindings) {
-        return results;
-      }
-    }
-    return results;
-  }
-  
-  // Exposed query function. This function can be used either as a template
-  // tag for multiple statements, e.g.:
-  //
-  // query`
-  //  SELECT * FROM ${tableName} WHERE ROWID=${index};
-  //  SELECT * FROM anotherTable;
-  // `;
-  //
-  // ...or as a function passed a single statement with bindings, e.g.:
-  //
-  // query('INSERT INTO table VALUES (?, ?)', [
-  //   ['foo', 42],
-  //   ['bar', 17]
-  // ]);
-  //
-  // With both usages, an array of statement results is returned (in a
-  // Promise) where each statement result is an Object with properties
-  // "columns" (array of column names) and "rows" (array of value arrays).
-  async function query(sql, ...values) {
-    if (Array.isArray(sql)) {
-      // Tag usage.
-      const interleaved = [];
-      sql.forEach((s, i) => {
-        interleaved.push(s, values[i]);
-      });
-      return execute(interleaved.join(''));
-    } else {
-      // Binding usage.
-      return execute(sql, values[0]);
-    }
-  }
-  return Comlink.proxy(query);
+  // Create the query interface.
+  const tag = createTag(sqlite3, db);
+  return Comlink.proxy(tag);
 }
 Comlink.expose(open);
 

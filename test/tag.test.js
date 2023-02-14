@@ -1,6 +1,5 @@
 import { getSQLite } from './api-instances.js';
-import * as SQLite from '../src/sqlite-api.js';
-import { tag } from '../src/examples/tag.js';
+import { createTag } from '../src/examples/tag.js';
 
 describe('tag', function() {
   /** @type {SQLiteAPI} */ let sqlite3;
@@ -24,7 +23,7 @@ describe('tag', function() {
       await sqlite3.exec(db, `DROP TABLE ${table}`);
     }
 
-    sql = tag(sqlite3, db);
+    sql = createTag(sqlite3, db);
   });
 
   afterEach(async function() {
