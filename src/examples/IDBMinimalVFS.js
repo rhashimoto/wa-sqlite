@@ -253,7 +253,7 @@ export class IDBMinimalVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xFileSize ${file.path}`);
 
-    pSize64.setBigInt64(0, BigInt(file.fileSize), true)
+    pSize64.setBigInt64(0, BigInt(file.fileSize), true);
     return VFS.SQLITE_OK;
   }
 

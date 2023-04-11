@@ -56,6 +56,13 @@ const DATABASE_CONFIGS = new Map([
     vfsModule: '../src/examples/OriginPrivateFileSystemVFS.js',
     vfsClass: 'OriginPrivateFileSystemVFS',
     vfsArgs: []
+  },
+  {
+    label: 'AccessHandlePool / standard',
+    isAsync: false,
+    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+    vfsClass: 'AccessHandlePoolVFS',
+    vfsArgs: ['/demo-AccessHandlePoolVFS']
   }
 ].map(obj => [obj.label, obj]));
 

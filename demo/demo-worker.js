@@ -41,6 +41,7 @@ const WA_SQLITE_ASYNC = '../dist/wa-sqlite-async.mjs';
       // Create the VFS and register it as the default file system.
       const namespace = await import(config.vfsModule);
       const vfs = new namespace[config.vfsClass](...config.vfsArgs ?? []);
+      await vfs.isReady;
       sqlite3.vfs_register(vfs, true);
     }
 
