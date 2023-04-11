@@ -1,6 +1,4 @@
-// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-// @ts-ignore
-import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
+// Copyright 2023 Roy T. Hashimoto. All Rights Reserved.
 
 // This is the path to the Monaco editor distribution. For development
 // this loads from the local server (uses Yarn 2 path).
@@ -65,6 +63,10 @@ const CONFIG_KEY = 'wa-sqlite demo config';
 const SQL_KEY = 'wa-sqlite demo sql';
 
 window.addEventListener('DOMContentLoaded', async function() {
+  const Comlink = await import(location.hostname.endsWith('localhost') ?
+    '/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
+    'https://unpkg.com/comlink/dist/esm/comlink.mjs');
+
   const params = new URLSearchParams(window.location.search);
   if (params.has('clear')) {
     localStorage.clear();
@@ -121,7 +123,10 @@ window.addEventListener('DOMContentLoaded', async function() {
     // Restart the worker.
     worker?.terminate();
     worker = new Worker('./demo-worker.js', { type: 'module' });
-
+    await new Promise(resolve => {
+      worker.addEventListener('message', resolve, { once: true });
+    });
+    
     // Configure the worker database.
     const config = DATABASE_CONFIGS.get(select.value);
     const workerProxy = Comlink.wrap(worker);
