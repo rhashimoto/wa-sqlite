@@ -4,7 +4,7 @@ import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
 
 // This is the path to the Monaco editor distribution. For development
 // this loads from the local server (uses Yarn 2 path).
-const MONACO_VS = false && location.hostname.endsWith('localhost') ?
+const MONACO_VS = location.hostname.endsWith('localhost') ?
   '/.yarn/unplugged/monaco-editor-npm-0.34.1-03d887d213/node_modules/monaco-editor/dev/vs' :
   'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs';
 
