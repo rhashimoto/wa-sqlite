@@ -95,27 +95,23 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         this.#mapIdToFile.set(fileId, file);
 
         // Read the first block, which also contains the file metadata.
-        file.block0 = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(this.#bound(file, 0));
-        });
-        if (!file.block0) {
-          // File doesn't exist, create if requested.
-          if (flags & VFS.SQLITE_OPEN_CREATE) {
-            file.block0 = {
-              path: file.path,
-              offset: 0,
-              version: 0,
-              data: new Uint8Array(0),
-              fileSize: 0
-            };
-
-            // Write metadata block to IndexedDB.
-            this.#idb.run('readwrite', ({blocks}) => blocks.put(file.block0));
-            await this.#idb.sync();
-          } else {
-            throw new Error(`file not found: ${file.path}`);
+        await this.#idb.run('readwrite', async ({blocks}) => {
+          file.block0 = await blocks.get(this.#bound(file, 0));
+          if (!file.block0) {
+            if (flags & VFS.SQLITE_OPEN_CREATE) {
+              file.block0 = {
+                path: file.path,
+                offset: 0,
+                version: 0,
+                data: new Uint8Array(0),
+                fileSize: 0
+              };
+              blocks.put(file.block0);
+            } else {
+              throw new Error(`file not found: ${file.path}`);
+            }
           }
-        }
+        });
         pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY, true);
         return VFS.SQLITE_OK;
       } catch (e) {

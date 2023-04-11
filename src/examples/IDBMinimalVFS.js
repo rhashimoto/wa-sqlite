@@ -82,21 +82,21 @@ export class IDBMinimalVFS extends VFS.Base {
         this.#mapIdToFile.set(fileId, file);
 
         // Read the last block to get the file size.
-        const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(this.#bound(file, -Infinity));
+        this.#idb.run('readwrite', async ({blocks}) => {
+          const lastBlock = await blocks.get(this.#bound(file, -Infinity));
+          if (lastBlock) {
+            file.fileSize = lastBlock.data.length - lastBlock.offset;
+          } else if (flags & VFS.SQLITE_OPEN_CREATE) {
+            const block = {
+              path: file.path,
+              offset: 0,
+              data: new Uint8Array(0),
+            };
+            blocks.put(block);
+          } else {
+            throw new Error(`file not found: ${file.path}`);
+          }
         });
-        if (lastBlock) {
-          file.fileSize = lastBlock.data.length - lastBlock.offset;
-        } else if (flags & VFS.SQLITE_OPEN_CREATE) {
-          const block = {
-            path: file.path,
-            offset: 0,
-            data: new Uint8Array(0),
-          };
-          this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
-        } else {
-          throw new Error(`file not found: ${file.path}`);
-        }
         pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY, true);
         return VFS.SQLITE_OK;
       } catch (e) {
