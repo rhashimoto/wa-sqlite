@@ -108,34 +108,46 @@ document.getElementById('start').addEventListener('click', async event => {
 
   const benchmarks = await benchmarksReady;
   const Comlink = await ComlinkReady;
-  // @ts-ignore
-  const preamble = document.getElementById('preamble').value;
-  for (const config of CONFIGURATIONS.values()) {
-    const worker = new Worker('./demo-worker.js', { type: 'module' });
-    await new Promise(resolve => {
-      worker.addEventListener('message', resolve, { once: true });
-    });
+  try {
+    // @ts-ignore
+    const preamble = document.getElementById('preamble').value;
+    document.getElementById('error').textContent = '';
+    for (const config of CONFIGURATIONS.values()) {
+      const worker = new Worker('./demo-worker.js', { type: 'module' });
+      try {
+        await Promise.race([
+          new Promise(resolve => {
+            worker.addEventListener('message', resolve, { once: true });
+          }),
+          new Promise((_, reject) => setTimeout(() => {
+            reject(new Error(`${config.label} initialization timeout`));
+          }, 5000))
+        ])
 
-    const workerProxy = Comlink.wrap(worker)
-    const sql = await workerProxy(config);
+        const workerProxy = Comlink.wrap(worker)
+        const sql = await workerProxy(config);
 
-    await sql([preamble], []);
+        await sql([preamble], []);
 
-    let tr = document.querySelector('tbody').firstElementChild;
-    for (const benchmark of benchmarks) {
-      const startTime = Date.now();
-      await sql([benchmark], []);
-      const elapsed = (Date.now() - startTime) / 1000;
+        let tr = document.querySelector('tbody').firstElementChild;
+        for (const benchmark of benchmarks) {
+          const startTime = Date.now();
+          await sql([benchmark], []);
+          const elapsed = (Date.now() - startTime) / 1000;
 
-      addEntry(tr, elapsed.toString());
-      tr = tr.nextElementSibling;
+          addEntry(tr, elapsed.toString());
+          tr = tr.nextElementSibling;
+        }
+      } finally {
+        worker.terminate();
+      }
     }
-
-    worker.terminate();
+  } catch (e) {
+    document.getElementById('error').textContent = e.stack.includes(e.message) ? e.stack : `${e.stack}\n${e.message}`;
+  } finally {
+    // @ts-ignore
+    event.target.disabled = false;
   }
-
-  // @ts-ignore
-  event.target.disabled = false;
 });
 
 function addEntry(parent, text) {
