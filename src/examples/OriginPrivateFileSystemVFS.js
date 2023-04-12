@@ -254,9 +254,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
    */
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
-    return VFS.SQLITE_IOCAP_SAFE_APPEND |
-           VFS.SQLITE_IOCAP_SEQUENTIAL |
-           VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+    return VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
   /**
