@@ -108,7 +108,8 @@ document.getElementById('start').addEventListener('click', async event => {
 
   const benchmarks = await benchmarksReady;
   const Comlink = await ComlinkReady;
-  const preamble = document.getElementById('preamble').textContent;
+  // @ts-ignore
+  const preamble = document.getElementById('preamble').value;
   for (const config of CONFIGURATIONS.values()) {
     const worker = new Worker('./demo-worker.js', { type: 'module' });
     await new Promise(resolve => {
