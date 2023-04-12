@@ -21,6 +21,10 @@
         border-collapse: collapse;
       }
 
+      td:first-child {
+        min-width: 15em;
+      }
+
       td, th {
         border: 1px solid #999;
         padding: 0.5rem;
@@ -38,22 +42,22 @@
 -- Pre-run setup
 PRAGMA journal_mode=delete;
       </textarea>
-      <button id="start" disabled>Start</button>
+      <button id="start">Start</button>
     </div>
     <div><pre id="error" style="color: red"></pre></div>
     <div>
       <table>
         <thead>
-          <tr>
+          <tr id="vfs">
             <th>Test</th>
-            <th>default</th>
+            <!-- <th>default</th>
             <th>Memory (sync)</th>
             <th>Memory (async)</th>
             <th>MemoryAsync</th>
             <th>IDBMinimal</th>
             <th>IDBMinimal relaxed</th>
             <th>IDBBatchAtomic</th>
-            <th>IDBBatchAtomic relaxed</th>
+            <th>IDBBatchAtomic relaxed</th> -->
           </tr>
         </thead>
         <tbody>
