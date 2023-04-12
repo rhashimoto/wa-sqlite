@@ -9,7 +9,7 @@ const HEADER_MAX_PATH_SIZE = 512;
 const HEADER_DIGEST_SIZE = 8;
 const HEADER_OFFSET_PATH = 0;
 const HEADER_OFFSET_DIGEST = HEADER_MAX_PATH_SIZE;
-const HEADER_OFFSET_DATA = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE;
+const HEADER_OFFSET_DATA = SECTOR_SIZE;
 
 const DEFAULT_CAPACITY = 6;
 
@@ -83,7 +83,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
       const file = { path, flags, accessHandle };
       this.#mapIdToFile.set(fileId, file);
 
-      pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY, true);
+      pOutFlags.setInt32(0, flags, true);
       return VFS.SQLITE_OK;
     } catch (e) {
       console.error(e.message);
@@ -317,6 +317,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
       return new TextDecoder().decode(encodedPath.subarray(0, pathBytes));
     } else {
       // Bad digest. Repair this header.
+      console.warn('Disassociating file with bad digest.');
       this.#setAssociatedPath(accessHandle, '');
       return '';
     }
@@ -371,6 +372,11 @@ export class AccessHandlePoolVFS extends VFS.Base {
    * @returns {ArrayBuffer} 64-bit digest
    */
   #computeDigest(corpus) {
+    if (!corpus[HEADER_OFFSET_PATH]) {
+      // Optimization for deleted file.
+      return new Uint32Array([0xf3d93f72, 0x308540b2]);
+    }
+
     let h1 = 0xdeadbeef;
     let h2 = 0x41c6ce57;
     
