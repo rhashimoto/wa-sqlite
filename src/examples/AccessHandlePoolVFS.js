@@ -31,15 +31,14 @@ export class AccessHandlePoolVFS extends VFS.Base {
 
   // The OPFS files all have randomly-generated names that do not match
   // the SQLite files whose data they contain. This map links those names
-  // with their respective OPFS access handles. In this map, all the OPFS
-  // files that are not yet associated with a SQLite file precede the
-  // OPFS files that are associated with a SQLite file - when an unassociated
-  // OPFS file access handle is needed, the first entry in this map is used.
+  // with their respective OPFS access handles.
   #mapAccessHandleToName = new Map();
 
   // When a SQLite file is associated with an OPFS file, that association
-  // is kept in this map.
+  // is kept in #mapPathToAccessHandle. Each access handle is in exactly
+  // one of #mapPathToAccessHandle or #availableAccessHandles.
   #mapPathToAccessHandle = new Map();
+  #availableAccessHandles = new Set();
 
   #mapIdToFile = new Map();
 
@@ -65,7 +64,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
         // File not found so try to create it.
         if (this.getSize() < this.getCapacity()) {
           // Choose an unassociated OPFS file from the pool.
-          ([accessHandle] = this.#mapAccessHandleToName.keys());
+          ([accessHandle] = this.#availableAccessHandles.keys());
           this.#setAssociatedPath(accessHandle, path);
         } else {
           // Out of unassociated files. This can be fixed by calling
@@ -76,8 +75,6 @@ export class AccessHandlePoolVFS extends VFS.Base {
       if (!accessHandle) {
         throw new Error('file not found');
       }
-      this.#mapPathToAccessHandle.set(path, accessHandle);
-
       // Subsequent methods are only passed the fileId, so make sure we have
       // a way to get the file resources.
       const file = { path, flags, accessHandle };
@@ -220,18 +217,14 @@ export class AccessHandlePoolVFS extends VFS.Base {
    * @returns {Promise<number>} 
    */
   async addCapacity(n) {
-    /** @type {[any, string][]} */ const newEntries = [];
     for (let i = 0; i < n; ++i) {
       const name = Math.random().toString(36).replace('0.', '');
       const handle = await this.#directoryHandle.getFileHandle(name, { create: true });
       const accessHandle = await handle.createSyncAccessHandle();
-      newEntries.push([accessHandle, name]);
+      this.#mapAccessHandleToName.set(accessHandle, name);
 
       this.#setAssociatedPath(accessHandle, '');
     }
-
-    // Insert new entries at the front of #mapAccessHandleToName.
-    this.#mapAccessHandleToName = new Map([...newEntries, ...this.#mapAccessHandleToName]);
     return n;
   }
 
@@ -244,12 +237,14 @@ export class AccessHandlePoolVFS extends VFS.Base {
    */
   async removeCapacity(n) {
     let nRemoved = 0;
-    for (const [accessHandle, name] of this.#mapAccessHandleToName) {
+    for (const accessHandle of Array.from(this.#availableAccessHandles)) {
       if (nRemoved == n || this.getSize() === this.getCapacity()) return nRemoved;
 
+      const name = this.#mapAccessHandleToName.get(accessHandle);
       await accessHandle.close();
       await this.#directoryHandle.removeEntry(name);
       this.#mapAccessHandleToName.delete(accessHandle);
+      this.#availableAccessHandles.delete(accessHandle);
       ++nRemoved;
     }
     return nRemoved;
@@ -265,19 +260,15 @@ export class AccessHandlePoolVFS extends VFS.Base {
     }
 
     // Open access handles in parallel, separating associated and unassociated.
-    /** @type {[any, string][]} */ const tuplesWithPath = [];
-    /** @type {[any, string][]} */ const tuplesWithoutPath = [];
     await Promise.all(files.map(async ([name, handle]) => {
       const accessHandle = await handle.createSyncAccessHandle();
       const path = this.#getAssociatedPath(accessHandle);
       if (path) {
         this.#mapPathToAccessHandle.set(path, accessHandle);
-        tuplesWithPath.push([accessHandle, name]);
       } else {
-        tuplesWithoutPath.push([accessHandle, name]);
+        this.#availableAccessHandles.add(accessHandle);
       }
     }));
-    this.#mapAccessHandleToName = new Map([...tuplesWithoutPath, ...tuplesWithPath]);
   }
 
   #releaseAccessHandles() {
@@ -286,6 +277,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
     }
     this.#mapAccessHandleToName.clear();
     this.#mapPathToAccessHandle.clear();
+    this.#availableAccessHandles.clear();
   }
 
   /**
@@ -343,25 +335,15 @@ export class AccessHandlePoolVFS extends VFS.Base {
     accessHandle.flush();
 
     if (path) {
-      // Move associated access handles to the end of #mapAccessHandleToName.
-      const name = this.#mapAccessHandleToName.get(accessHandle);
-      if (name) {
-        this.#mapAccessHandleToName.delete(accessHandle);
-        this.#mapAccessHandleToName.set(accessHandle, name);
-      }
+      this.#mapPathToAccessHandle.set(path, accessHandle);
+      this.#availableAccessHandles.delete(accessHandle);
     } else {
       // This OPFS file doesn't represent any SQLite file so it doesn't
       // need to keep any data.
       accessHandle.truncate(HEADER_OFFSET_DATA);
 
-      // This OPFS file is now unassociated, so move it to the front
-      // of #mapAccessHandleToName.
-      const name = this.#mapAccessHandleToName.get(accessHandle);
-      if (name) {
-        this.#mapAccessHandleToName.delete(accessHandle);
-        this.#mapAccessHandleToName = new Map(
-          [[accessHandle, name], ...this.#mapAccessHandleToName]);
-      }
+      this.#mapPathToAccessHandle.delete(path);
+      this.#availableAccessHandles.add(accessHandle);
     }
   }
 
@@ -412,7 +394,6 @@ export class AccessHandlePoolVFS extends VFS.Base {
     if (accessHandle) {
       // Un-associate the SQLite path from the OPFS file.
       this.#setAssociatedPath(accessHandle, '');
-      this.#mapPathToAccessHandle.delete(path);
     }
   }
 }
