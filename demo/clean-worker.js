@@ -1,6 +1,8 @@
 const INDEXEDDB_DATABASES = [
   'demo-IDBMinimalVFS',
   'demo-IDBBatchAtomicVFS',
+  'demo-IDBMinimalVFS-relaxed',
+  'demo-IDBBatchAtomicVFS-relaxed',
   'benchmark-IDBMinimalVFS',
   'benchmark-IDBBatchAtomicVFS',
 ];
