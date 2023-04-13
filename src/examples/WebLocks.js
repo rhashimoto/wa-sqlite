@@ -34,6 +34,13 @@ export class WebLocksBase {
   }
 
   /**
+   * @returns {Promise<boolean>}
+   */
+  async isSomewhereReserved() {
+    throw new Error('unimplemented');
+  }
+
+  /**
    * 
    * @param {(targetState: number) => void} method 
    * @param {number} flags 
@@ -186,11 +193,19 @@ export class WebLocksBase {
   }
 
   /**
-   * @param {string} name 
+   * @param {string} lockName 
    */
-  _releaseWebLock(name) {
-    this.#releasers.get(name)?.();
-    this.#releasers.delete(name);
+  _releaseWebLock(lockName) {
+    this.#releasers.get(lockName)?.();
+    this.#releasers.delete(lockName);
+  }
+
+  /**
+   * @param {string} lockName 
+   */
+  async _pollWebLock(lockName) {
+    const query = await navigator.locks.query();
+    return query.held.find(({name}) => name === lockName)?.mode;
   }
 
   /**
@@ -213,13 +228,30 @@ export class WebLocksExclusive extends WebLocksBase {
   constructor(name) {
     super();
     this._lockName = name + '-outer';
+    this._reservedName = name + '-reserved';
   }
 
-   async _NONEtoSHARED() {
+  async isSomewhereReserved() {
+    const mode = await this._pollWebLock(this._reservedName);
+    return mode === 'exclusive';
+  }
+
+  async _NONEtoSHARED() {
     await this._acquireWebLock(this._lockName, {
       mode: 'exclusive',
       signal: this._getTimeoutSignal()
     });
+  }
+
+  async _SHAREDtoRESERVED() {
+    await this._acquireWebLock(this._reservedName, {
+      mode: 'exclusive',
+      signal: this._getTimeoutSignal()
+    });
+  }
+
+  async _RESERVEDtoSHARED() {
+    this._releaseWebLock(this._reservedName);
   }
 
   async _SHAREDtoNONE() {
@@ -237,6 +269,11 @@ export class WebLocksShared extends WebLocksBase {
     super();
     this._outerName = name + '-outer';
     this._innerName = name + '-inner';
+  }
+
+  async isSomewhereReserved() {
+    const mode = await this._pollWebLock(this._outerName);
+    return mode === 'exclusive';
   }
 
   async _NONEtoSHARED() {
@@ -261,7 +298,7 @@ export class WebLocksShared extends WebLocksBase {
       });
       if (isLocked) break;
 
-      if (await this._isReserved()) {
+      if (await this.isSomewhereReserved()) {
         // Someone else has a reserved lock so retry cannot succeed.
         throw new DOMException('', 'AbortError');
       }
@@ -290,10 +327,5 @@ export class WebLocksShared extends WebLocksBase {
 
   async _SHAREDtoNONE() {
     this._releaseWebLock(this._innerName);
-  }
-
-  async _isReserved() {
-    const query = await navigator.locks.query();
-    return query.held.find(({name}) => name === this._outerName)?.mode === 'exclusive';
   }
 }

@@ -241,6 +241,22 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
+  xCheckReservedLock(fileId, pResOut) {
+    return this.handleAsync(async () => {
+      const fileEntry = this.#mapIdToFile.get(fileId);
+      log(`xCheckReservedLock ${fileEntry.filename}`);
+
+      const isReserved = await fileEntry.locks.isSomewhereReserved();
+      pResOut.setInt32(0, isReserved ? 1 : 0, true);
+      return VFS.SQLITE_OK;
+    });
+  }
+
+  /**
+   * @param {number} fileId 
    * @returns {number}
    */
   xSectorSize(fileId) {

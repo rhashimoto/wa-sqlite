@@ -16,7 +16,8 @@ in culpa qui officia deserunt mollit anim id est laborum.`
 export const TEST = {
   BATCH_ATOMIC: 'batch atomic',
   CONTENTION: 'contenion',
-  REBLOCK: 'reblock'
+  REBLOCK: 'reblock',
+  LOCKS: 'locks'
 };
 
 /**
@@ -335,6 +336,50 @@ export function configureTests(build, clear, skip = []) {
       expect(pOut.value64).toBe(0);
     });
   } // skip check
+
+  if (!skipTests.has(TEST.LOCKS)) {
+    it('should check reserved lock status', async function() {
+      const objectUnderTest = await build();
+
+      let result;
+      const filename = 'foo';
+      result = await objectUnderTest.xOpen(
+        filename, FILE_ID,
+        VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB,
+        pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+
+      result = await objectUnderTest.xLock(FILE_ID, VFS.SQLITE_LOCK_SHARED);
+      expect(result).toBe(VFS.SQLITE_OK);
+      result = await objectUnderTest.xCheckReservedLock(FILE_ID, pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value32).toBeFalsy();
+
+      result = await objectUnderTest.xLock(FILE_ID, VFS.SQLITE_LOCK_RESERVED);
+      expect(result).toBe(VFS.SQLITE_OK);
+      result = await objectUnderTest.xCheckReservedLock(FILE_ID, pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value32).toBeTruthy();
+
+      result = await objectUnderTest.xLock(FILE_ID, VFS.SQLITE_LOCK_EXCLUSIVE);
+      expect(result).toBe(VFS.SQLITE_OK);
+      result = await objectUnderTest.xCheckReservedLock(FILE_ID, pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value32).toBeTruthy();
+
+      result = await objectUnderTest.xUnlock(FILE_ID, VFS.SQLITE_LOCK_SHARED);
+      expect(result).toBe(VFS.SQLITE_OK);
+      result = await objectUnderTest.xCheckReservedLock(FILE_ID, pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value32).toBeFalsy();
+
+      result = await objectUnderTest.xUnlock(FILE_ID, VFS.SQLITE_LOCK_NONE);
+      expect(result).toBe(VFS.SQLITE_OK);
+      result = await objectUnderTest.xCheckReservedLock(FILE_ID, pOut.pass());
+      expect(result).toBe(VFS.SQLITE_OK);
+      expect(pOut.value32).toBeFalsy();
+    });
+  }
 
   if (!skipTests.has(TEST.CONTENTION)) {
     it('should allow contention', async function() {

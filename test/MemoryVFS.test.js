@@ -3,7 +3,8 @@ import { configureTests, TEST } from "./VFSTests.js";
 
 const SKIP = [
   TEST.BATCH_ATOMIC,
-  TEST.CONTENTION
+  TEST.CONTENTION,
+  TEST.LOCKS
 ];
 
 class TestVFS extends MemoryVFS {

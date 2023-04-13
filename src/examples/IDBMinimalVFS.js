@@ -307,6 +307,22 @@ export class IDBMinimalVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
+  xCheckReservedLock(fileId, pResOut) {
+    return this.handleAsync(async () => {
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xCheckReservedLock ${file.path}`);
+
+      const isReserved = await file.locks.isSomewhereReserved();
+      pResOut.setInt32(0, isReserved ? 1 : 0, true);
+      return VFS.SQLITE_OK;
+    });
+  }
+
+  /**
+   * @param {number} fileId 
    * @returns {number}
    */
   xSectorSize(fileId) {
