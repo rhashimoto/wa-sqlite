@@ -6,9 +6,11 @@ const SECTOR_SIZE = 4096;
 // Each OPFS file begins with a fixed-size header with metadata. The
 // contents of the file follow immediately after the header.
 const HEADER_MAX_PATH_SIZE = 512;
+const HEADER_FLAGS_SIZE = 4;
 const HEADER_DIGEST_SIZE = 8;
-const HEADER_OFFSET_PATH = 0;
-const HEADER_OFFSET_DIGEST = HEADER_MAX_PATH_SIZE;
+const HEADER_CORPUS_SIZE = HEADER_MAX_PATH_SIZE + HEADER_FLAGS_SIZE;
+const HEADER_OFFSET_FLAGS = HEADER_MAX_PATH_SIZE;
+const HEADER_OFFSET_DIGEST = HEADER_CORPUS_SIZE;
 const HEADER_OFFSET_DATA = SECTOR_SIZE;
 
 const DEFAULT_CAPACITY = 6;
@@ -65,7 +67,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
         if (this.getSize() < this.getCapacity()) {
           // Choose an unassociated OPFS file from the pool.
           ([accessHandle] = this.#availableAccessHandles.keys());
-          this.#setAssociatedPath(accessHandle, path);
+          this.#setAssociatedPath(accessHandle, path, flags);
         } else {
           // Out of unassociated files. This can be fixed by calling
           // addCapacity() from the application.
@@ -223,7 +225,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
       const accessHandle = await handle.createSyncAccessHandle();
       this.#mapAccessHandleToName.set(accessHandle, name);
 
-      this.#setAssociatedPath(accessHandle, '');
+      this.#setAssociatedPath(accessHandle, '', 0);
     }
     return n;
   }
@@ -288,17 +290,17 @@ export class AccessHandlePoolVFS extends VFS.Base {
    */
   #getAssociatedPath(accessHandle) {
     // Read the path and digest of the path from the file.
-    const encodedPath = new Uint8Array(HEADER_MAX_PATH_SIZE);
-    accessHandle.read(encodedPath, { at: HEADER_OFFSET_PATH })
+    const corpus = new Uint8Array(HEADER_CORPUS_SIZE);
+    accessHandle.read(corpus, { at: 0 })
 
     const fileDigest = new Uint32Array(HEADER_DIGEST_SIZE / 4);
     accessHandle.read(fileDigest, { at: HEADER_OFFSET_DIGEST });
 
     // Verify the digest.
-    const computedDigest = this.#computeDigest(encodedPath);
+    const computedDigest = this.#computeDigest(corpus);
     if (fileDigest.every((value, i) => value === computedDigest[i])) {
       // Good digest. Decode the null-terminated path string.
-      const pathBytes = encodedPath.findIndex(value => value === 0);
+      const pathBytes = corpus.findIndex(value => value === 0);
       if (pathBytes === 0) {
         // Ensure that unassociated files are empty. Unassociated files are
         // truncated in #setAssociatedPath after the header is written. If
@@ -306,11 +308,11 @@ export class AccessHandlePoolVFS extends VFS.Base {
         // may remain in the file.
         accessHandle.truncate(HEADER_OFFSET_DATA);
       }
-      return new TextDecoder().decode(encodedPath.subarray(0, pathBytes));
+      return new TextDecoder().decode(corpus.subarray(0, pathBytes));
     } else {
       // Bad digest. Repair this header.
       console.warn('Disassociating file with bad digest.');
-      this.#setAssociatedPath(accessHandle, '');
+      this.#setAssociatedPath(accessHandle, '', 0);
       return '';
     }
   }
@@ -319,18 +321,23 @@ export class AccessHandlePoolVFS extends VFS.Base {
    * Set the path on an OPFS file header.
    * @param accessHandle FileSystemSyncAccessHandle
    * @param {string} path
+   * @param {number} flags
    */
-  #setAssociatedPath(accessHandle, path) {
-    // Convert the path string to UTF-8 and get the digest.
-    const encodedPath = new Uint8Array(HEADER_MAX_PATH_SIZE);
-    const encodedResult = new TextEncoder().encodeInto(path, encodedPath);
-    if (encodedResult.written >= encodedPath.byteLength) {
+  #setAssociatedPath(accessHandle, path, flags) {
+    // Convert the path string to UTF-8.
+    const corpus = new Uint8Array(HEADER_CORPUS_SIZE);
+    const encodedResult = new TextEncoder().encodeInto(path, corpus);
+    if (encodedResult.written >= HEADER_MAX_PATH_SIZE) {
       throw new Error('path too long');
     }
-    const digest = this.#computeDigest(encodedPath);
 
-    // Write the OPFS file header.
-    accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
+    // Add the creation flags.
+    const dataView = new DataView(corpus.buffer, corpus.byteOffset);
+    dataView.setUint32(HEADER_OFFSET_FLAGS, flags);
+
+    // Write the OPFS file header, including the digest.
+    const digest = this.#computeDigest(corpus);
+    accessHandle.write(corpus, { at: 0 });
     accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
     accessHandle.flush();
 
@@ -354,9 +361,9 @@ export class AccessHandlePoolVFS extends VFS.Base {
    * @returns {ArrayBuffer} 64-bit digest
    */
   #computeDigest(corpus) {
-    if (!corpus[HEADER_OFFSET_PATH]) {
+    if (!corpus[0]) {
       // Optimization for deleted file.
-      return new Uint32Array([0xf3d93f72, 0x308540b2]);
+      return new Uint32Array([0xfecc5f80, 0xaccec037]);
     }
 
     let h1 = 0xdeadbeef;
@@ -393,7 +400,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
     const accessHandle = this.#mapPathToAccessHandle.get(path);
     if (accessHandle) {
       // Un-associate the SQLite path from the OPFS file.
-      this.#setAssociatedPath(accessHandle, '');
+      this.#setAssociatedPath(accessHandle, '', 0);
     }
   }
 }
