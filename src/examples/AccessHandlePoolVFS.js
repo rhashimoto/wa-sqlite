@@ -13,6 +13,14 @@ const HEADER_OFFSET_FLAGS = HEADER_MAX_PATH_SIZE;
 const HEADER_OFFSET_DIGEST = HEADER_CORPUS_SIZE;
 const HEADER_OFFSET_DATA = SECTOR_SIZE;
 
+// These file types are expected to persist in the file system outside
+// a session. Other files will be removed on VFS start.
+const PERSISTENT_FILE_TYPES =
+  VFS.SQLITE_OPEN_MAIN_DB |
+  VFS.SQLITE_OPEN_MAIN_JOURNAL |
+  VFS.SQLITE_OPEN_SUPER_JOURNAL |
+  VFS.SQLITE_OPEN_WAL;
+
 const DEFAULT_CAPACITY = 6;
 
 function log(...args) {
@@ -264,6 +272,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
     // Open access handles in parallel, separating associated and unassociated.
     await Promise.all(files.map(async ([name, handle]) => {
       const accessHandle = await handle.createSyncAccessHandle();
+      this.#mapAccessHandleToName.set(accessHandle, name);
       const path = this.#getAssociatedPath(accessHandle);
       if (path) {
         this.#mapPathToAccessHandle.set(path, accessHandle);
@@ -292,6 +301,17 @@ export class AccessHandlePoolVFS extends VFS.Base {
     // Read the path and digest of the path from the file.
     const corpus = new Uint8Array(HEADER_CORPUS_SIZE);
     accessHandle.read(corpus, { at: 0 })
+
+    // Delete files not expected to be present.
+    const dataView = new DataView(corpus.buffer, corpus.byteOffset);
+    const flags = dataView.getUint32(HEADER_OFFSET_FLAGS);
+    if (corpus[0] &&
+        ((flags & VFS.SQLITE_OPEN_DELETEONCLOSE) ||
+         (flags & PERSISTENT_FILE_TYPES) === 0)) {
+      console.warn(`Remove file with unexpected flags ${flags.toString(16)}`);
+      this.#setAssociatedPath(accessHandle, '', 0);
+      return '';
+    }
 
     const fileDigest = new Uint32Array(HEADER_DIGEST_SIZE / 4);
     accessHandle.read(fileDigest, { at: HEADER_OFFSET_DIGEST });
