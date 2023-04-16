@@ -1,7 +1,5 @@
 const DEFAULT_SHARED_WORKER_PATH = './SharedService_SharedWorker.js';
 
-const finalizers = new FinalizationRegistry(f => f());
-
 export class SharedService extends EventTarget {
   /** @type {string} */ #name;
   /** @type {() => MessagePort|Promise<MessagePort>} */ #portProviderFunc;
