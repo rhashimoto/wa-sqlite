@@ -139,7 +139,7 @@ export class SharedService extends EventTarget {
           const servicePort = this.#servicePort || await new Promise(resolve => {
             this.addEventListener('service-port', () => {
               resolve(this.#servicePort);
-            });
+            }, { once: true });
           });
 
           return new Promise((resolve, reject) => {
