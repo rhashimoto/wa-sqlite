@@ -117,6 +117,7 @@ export class SharedService extends EventTarget {
    */
   #providerChange() {
     // Fetch the new port for proxying calls.
+    this.#servicePort = null;
     this.#requestServicePort();
 
     // Reject any pending calls.

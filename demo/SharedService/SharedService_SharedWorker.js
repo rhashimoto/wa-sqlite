@@ -19,6 +19,7 @@ globalThis.addEventListener('connect', event => {
       const providerPort = mapNameToProviderPort.get(name);
       if (providerPort) {
         providerPort.addEventListener('message', event => {
+          event.stopImmediatePropagation();
           workerPort.postMessage(null, event.ports);
         }, { once: true });
         providerPort.postMessage(lockId);
