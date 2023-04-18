@@ -4,19 +4,24 @@ import { SharedService, createSharedServicePort } from "./SharedService.js";
 // arguments and results can be called by proxy.
 const target = {
   async add(x, y) {
-    log(`evaluating ${x} + ${y}`)
+    log(`evaluating ${x} + ${y}`);
     return x + y;
   },
 
   multiply(x, y) {
-    log(`evaluating ${x} * ${y}`)
+    log(`evaluating ${x} * ${y}`);
     return x * y;
   },
 
   async slow_subtract(x, y) {
-    log(`evaluating ${x} - ${y} with 5s delay`)
+    log(`evaluating ${x} - ${y} with 5s delay`);
     await new Promise(resolve => setTimeout(resolve, 5000));
     return x - y;
+  },
+
+  throw_error(x, y) {
+    log('throwing Error');
+    throw new Error('test error');
   }
 };
 
