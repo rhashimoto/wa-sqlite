@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <title>wa-sqlite contention</title>
   <style>
+    body > div {
+      margin-bottom: 1em;
+    }
+
     pre {
       display: block;
       margin: 0;
@@ -28,13 +32,14 @@
       font-size: 1in;
     }
 
+    .invalid {
+      border-color: red;
+    }
+
     #start {
       margin: 2em;
     }
 
-    #output {
-      margin-top: 1em;
-    }
   </style>
 </head>
 <body>
@@ -46,6 +51,15 @@
     </div>
     <button id="start" disabled>Start test</button>
     <div id="clock" class="bignum"></div>
+  </div>
+  <div>
+    <details open>
+      <summary>Advanced configuration</summary>
+      <textarea id="perRun" class="sql" rows="10" cols="80"></textarea>
+      <textarea id="perTab" class="sql" rows="10" cols="80"></textarea>
+      <textarea id="perJob" class="sql" rows="10" cols="80"></textarea>
+      <textarea id="results" class="sql" rows="10" cols="80"></textarea>
+    </details>
   </div>
   <div id="output"></div>
   <script src="./contention.js"></script>

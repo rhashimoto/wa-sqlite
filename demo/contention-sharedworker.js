@@ -15,8 +15,9 @@ globalThis.addEventListener('connect', event => {
         });
         break;
       case 'go':
-        const duration = data.duration;
-        goChannel.postMessage(Date.now() + duration);
+        const config = data.config;
+        config.deadline = Date.now() + config.seconds * 1000;
+        goChannel.postMessage(config);
         break;
       default:
         console.warn('unrecognized message', data);

@@ -1,4 +1,34 @@
-const DURATION_MILLIS = 10 * 1000;
+const DEFAULT_DURATION_SECONDS = 3;
+
+const DEFAULT_CONFIG = {
+  seconds: DEFAULT_DURATION_SECONDS,
+  perRun: `
+CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
+REPLACE INTO kv VALUES ('counter', 0);
+
+CREATE TABLE IF NOT EXISTS log (time, tabId, count);
+DELETE FROM log;
+  `.trim(),
+
+  perTab: `
+  `.trim(),
+
+  perJob: `
+BEGIN IMMEDIATE;
+
+UPDATE kv SET value = value + 1 WHERE key = 'counter';
+INSERT INTO log VALUES
+  ((SELECT (julianday('now') - 2440587.5)*86400000.0), :tabId, (SELECT value FROM kv WHERE key = 'counter'));
+
+COMMIT;
+  `.trim(),
+
+  results: `
+DELETE FROM log WHERE time > :deadline;
+
+SELECT COUNT(*) FROM log GROUP BY tabId;
+  `.trim()
+};
 
 const DATABASE_CONFIGS = new Map([
   {
@@ -34,6 +64,8 @@ const DATE_OPTIONS = {
   fractionalSecondDigits: 3
 };
 
+const SUBS_REGEX = /:[A-Za-z][A-Za-z0-9_]*/g;
+
 class ContentionDemo extends EventTarget {
   #tabId = Math.random().toString(36).replace('0.', '');
   #sharedWorker = new SharedWorker('./contention-sharedworker.js');
@@ -57,19 +89,16 @@ class ContentionDemo extends EventTarget {
     });
   }
 
-  async requestStart() {
-    await this.#dbProxy`
-      CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
-      REPLACE INTO kv VALUES ('counter', 0);
-
-      CREATE TABLE IF NOT EXISTS log (time, tabId, count);
-      DELETE FROM log;
-    `;
-
-    this.#sharedWorker.port.postMessage({
-      type: 'go',
-      duration: DURATION_MILLIS
-    });
+  async requestStart(config) {
+    try {
+      await this.#execute(config.perRun, { tabId: this.#tabId });
+      this.#sharedWorker.port.postMessage({
+        type: 'go',
+        config
+      });
+    } catch (e) {
+      this.#logError(e);
+    }
   }
 
   async #prepare(vfs, clear) {
@@ -115,30 +144,24 @@ class ContentionDemo extends EventTarget {
       }));
     } catch (e) {
       this.#logError(e);
-      throw e;
     }
   }
 
-  async #go(endTime) {
+  async #go(config) {
     try {
-      this.dispatchEvent(new CustomEvent('go', { detail: endTime }));
-      while (Date.now() < endTime) {
-        await this.#dbProxy`
-          BEGIN IMMEDIATE;
+      this.dispatchEvent(new CustomEvent('go', { detail: config }));
 
-          UPDATE kv SET value = value + 1 WHERE key = 'counter';
-          INSERT INTO log VALUES
-            (${Date.now()}, '${this.#tabId}', (SELECT value FROM kv WHERE key = 'counter'));
-
-          COMMIT;
-        `
+      const subs = {
+        tabId: this.#tabId,
+        deadline: config.deadline
+      };
+      await this.#execute(config.perTab, subs);
+      while (Date.now() < config.deadline) {
+        await this.#execute(config.perJob, subs);
       }
 
-      const results = await this.#dbProxy`
-        DELETE FROM log WHERE time > ${endTime};
+      const results = await this.#execute(config.results, subs);
 
-        SELECT COUNT(*) FROM log GROUP BY tabId;
-      `;
       const counts = results[0].rows.flat();
       const sum = counts.reduce((sum, value) => sum + value);
       this.#log(`transactions by tab ${JSON.stringify(counts)} => ${sum}`);
@@ -148,6 +171,14 @@ class ContentionDemo extends EventTarget {
       this.#logError(e);
       throw e;
     }
+  }
+
+  #execute(query, subs = {}) {
+    const sql = query.replaceAll(SUBS_REGEX, (match) => {
+      const value = subs[match.substring(1)];
+      return typeof value === 'string' ? `'${value}'` : value;
+    });
+    return this.#dbProxy(sql);
   }
 
   #log(s) {
@@ -180,12 +211,12 @@ demo.addEventListener('go', function countDown(/** @type {CustomEvent} */ event)
 });
 
 demo.addEventListener('go', function countDown(/** @type {CustomEvent} */ event) {
-  const endTime = event.detail;
+  const deadline = event.detail.deadline;
   const clock = document.getElementById('clock');
 
   const now = Date.now();
-  if (now < endTime) {
-    const value = Math.round((endTime - now) / 1000);
+  if (now < deadline) {
+    const value = Math.round((deadline - now) / 1000);
     clock.textContent = value.toString();
     setTimeout(() => countDown(event), 1000);
   } else {
@@ -201,6 +232,20 @@ demo.addEventListener('log', function countDown(/** @type {CustomEvent} */ event
   pre.textContent = event.detail;
 });
 
+(function() {
+  const textAreas = document.getElementsByClassName('sql');
+  for (const textArea of Array.from(textAreas)) {
+    // @ts-ignore
+    textArea.value = DEFAULT_CONFIG[textArea.id];
+  }
+})();
+
 document.getElementById('start').addEventListener('click', function() {
-  demo.requestStart();
+  const config = { seconds: DEFAULT_CONFIG.seconds };
+  const textAreas = document.getElementsByClassName('sql');
+  for (const textArea of Array.from(textAreas)) {
+    // @ts-ignore
+    config[textArea.id] = textArea.value;
+  }
+  demo.requestStart(config);
 });
