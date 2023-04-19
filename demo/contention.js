@@ -1,4 +1,4 @@
-const DURATION_MILLIS = 5 * 1000;
+const DURATION_MILLIS = 10 * 1000;
 
 const DATABASE_CONFIGS = new Map([
   {
@@ -24,6 +24,8 @@ const DATABASE_CONFIGS = new Map([
   }
 ].map(value => [value.label, value]));
 
+const DEFAULT_VFS = 'IDBBatchAtomicVFS';
+
 const DATE_OPTIONS = {
   hour12: false,
   hour: '2-digit',
@@ -32,127 +34,173 @@ const DATE_OPTIONS = {
   fractionalSecondDigits: 3
 };
 
-function log(s) {
-  const output = document.getElementById('output');
-  const pre = document.createElement('pre');
-  output.appendChild(pre);
+class ContentionDemo extends EventTarget {
+  #tabId = Math.random().toString(36).replace('0.', '');
+  #sharedWorker = new SharedWorker('./contention-sharedworker.js');
 
-  // @ts-ignore
-  const timestamp = new Date().toLocaleTimeString(undefined, DATE_OPTIONS);
-  pre.textContent = `${timestamp} ${s}`;
+  #dbProxy;
+
+  constructor() {
+    super();
+
+    const params = new URLSearchParams(window.location.search);
+    this.#prepare(params.get('vfs') || DEFAULT_VFS, params.has('clear'));
+
+    this.#sharedWorker.port.start();
+
+    new BroadcastChannel('clients').addEventListener('message', ({data}) => {
+      this.dispatchEvent(new CustomEvent('clients', { detail: data }));
+    });
+  
+    document.getElementById('newtab').addEventListener('click', () => {
+      window.open(window.location.href, '_blank');
+    });
+  }
+
+  async requestStart() {
+    await this.#dbProxy`
+      CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
+      REPLACE INTO kv VALUES ('counter', 0);
+
+      CREATE TABLE IF NOT EXISTS log (time, tabId, count);
+      DELETE FROM log;
+    `;
+
+    this.#sharedWorker.port.postMessage({
+      type: 'go',
+      duration: DURATION_MILLIS
+    });
+  }
+
+  async #prepare(vfs, clear) {
+    try {
+      const vfsConfig = DATABASE_CONFIGS.get(vfs);
+      if (!vfsConfig) throw new Error(`Bad VFS: ${vfs}`);
+
+      if (clear) {
+        this.#log('clearing storage');
+        localStorage.clear();
+        const worker = new Worker('./clean-worker.js', { type: 'module' });
+        await new Promise(resolve => {
+          worker.addEventListener('message', resolve);
+        });
+        worker.terminate();
+      }
+
+      // Instantiate the database Worker.
+      const Comlink = await import(location.hostname.endsWith('localhost') ?
+        '/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
+        'https://unpkg.com/comlink/dist/esm/comlink.mjs');
+
+      const worker = new Worker('./demo-worker.js', { type: 'module' });
+      await new Promise(resolve => {
+        worker.addEventListener('message', resolve, { once: true });
+      });
+      const workerProxy = Comlink.wrap(worker);
+      this.#dbProxy = await workerProxy(vfsConfig);
+
+      navigator.locks.request(this.#tabId, () => new Promise(() => {
+        // Register with the SharedWorker.
+        this.#sharedWorker.port.postMessage({
+          type: 'register',
+          name: this.#tabId
+        });
+
+        new BroadcastChannel('go').addEventListener('message', ({data}) => {
+          this.#go(data);
+        });
+        this.dispatchEvent(new CustomEvent('ready'));
+
+        // This Promise never resolves so we keep the lock until exit.
+      }));
+    } catch (e) {
+      this.#logError(e);
+      throw e;
+    }
+  }
+
+  async #go(endTime) {
+    try {
+      this.dispatchEvent(new CustomEvent('go', { detail: endTime }));
+      while (Date.now() < endTime) {
+        await this.#dbProxy`
+          BEGIN IMMEDIATE;
+
+          UPDATE kv SET value = value + 1 WHERE key = 'counter';
+          INSERT INTO log VALUES
+            (${Date.now()}, '${this.#tabId}', (SELECT value FROM kv WHERE key = 'counter'));
+
+          COMMIT;
+        `
+      }
+
+      const results = await this.#dbProxy`
+        DELETE FROM log WHERE time > ${endTime};
+
+        SELECT COUNT(*) FROM log GROUP BY tabId;
+      `;
+      const counts = results[0].rows.flat();
+      const sum = counts.reduce((sum, value) => sum + value);
+      this.#log(`transactions by tab ${JSON.stringify(counts)} => ${sum}`);
+      this.dispatchEvent(new CustomEvent('ready'));
+      console.log(results);
+    } catch (e) {
+      this.#logError(e);
+      throw e;
+    }
+  }
+
+  #log(s) {
+    // @ts-ignore
+    const timestamp = new Date().toLocaleTimeString(undefined, DATE_OPTIONS);
+    const value = `${timestamp} ${s}`;
+    this.dispatchEvent(new CustomEvent('log', { detail: value }));
+  }
+
+  #logError(e) {
+    const s = e.stack.includes(e.message) ? e.stack : `${e.message}\n${e.stack}`;
+    this.#log(s);
+  }
 }
 
-function countDown(endTime) {
+const demo = new ContentionDemo();
+
+demo.addEventListener('clients', function(/** @type {CustomEvent} */ event) {
+  document.getElementById('clientCount').textContent = String(event.detail);
+});
+
+demo.addEventListener('ready', function(/** @type {CustomEvent} */ event) {
+    // @ts-ignore
+    document.getElementById('start').disabled = false;
+});
+
+demo.addEventListener('go', function countDown(/** @type {CustomEvent} */ event) {
+  // @ts-ignore
+  document.getElementById('start').disabled = true;
+});
+
+demo.addEventListener('go', function countDown(/** @type {CustomEvent} */ event) {
+  const endTime = event.detail;
   const clock = document.getElementById('clock');
 
   const now = Date.now();
   if (now < endTime) {
     const value = Math.round((endTime - now) / 1000);
     clock.textContent = value.toString();
-    setTimeout(() => countDown(endTime), 1000);
+    setTimeout(() => countDown(event), 1000);
   } else {
     clock.textContent = '';
   }
-}
+});
 
-window.addEventListener('DOMContentLoaded', async function() {
-  // Create a unique id for this tab.
-  const tabId = Math.random().toString(36).replace('0.', '');
+demo.addEventListener('log', function countDown(/** @type {CustomEvent} */ event) {
+  const output = document.getElementById('output');
+  const pre = document.createElement('pre');
+  output.appendChild(pre);
 
-  // Attach the SharedWorker.
-  const sharedWorker = new SharedWorker('./contention-sharedworker.js');
-  sharedWorker.port.start();
-  
-  new BroadcastChannel('clients').addEventListener('message', ({data}) => {
-    document.getElementById('clientCount').textContent = String(data);
-  });
+  pre.textContent = event.detail;
+});
 
-  document.getElementById('newtab').addEventListener('click', () => {
-    window.open(window.location.href, '_blank');
-  });
-
-  try {
-    // Optionally clear storage.
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('clear')) {
-      log('clearing storage...')
-      localStorage.clear();
-      const worker = new Worker('./clean-worker.js', { type: 'module' });
-      await new Promise(resolve => {
-        worker.addEventListener('message', resolve);
-      });
-      worker.terminate();
-    }
-
-    // Launch the Worker.
-    const vfsName = params.get('vfs') ?? 'IDBBatchAtomicVFS';
-    const vfsConfig = DATABASE_CONFIGS.get(vfsName);
-    if (!vfsConfig) throw new Error(`Bad VFS: ${vfsName}`);
-    log(`loading ${vfsName}...`);
-
-    const Comlink = await import(location.hostname.endsWith('localhost') ?
-      '/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
-      'https://unpkg.com/comlink/dist/esm/comlink.mjs');
-
-    const worker = new Worker('./demo-worker.js', { type: 'module' });
-    await new Promise(resolve => {
-      worker.addEventListener('message', resolve, { once: true });
-    });
-    const workerProxy = Comlink.wrap(worker);
-    const sql = await workerProxy(vfsConfig);
-
-    // Use a SharedWorker as the starter.
-    document.getElementById('start').addEventListener('click', async () => {
-      await sql`
-        CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
-        REPLACE INTO kv VALUES ('counter', 0);
-
-        CREATE TABLE IF NOT EXISTS log (time, tabId, count);
-        DELETE FROM log;
-      `;
-      sharedWorker.port.postMessage({
-        type: 'go',
-        duration: DURATION_MILLIS
-      });
-    });
-
-    new BroadcastChannel('go').addEventListener('message', async ({data}) => {
-      const endTime = data;
-      countDown(endTime);
-      while (Date.now() < endTime) {
-        await sql`
-          BEGIN IMMEDIATE;
-
-          UPDATE kv SET value = value + 1 WHERE key = 'counter';
-          INSERT INTO log VALUES
-            (${Date.now()}, '${tabId}', (SELECT value FROM kv WHERE key = 'counter'));
-
-          COMMIT;
-        `
-      }
-
-      const results = await sql`
-        DELETE FROM log WHERE time > ${endTime};
-
-        SELECT COUNT(*) FROM log GROUP BY tabId;
-      `;
-      log(`result counts ${JSON.stringify(results[0].rows.flat())}`);
-      console.log(results);
-    });
-
-    navigator.locks.request(tabId, () => new Promise(() => {
-      // Register with the SharedWorker.
-      sharedWorker.port.postMessage({
-        type: 'register',
-        name: tabId
-      });
-      // This Promise never resolves so we keep the lock until exit.
-    }));
-  
-    // @ts-ignore
-    this.document.getElementById('start').disabled = false;
-    log('ready');
-  } catch (e) {
-    log(e.stack.includes(e.message) ? e.stack : `${e.message}\n${e.stack}`);
-  }
+document.getElementById('start').addEventListener('click', function() {
+  demo.requestStart();
 });
