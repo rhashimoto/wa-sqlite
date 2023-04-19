@@ -8,11 +8,45 @@
       display: block;
       margin: 0;
     }
+
+    .flex {
+      display: flex;
+      align-items: center;
+    }
+
+    .vflex {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .label {
+      font-size: 16pt;
+    }
+
+    .bignum {
+      font-size: 1in;
+    }
+
+    #start {
+      margin: 2em;
+    }
+
+    #output {
+      margin-top: 1em;
+    }
   </style>
 </head>
 <body>
-  <button id="newtab">Open new tab</button>
-  <button id="start" disabled>Start test</button>
+  <div class="flex">
+    <div class="vflex">
+      <div class="label">Tabs</div>
+      <div id="clientCount" class="bignum">0</div>
+      <button id="newtab">Open new tab</button>
+    </div>
+    <button id="start" disabled>Start test</button>
+    <div id="clock" class="bignum"></div>
+  </div>
   <div id="output"></div>
   <script src="./contention.js"></script>
 </body>

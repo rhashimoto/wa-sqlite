@@ -42,6 +42,19 @@ function log(s) {
   pre.textContent = `${timestamp} ${s}`;
 }
 
+function countDown(endTime) {
+  const clock = document.getElementById('clock');
+
+  const now = Date.now();
+  if (now < endTime) {
+    const value = Math.round((endTime - now) / 1000);
+    clock.textContent = value.toString();
+    setTimeout(() => countDown(endTime), 1000);
+  } else {
+    clock.textContent = '';
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async function() {
   // Create a unique id for this tab.
   const tabId = Math.random().toString(36).replace('0.', '');
@@ -51,16 +64,14 @@ window.addEventListener('DOMContentLoaded', async function() {
   sharedWorker.port.start();
   
   new BroadcastChannel('clients').addEventListener('message', ({data}) => {
-    // TODO: display number of ready clients
-    log(`${data} clients`);
+    document.getElementById('clientCount').textContent = String(data);
+  });
+
+  document.getElementById('newtab').addEventListener('click', () => {
+    window.open(window.location.href, '_blank');
   });
 
   try {
-    log('preparing...')
-    document.getElementById('newtab').addEventListener('click', () => {
-      window.open(window.location.href, '_blank');
-    });
-
     // Optionally clear storage.
     const params = new URLSearchParams(window.location.search);
     if (params.has('clear')) {
@@ -106,8 +117,8 @@ window.addEventListener('DOMContentLoaded', async function() {
     });
 
     new BroadcastChannel('go').addEventListener('message', async ({data}) => {
-      log('begin test');
       const endTime = data;
+      countDown(endTime);
       while (Date.now() < endTime) {
         await sql`
           BEGIN IMMEDIATE;
@@ -119,7 +130,6 @@ window.addEventListener('DOMContentLoaded', async function() {
           COMMIT;
         `
       }
-      log('end test');
 
       const results = await sql`
         DELETE FROM log WHERE time > ${endTime};
