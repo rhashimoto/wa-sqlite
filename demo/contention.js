@@ -1,5 +1,4 @@
-// hello
-"use strict";
+const DURATION_MILLIS = 5 * 1000;
 
 const DATABASE_CONFIGS = new Map([
   {
@@ -44,6 +43,18 @@ function log(s) {
 }
 
 window.addEventListener('DOMContentLoaded', async function() {
+  // Create a unique id for this tab.
+  const tabId = Math.random().toString(36).replace('0.', '');
+
+  // Attach the SharedWorker.
+  const sharedWorker = new SharedWorker('./contention-sharedworker.js');
+  sharedWorker.port.start();
+  
+  new BroadcastChannel('clients').addEventListener('message', ({data}) => {
+    // TODO: display number of ready clients
+    log(`${data} clients`);
+  });
+
   try {
     log('preparing...')
     document.getElementById('newtab').addEventListener('click', () => {
@@ -80,8 +91,6 @@ window.addEventListener('DOMContentLoaded', async function() {
     const sql = await workerProxy(vfsConfig);
 
     // Use a SharedWorker as the starter.
-    const sharedWorker = new SharedWorker('./contention-sharedworker.js');
-    sharedWorker.port.start();
     document.getElementById('start').addEventListener('click', async () => {
       await sql`
         CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
@@ -90,11 +99,13 @@ window.addEventListener('DOMContentLoaded', async function() {
         CREATE TABLE IF NOT EXISTS log (time, tabId, count);
         DELETE FROM log;
       `;
-      sharedWorker.port.postMessage(null);
+      sharedWorker.port.postMessage({
+        type: 'go',
+        duration: DURATION_MILLIS
+      });
     });
 
-    const tabId = Math.random().toString(36).replace('0.', '');
-    new BroadcastChannel('contention').addEventListener('message', async ({data}) => {
+    new BroadcastChannel('go').addEventListener('message', async ({data}) => {
       log('begin test');
       const endTime = data;
       while (Date.now() < endTime) {
@@ -119,6 +130,15 @@ window.addEventListener('DOMContentLoaded', async function() {
       console.log(results);
     });
 
+    navigator.locks.request(tabId, () => new Promise(() => {
+      // Register with the SharedWorker.
+      sharedWorker.port.postMessage({
+        type: 'register',
+        name: tabId
+      });
+      // This Promise never resolves so we keep the lock until exit.
+    }));
+  
     // @ts-ignore
     this.document.getElementById('start').disabled = false;
     log('ready');
