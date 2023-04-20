@@ -91,6 +91,7 @@ const DATE_OPTIONS = {
 const SUBS_REGEX = /:[A-Za-z][A-Za-z0-9_]*/g;
 
 class ContentionDemo extends EventTarget {
+  #label;
   #tabId = Math.random().toString(36).replace('0.', '');
   #sharedWorker = new SharedWorker('./contention-sharedworker.js');
 
@@ -100,12 +101,15 @@ class ContentionDemo extends EventTarget {
     super();
 
     const params = new URLSearchParams(window.location.search);
-    this.#prepare(params.get('vfs') || DEFAULT_VFS, params.has('clear'));
+    this.#label = params.get('vfs') || DEFAULT_VFS;
+    this.#prepare(this.#label, params.has('clear'));
 
     this.#sharedWorker.port.start();
 
     new BroadcastChannel('clients').addEventListener('message', ({data}) => {
-      this.dispatchEvent(new CustomEvent('clients', { detail: data }));
+      if (data.label === this.#label) {
+        this.dispatchEvent(new CustomEvent('clients', { detail: data }));
+      }
     });
   
     document.getElementById('newtab').addEventListener('click', () => {
@@ -115,6 +119,7 @@ class ContentionDemo extends EventTarget {
 
   async requestStart(config) {
     try {
+      config.label = this.#label;
       await this.#execute(config.perRun, { tabId: this.#tabId });
       this.#sharedWorker.port.postMessage({
         type: 'go',
@@ -156,11 +161,14 @@ class ContentionDemo extends EventTarget {
         // Register with the SharedWorker.
         this.#sharedWorker.port.postMessage({
           type: 'register',
+          label: this.#label,
           name: this.#tabId
         });
 
         new BroadcastChannel('go').addEventListener('message', ({data}) => {
-          this.#go(data);
+          if (data.label === this.#label) {
+            this.#go(data);
+          }
         });
         this.dispatchEvent(new CustomEvent('ready'));
 
@@ -219,7 +227,7 @@ class ContentionDemo extends EventTarget {
 const demo = new ContentionDemo();
 
 demo.addEventListener('clients', function(/** @type {CustomEvent} */ event) {
-  document.getElementById('clientCount').textContent = String(event.detail);
+  document.getElementById('clientCount').textContent = String(event.detail.size);
 });
 
 demo.addEventListener('ready', function(/** @type {CustomEvent} */ event) {

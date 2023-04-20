@@ -1,4 +1,4 @@
-const clients = new Set();
+/** @type {Map<string, Set<string>>} */ const mapLabelToClients = new Map();
 const clientsChannel = new BroadcastChannel('clients');
 const goChannel = new BroadcastChannel('go');
 
@@ -7,11 +7,22 @@ globalThis.addEventListener('connect', event => {
   clientPort.addEventListener('message', ({data}) => {
     switch (data.type) {
       case 'register':
+        let clients = mapLabelToClients.get(data.label);
+        if (!clients) {
+          clients = new Set();
+          mapLabelToClients.set(data.label, clients);
+        }
         clients.add(data.name);
-        clientsChannel.postMessage(clients.size);
+        clientsChannel.postMessage({
+          label: data.label,
+          size: clients.size
+        });
         navigator.locks.request(data.name, () => {
           clients.delete(data.name);
-          clientsChannel.postMessage(clients.size);
+          clientsChannel.postMessage({
+            label: data.label,
+            size: clients.size
+          });
         });
         break;
       case 'go':
