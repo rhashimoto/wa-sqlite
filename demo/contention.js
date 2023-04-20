@@ -3,6 +3,8 @@ const DEFAULT_DURATION_SECONDS = 3;
 const DEFAULT_CONFIG = {
   seconds: DEFAULT_DURATION_SECONDS,
   perRun: `
+-- This query is used to initialize the database.
+-- It runs only on the initiating tab.
 CREATE TABLE IF NOT EXISTS kv (key PRIMARY KEY, value);
 REPLACE INTO kv VALUES ('counter', 0);
 
@@ -11,9 +13,11 @@ DELETE FROM log;
   `.trim(),
 
   perTab: `
+-- This query is used for per-tab initialization.
   `.trim(),
 
   perJob: `
+-- This query is repeated on each tab until time expires.
 BEGIN IMMEDIATE;
 
 UPDATE kv SET value = value + 1 WHERE key = 'counter';
@@ -24,6 +28,7 @@ COMMIT;
   `.trim(),
 
   results: `
+-- This query is used to extract results from the database.
 DELETE FROM log WHERE time > :deadline;
 
 WITH counts AS (SELECT COUNT(1) AS count FROM log GROUP BY tabId)
