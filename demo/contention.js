@@ -1,4 +1,4 @@
-const DEFAULT_DURATION_SECONDS = 3;
+const DEFAULT_DURATION_SECONDS = 10;
 
 const DEFAULT_CONFIG = {
   seconds: DEFAULT_DURATION_SECONDS,
@@ -32,8 +32,7 @@ COMMIT;
 DELETE FROM log WHERE time > :deadline;
 
 WITH counts AS (SELECT COUNT(1) AS count FROM log GROUP BY tabId)
-SELECT JSON_GROUP_ARRAY(count) AS "count by tab", SUM(count) AS "sum" FROM counts;
-  `.trim()
+SELECT JSON_GROUP_ARRAY(count) AS "count by tab", SUM(count) AS "sum", SUM(count)/CAST(:seconds AS REAL) AS "per second" FROM counts;  `.trim()
 };
 
 const DATABASE_CONFIGS = new Map([
@@ -159,7 +158,8 @@ class ContentionDemo extends EventTarget {
 
       const subs = {
         tabId: this.#tabId,
-        deadline: config.deadline
+        deadline: config.deadline,
+        seconds: config.seconds
       };
       await this.#execute(config.perTab, subs);
       while (Date.now() < config.deadline) {
@@ -170,12 +170,10 @@ class ContentionDemo extends EventTarget {
       for (const result of results) {
         this.dispatchEvent(new CustomEvent('result', { detail: result }));
       }
-
-      this.dispatchEvent(new CustomEvent('ready'));
     } catch (e) {
       this.#logError(e);
-      throw e;
     }
+    this.dispatchEvent(new CustomEvent('ready'));
   }
 
   #execute(query, subs = {}) {
@@ -268,6 +266,9 @@ demo.addEventListener('log', function countDown(/** @type {CustomEvent} */ event
 });
 
 (function() {
+  const seconds = document.getElementById('seconds');
+  seconds['value'] = DEFAULT_CONFIG.seconds.toString();
+
   const textAreas = document.getElementsByClassName('sql');
   for (const textArea of Array.from(textAreas)) {
     // @ts-ignore
@@ -276,7 +277,11 @@ demo.addEventListener('log', function countDown(/** @type {CustomEvent} */ event
 })();
 
 document.getElementById('start').addEventListener('click', function() {
-  const config = { seconds: DEFAULT_CONFIG.seconds };
+  const config = {};
+  const seconds = document.getElementById('seconds');
+  // @ts-ignore
+  config.seconds = Number(seconds.value);
+
   const textAreas = document.getElementsByClassName('sql');
   for (const textArea of Array.from(textAreas)) {
     // @ts-ignore

@@ -51,6 +51,10 @@
       margin: 2em;
     }
 
+    #seconds {
+      width: 3em;
+      margin: 1em auto;
+    }
   </style>
 </head>
 <body>
@@ -64,15 +68,18 @@
     <div id="clock" class="bignum"></div>
   </div>
   <div>
-    <details open>
+    <details>
       <summary>Advanced configuration</summary>
       <div>
         Only settings on the tab where Start is clicked will be used.
       </div>
-      <textarea id="perRun" class="sql" rows="10" cols="80"></textarea>
-      <textarea id="perTab" class="sql" rows="10" cols="80"></textarea>
-      <textarea id="perJob" class="sql" rows="10" cols="80"></textarea>
-      <textarea id="results" class="sql" rows="10" cols="80"></textarea>
+      <div>
+        Run time in seconds <input id="seconds" type="number">
+      </div>
+      <textarea id="perRun" class="sql" rows="8" cols="80"></textarea>
+      <textarea id="perTab" class="sql" rows="8" cols="80"></textarea>
+      <textarea id="perJob" class="sql" rows="8" cols="80"></textarea>
+      <textarea id="results" class="sql" rows="8" cols="80"></textarea>
     </details>
   </div>
   <div id="output"></div>
