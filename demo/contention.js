@@ -19,11 +19,9 @@ DELETE FROM log;
   perJob: `
 -- This query is repeated on each tab until time expires.
 BEGIN IMMEDIATE;
-
-UPDATE kv SET value = value + 1 WHERE key = 'counter';
+UPDATE kv SET value = value + 1 WHERE key='counter';
 INSERT INTO log VALUES
-  ((SELECT (julianday('now') - 2440587.5)*86400000.0), :tabId, (SELECT value FROM kv WHERE key = 'counter'));
-
+  ((SELECT (julianday('now') - 2440587.5)*86400000.0), :tabId, (SELECT value FROM kv WHERE key='counter'));
 COMMIT;
   `.trim(),
 
@@ -44,6 +42,13 @@ const DATABASE_CONFIGS = new Map([
     vfsArgs: ['demo-IDBMinimalVFS']
   },
   {
+    label: 'IDBMinimalVFS-relaxed',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBMinimalVFS.js',
+    vfsClass: 'IDBMinimalVFS',
+    vfsArgs: ['demo-IDBMinimalVFS', { durability: 'relaxed' }]
+  },
+  {
     label: 'IDBBatchAtomicVFS',
     isAsync: true,
     vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
@@ -51,11 +56,25 @@ const DATABASE_CONFIGS = new Map([
     vfsArgs: ['demo-IDBBatchAtomicVFS']
   },
   {
+    label: 'IDBBatchAtomicVFS-relaxed',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
+    vfsClass: 'IDBBatchAtomicVFS',
+    vfsArgs: ['demo-IDBBatchAtomicVFS', { durability: 'relaxed' }]
+  },
+  {
     label: 'OriginPrivateFileSystemVFS',
     isAsync: true,
     vfsModule: '../src/examples/OriginPrivateFileSystemVFS.js',
     vfsClass: 'OriginPrivateFileSystemVFS',
     vfsArgs: []
+  },
+  {
+    label: 'AccessHandlePoolVFS',
+    isAsync: false,
+    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+    vfsClass: 'AccessHandlePoolVFS',
+    vfsArgs: ['/demo-AccessHandlePoolVFS']
   }
 ].map(value => [value.label, value]));
 
