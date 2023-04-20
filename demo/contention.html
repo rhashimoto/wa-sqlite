@@ -13,6 +13,17 @@
       margin: 0;
     }
 
+    table {
+        margin-top: 1em;
+        border-collapse: collapse;
+      }
+
+    td, th {
+      border: 1px solid #999;
+      padding: 0.25rem;
+      text-align: left;
+    }
+    
     .flex {
       display: flex;
       align-items: center;
@@ -46,7 +57,7 @@
   <div class="flex">
     <div class="vflex">
       <div class="label">Tabs</div>
-      <div id="clientCount" class="bignum">0</div>
+      <div id="clientCount" class="bignum">1</div>
       <button id="newtab">Open new tab</button>
     </div>
     <button id="start" disabled>Start test</button>
@@ -55,6 +66,9 @@
   <div>
     <details open>
       <summary>Advanced configuration</summary>
+      <div>
+        Only settings on the tab where Start is clicked will be used.
+      </div>
       <textarea id="perRun" class="sql" rows="10" cols="80"></textarea>
       <textarea id="perTab" class="sql" rows="10" cols="80"></textarea>
       <textarea id="perJob" class="sql" rows="10" cols="80"></textarea>

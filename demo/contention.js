@@ -26,7 +26,8 @@ COMMIT;
   results: `
 DELETE FROM log WHERE time > :deadline;
 
-SELECT COUNT(*) FROM log GROUP BY tabId;
+WITH counts AS (SELECT COUNT(1) AS count FROM log GROUP BY tabId)
+SELECT JSON_GROUP_ARRAY(count) AS "count by tab", SUM(count) AS "sum" FROM counts;
   `.trim()
 };
 
@@ -161,12 +162,11 @@ class ContentionDemo extends EventTarget {
       }
 
       const results = await this.#execute(config.results, subs);
+      for (const result of results) {
+        this.dispatchEvent(new CustomEvent('result', { detail: result }));
+      }
 
-      const counts = results[0].rows.flat();
-      const sum = counts.reduce((sum, value) => sum + value);
-      this.#log(`transactions by tab ${JSON.stringify(counts)} => ${sum}`);
       this.dispatchEvent(new CustomEvent('ready'));
-      console.log(results);
     } catch (e) {
       this.#logError(e);
       throw e;
@@ -222,6 +222,36 @@ demo.addEventListener('go', function countDown(/** @type {CustomEvent} */ event)
   } else {
     clock.textContent = '';
   }
+});
+
+demo.addEventListener('result', function(/** @type {CustomEvent} */ event) {
+  const result = event.detail;
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  table.appendChild(tbody);
+
+  const tr = document.createElement('tr');
+  thead.appendChild(tr);
+  for (const column of result.columns) {
+    const th = document.createElement('th');
+    tr.appendChild(th);
+    th.textContent = String(column);
+  }
+
+  for (const row of result.rows) {
+    const tr = document.createElement('tr');
+    tbody.appendChild(tr);
+    for (const column of row) {
+      const td = document.createElement('td');
+      tr.appendChild(td);
+      td.textContent = String(column);
+    }
+  }
+
+  document.getElementById('output').appendChild(table);
 });
 
 demo.addEventListener('log', function countDown(/** @type {CustomEvent} */ event) {
