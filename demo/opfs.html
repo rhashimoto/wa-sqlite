@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>wa-sqlite benchmarks</title>
+    <title>wa-sqlite OPFS benchmarks</title>
     <style>
       #controls {
         margin-top: 1em;
@@ -30,9 +30,18 @@
     </style>
   </head>
   <body>
-    <h1>wa-sqlite benchmarks</h1>
-    See <a href="https://github.com/rhashimoto/wa-sqlite/discussions/23">discussion post</a>
-    for details.
+    <h1>wa-sqlite OPFS</h1>
+    The proposed
+    <a href="https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system">
+      Origin Private File System
+    </a>
+    and
+    <a href="https://github.com/WICG/file-system-access/blob/main/AccessHandle.md">
+      (synchronous) AccessHandle
+    </a>
+    may provide an alternative to IndexedDB for persistent application storage.
+    These experimental APIs (and ES6 module worker) are not supported on
+    all browsers and platforms.
     <div id="controls">
       <textarea id="preamble" rows="2" cols="48">
 -- Pre-run setup
@@ -46,19 +55,12 @@ PRAGMA journal_mode=delete;
         <thead>
           <tr>
             <th>Test</th>
-            <th>default</th>
-            <th>Memory (sync)</th>
-            <th>Memory (async)</th>
-            <th>MemoryAsync</th>
-            <th>IDBMinimal</th>
-            <th>IDBMinimal relaxed</th>
-            <th>IDBBatchAtomic</th>
-            <th>IDBBatchAtomic relaxed</th>
+            <th>OPFS</th>
           </tr>
         </thead>
         <tbody>
           <tr id="test1">
-            <td>Test 1: 1000 INSERTs (very slow on IDB)</td>
+            <td>Test 1: 1000 INSERTs (very slow)</td>
           </tr>
           <tr id="test2">
             <td>Test 2: 25000 INSERTs in a transaction</td>
@@ -108,7 +110,7 @@ PRAGMA journal_mode=delete;
         </tbody>
       </table>
     </div>
-    <script type="module" src="benchmarks.js"></script>
+    <script type="module" src="opfs.js"></script>
 
     <a href="https://github.com/rhashimoto/wa-sqlite" class="github-corner" aria-label="View source on GitHub">
       <svg width="60" height="60" viewBox="0 0 250 250"

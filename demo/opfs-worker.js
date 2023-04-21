@@ -1,16 +1,8 @@
-// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-// @ts-ignore
-import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
-// @ts-ignore
-import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
-
+import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
+import { OriginPrivateFileSystemVFS } from '../src/examples/OriginPrivateFileSystemVFS.js';
 
-import { MemoryVFS } from '../src/examples/MemoryVFS.js';
-import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IDBBatchAtomicVFS } from '../src/examples/IDBBatchAtomicVFS.js';
-import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
-
+const DB_NAME = 'file:///benchmark?foo=bar';
 const TESTS = [
   test1,
   test2,
@@ -30,117 +22,56 @@ const TESTS = [
   test16,
 ];
 
+let sqlite3, db;
 (async function() {
-  // Clear IndexedDB.
-  const dbNames = indexedDB.databases
-    ? (await indexedDB.databases()).map(database => database.name)
-    : [
-        'benchmark', 'idb-benchmark', 'idb-benchmark-relaxed',
-        'idb-minimal-benchmark', 'idb-minimal-benchmark-relaxed',
-        'idb-batch-atomic-benchmark', 'idb-batch-atomic-benchmark-relaxed'
-      ];
-  await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
+  const module = await SQLiteModuleFactory();
+  sqlite3 = SQLite.Factory(module);
+  // @ts-ignore
+  sqlite3.vfs_register(new OriginPrivateFileSystemVFS(), true);
 
-  const [SQLiteModule, SQLiteAsyncModule] = await Promise.all([
-    SQLiteESMFactory(),
-    SQLiteAsyncESMFactory()
-  ]);
-
-  // Build API objects for each module.
-  const sqlite3s = SQLite.Factory(SQLiteModule);
-  const sqlite3a = SQLite.Factory(SQLiteAsyncModule);
-
-  // Register Virtual File Systems with the SQLite runtimes. A
-  // synchronous VFS will work in both the synchronous and asynchronous
-  // runtimes; an asynchronous VFS will work only in the asynchronous
-  // runtime.
-  sqlite3s.vfs_register(new MemoryVFS());
-  sqlite3a.vfs_register(new MemoryVFS());
-  sqlite3a.vfs_register(new MemoryAsyncVFS());
-  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark'));
-  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark-relaxed', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark'));
-  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark-relaxed', { durability: 'relaxed' }));
-
-  /** @type {Array<[SQLiteAPI, string]>} */
-  const configs = [
-    [sqlite3s, undefined],
-    [sqlite3s, 'memory'],
-    [sqlite3a, 'memory'],
-    [sqlite3a, 'memory-async'],
-    [sqlite3a, 'idb-minimal-benchmark'],
-    [sqlite3a, 'idb-minimal-benchmark-relaxed'],
-    [sqlite3a, 'idb-batch-atomic-benchmark'],
-    [sqlite3a, 'idb-batch-atomic-benchmark-relaxed'],
-  ];
-
-  const button = document.getElementById('start');
-  const preamble = document.getElementById('preamble');
-  const error = document.getElementById('error');
-  button.addEventListener('click', async function() {
-    button['disabled'] = true;
-    preamble['disabled'] = true;
-    error.textContent = '';
-
-    const testRows = document.querySelectorAll('tbody tr');
-    for (const row of testRows) {
-      while (row.childElementCount > 1) {
-        row.removeChild(row.lastChild);
-      }
+  addEventListener('message', async function({ data }) {
+    let result;
+    switch (data.f) {
+      case 'initialize':
+        result = await initialize(data.preamble);
+        break;
+      case 'test':
+        const start = Date.now();
+        await TESTS[data.i](sqlite3, db);
+        result = Date.now() - start;
+        break;
+      case 'finalize':
+        result = await finalize();
+        break;
+      default:
+        throw new Error(`unrecognized request '${data.f}'`);
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    try {
-      for (const config of configs) {
-        const rows = Array.from(testRows);
-        for await (const result of benchmark(...config)) {
-          const td = document.createElement('td');
-          td.textContent = `${result / 1000} s`;
-          rows.shift().append(td);
-          await new Promise(resolve => setTimeout(resolve));
-        }
-      }
-    } catch (e) {
-      const report = (window['chrome'] ? '' : `${e.message}\n`) + e.stack;
-      error.textContent = report;
-    } finally {
-      button['disabled'] = false;
-      preamble['disabled'] = false;
-    }
+    postMessage(result);
   });
-  button['disabled'] = false;
+  postMessage(null);
 })();
 
-/**
- * @param {SQLiteAPI} sqlite3 
- * @param {string} vfs 
- */
-async function* benchmark(sqlite3, vfs) {
-  const db = await sqlite3.open_v2('benchmark', undefined, vfs);
-  try {
-    // Delete all tables.
-    const tables = [];
-    await sqlite3.exec(db, `
-      SELECT name FROM sqlite_master WHERE type='table';
-    `, row => {
-      tables.push(row[0]);
-    });
-    for (const table of tables) {
-      await sqlite3.exec(db, `DROP TABLE ${table}`);
-    }
+async function initialize(preamble) {
+  await clearFilesystem();
 
-    // Execute the preamble.
-    const preamble = document.getElementById('preamble')['value'];
-    await sqlite3.exec(db, preamble);
+  db = await sqlite3.open_v2(
+    DB_NAME,
+    SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
+    'opfs');
+  await sqlite3.exec(db, preamble);
+}
 
-    for (const test of TESTS) {
-      const start = Date.now();
-      await test(sqlite3, db);
-      yield Date.now() - start;
-    }
-  }
-  finally {
-    await sqlite3.close(db);
+async function finalize() {
+  await sqlite3.close(db);
+  await clearFilesystem();
+}
+
+async function clearFilesystem() {
+  const rootDir = await navigator.storage.getDirectory();
+  // @ts-ignore
+  for await (const [name] of rootDir.entries()) {
+    console.debug(`removing ${name}`);
+    await rootDir.removeEntry(name, { recursive: true }).catch(() => {});
   }
 }
 
