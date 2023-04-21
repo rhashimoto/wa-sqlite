@@ -8,7 +8,7 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xClose(fileId) {
     return VFS.SQLITE_IOERR;
@@ -16,9 +16,9 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xRead(fileId, pData, iOffset) {
     return VFS.SQLITE_IOERR;
@@ -26,9 +26,9 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xWrite(fileId, pData, iOffset) {
     return VFS.SQLITE_IOERR;
@@ -37,7 +37,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xTruncate(fileId, iSize) {
     return VFS.SQLITE_IOERR;
@@ -46,7 +46,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {*} flags 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xSync(fileId, flags) {
     return VFS.SQLITE_OK;
@@ -54,8 +54,8 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ set: function(number): void }} pSize64 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pSize64 
+   * @returns {number}
    */
   xFileSize(fileId, pSize64) {
     return VFS.SQLITE_IOERR;
@@ -64,7 +64,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xLock(fileId, flags) {
     return VFS.SQLITE_OK;
@@ -73,7 +73,7 @@ export class Base {
   /**
    * @param {number} fileId 
    * @param {number} flags 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xUnlock(fileId, flags) {
     return VFS.SQLITE_OK;
@@ -81,27 +81,27 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ set: function(number): void }} pResOut 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pResOut 
+   * @returns {number}
    */
   xCheckReservedLock(fileId, pResOut) {
-    pResOut.set(0);
+    pResOut.setInt32(0, 0, true);
     return VFS.SQLITE_OK;
   }
 
   /**
    * @param {number} fileId 
-   * @param {number} flags 
-   * @param {{ value: Int8Array }} pOut 
-   * @returns {number|Promise<number>}
+   * @param {number} op 
+   * @param {DataView} pArg 
+   * @returns {number}
    */
-  xFileControl(fileId, flags, pOut) {
+  xFileControl(fileId, op, pArg) {
     return VFS.SQLITE_NOTFOUND;
   }
 
   /**
    * @param {number} fileId 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xSectorSize(fileId) {
     return 512;
@@ -109,7 +109,7 @@ export class Base {
 
   /**
    * @param {number} fileId 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDeviceCharacteristics(fileId) {
     return 0;
@@ -119,18 +119,17 @@ export class Base {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pOutFlags 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pOutFlags 
+   * @returns {number}
    */
   xOpen(name, fileId, flags, pOutFlags) {
     return VFS.SQLITE_CANTOPEN;
   }
 
   /**
-   * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDelete(name, syncDir) {
     return VFS.SQLITE_IOERR;
@@ -139,8 +138,8 @@ export class Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pResOut 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pResOut 
+   * @returns {number}
    */
   xAccess(name, flags, pResOut) {
     return VFS.SQLITE_IOERR;
@@ -150,9 +149,14 @@ export class Base {
    * Handle asynchronous operation. This implementation will be overriden on
    * registration by an Asyncify build.
    * @param {function(): Promise<number>} f 
-   * @returns {Promise<number>}
+   * @returns {number}
    */
   handleAsync(f) {
+    // This default implementation deliberately does not match the
+    // declared signature. It will be used in testing VFS classes
+    // separately from SQLite. This will work acceptably for methods
+    // that simply return the handleAsync() result without using it.
+    // @ts-ignore
     return f();
   }
 }

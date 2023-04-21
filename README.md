@@ -1,4 +1,4 @@
-[![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml)
+[![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=breaking-changes)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml?branch=breaking-changes)
 
 # wa-sqlite
 This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems and virtual table modules completely in Javascript. This allows alternative browser storage options such as IndexedDB and File System Access. Applications can opt to use either a synchronous or asynchronous (using Asyncify) SQLite library build (an asynchronous build is required for asynchronous extensions).
@@ -8,7 +8,10 @@ This is a WebAssembly build of SQLite with experimental support for writing SQLi
 [Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser. More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
 
 ## Build
-The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the "buildless" branch with pre-built artifacts checked in. This is also recommended when including the project as a dependency (e.g. `yarn add "wa-sqlite@rhashimoto/wa-sqlite#buildless"`).
+The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the pre-built artifacts in
+[./dist](https://github.com/rhashimoto/wa-sqlite/tree/master/dist).
+Note that earlier versions of the project only provided pre-built artifacts in the
+"buildless" branch; that branch will no longer be maintained.
 
 If you do want to build - e.g. you want to change build flags, use a specific EMSDK version, or modify wa-sqlite itself - here are the prerequisites:
 
@@ -19,7 +22,7 @@ If you do want to build - e.g. you want to change build flags, use a specific EM
 
 Here are the build steps:
 * Make sure `emcc` works.
-* `git clone ...`
+* `git clone git@github.com:rhashimoto/wa-sqlite.git`
 * `cd wa-sqlite`
 * `yarn install`
 * `make` (or `yarn prepack`)

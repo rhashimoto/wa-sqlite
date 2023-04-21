@@ -13,7 +13,7 @@ import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
 import { ArrayModule } from '../src/examples/ArrayModule.js';
 import { ArrayAsyncModule } from '../src/examples/ArrayAsyncModule.js';
 
-import { tag } from '../src/examples/tag.js';
+import { createTag } from '../src/examples/tag.js';
 import GOOG from '../test/GOOG.js';
 
 // This is the path to the local monaco-editor installed via devDependencies.
@@ -71,7 +71,7 @@ SELECT y * y FROM tbl WHERE x = 'bar';
       vfs,
       SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
       vfs);
-    const t = tag(sqlite3, db);
+    const t = createTag(sqlite3, db);
     mapNameToTag.set(key, t);
 
     // Add an example module with an array back-end.

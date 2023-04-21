@@ -11,11 +11,11 @@
  *  Javascript types that SQLite can use
  * 
  * C integer and floating-point types both map to/from Javascript `number`.
- * Blob data can be provided to SQLite as `Int8Array` or `number[]` (with
+ * Blob data can be provided to SQLite as `Uint8Array` or `number[]` (with
  * each element converted to a byte); SQLite always returns blob data as
- * `Int8Array`
+ * `Uint8Array`
  */
-type SQLiteCompatibleType = number|string|Int8Array|Array<number>|BigInt|null;
+type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|BigInt|null;
 
 /**
  * SQLite Virtual File System object
@@ -38,73 +38,73 @@ declare interface SQLiteVFS {
   mxPathName?: number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xClose(fileId: number): number|Promise<number>;
+  xClose(fileId: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xRead(
     fileId: number,
-    pData: { size: number, value: Int8Array},
+    pData: Uint8Array,
     iOffset: number
-  ): number|Promise<number>;
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xWrite(
     fileId: number,
-    pData: { size: number, value: Int8Array},
+    pData: Uint8Array,
     iOffset: number
-  ): number|Promise<number>;
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xTruncate(fileId: number, iSize: number): number|Promise<number>;
+  xTruncate(fileId: number, iSize: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xSync(fileId: number, flags: number): number|Promise<number>;
+  xSync(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileSize(
     fileId: number,
-    pSize64: { set(value: number): void }
-  ): number|Promise<number>;
+    pSize64: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xLock(fileId: number, flags: number): number|Promise<number>;
+  xLock(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xUnlock(fileId: number, flags: number): number|Promise<number>;
+  xUnlock(fileId: number, flags: number): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xCheckReservedLock(
     fileId: number,
-    pResOut: { set(value: number): void }
-  ): number|Promise<number>;
+    pResOut: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileControl(
     fileId: number,
     flags: number,
-    pOut: { value: Int8Array }
-  ): number|Promise<number>;
+    pOut: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xDeviceCharacteristics(fileId: number): number|Promise<number>;
+  xDeviceCharacteristics(fileId: number): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xOpen(
     name: string|null,
     fileId: number,
     flags: number,
-    pOutFlags: { set(value: number): void }
-  ): number|Promise<number>;
+    pOutFlags: DataView
+  ): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xDelete(name: string, syncDir: number): number|Promise<number>;
+  xDelete(name: string, syncDir: number): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xAccess(
     name: string,
     flags: number,
-    pResOut: { set(value): void }
-  ): number|Promise<number>;
+    pResOut: DataView
+  ): number;
 }
 
 /**
@@ -158,8 +158,8 @@ declare interface SQLiteModule {
     appData,
     argv: string[],
     pVTab: number,
-    pzErr: { set(value: string): void }
-  ): number|Promise<number>;
+    pzErr: DataView
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xconnect_method
@@ -169,33 +169,33 @@ declare interface SQLiteModule {
     appData,
     argv: string[],
     pVTab: number,
-    pzErr: { set(value: string): void }
-  ): number|Promise<number>;
+    pzErr: DataView
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xbestindex_method
    */
-  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number|Promise<number>;
+  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xdisconnect_method
    */
-  xDisconnect(pVTab: number): number|Promise<number>;
+  xDisconnect(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xdestroy_method
    */
-  xDestroy(pVTab: number): number|Promise<number>;
+  xDestroy(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xopen_method
    */
-  xOpen(pVTab: number, pCursor: number): number|Promise<number>;
+  xOpen(pVTab: number, pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xclose_method
    */
-  xClose(pCursor: number): number|Promise<number>;
+  xClose(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xfilter_method
@@ -205,27 +205,27 @@ declare interface SQLiteModule {
     idxNum: number,
     idxString: string|null,
     values: number[]
-  ): number|Promise<number>;
+  ): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xnext_method
    */
-  xNext(pCursor: number): number|Promise<number>;
+  xNext(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xeof_method
    */
-  xEof(pCursor: number): number|Promise<number>;
+  xEof(pCursor: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xcolumn_method
    */
-  xColumn(pCursor: number, pContext: number, iCol: number): number|Promise<number>;
+  xColumn(pCursor: number, pContext: number, iCol: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrowid_method
    */
-  xRowid(pCursor: number, pRowid: { set(value: number): void }): number|Promise<number>;
+  xRowid(pCursor: number, pRowid: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xupdate_method
@@ -233,32 +233,32 @@ declare interface SQLiteModule {
   xUpdate?(
     pVTab: number,
     values: number[],
-    pRowId: { set(value: number): void }): number|Promise<number>;
+    pRowId: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xbegin_method
    */
-  xBegin?(pVTab: number): number|Promise<number>;
+  xBegin?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xsync_method
    */
-  xSync?(pVTab: number): number|Promise<number>;
+  xSync?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xcommit_method
    */
-  xCommit?(pVTab: number): number|Promise<number>;
+  xCommit?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrollback_method
    */
-  xRollback?(pVTab: number): number|Promise<number>;
+  xRollback?(pVTab: number): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xrename_method
    */
-  xRename?(pVTab: number, zNew: string): number|Promise<number>;
+  xRename?(pVTab: number, zNew: string): number;
 }
 
 /**
@@ -370,7 +370,7 @@ declare interface SQLiteAPI {
    * @param value 
    * @returns `SQLITE_OK` (throws exception on error)
    */
-  bind_blob(stmt: number, i: number, value: Int8Array|Array<number>): number;
+  bind_blob(stmt: number, i: number, value: Uint8Array|Array<number>): number;
 
   /**
    * Bind number to prepared statement parameter
@@ -493,7 +493,7 @@ declare interface SQLiteAPI {
    * @param i column index
    * @returns column value
    */
-  column_blob(stmt: number, i: number): Int8Array;
+  column_blob(stmt: number, i: number): Uint8Array;
 
   /**
    * Get storage size for column text or blob
@@ -619,6 +619,17 @@ declare interface SQLiteAPI {
    * @returns number of columns
    */
   data_count(stmt: number): number;
+
+  /**
+   * Declare the schema of a virtual table in module
+   * {@link SQLiteModule.xCreate} or {@link SQLiteModule.xConnect}
+   * methods
+   * @see https://www.sqlite.org/c3ref/declare_vtab.html
+   * @param db database pointer
+   * @param zSQL schema declaration
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  declare_vtab(db: number, zSQL: string): number;
 
   /**
    * One-step query execution interface
@@ -752,7 +763,7 @@ declare interface SQLiteAPI {
    * @param context context pointer
    * @param value 
    */
-  result_blob(context: number, value: Int8Array|number[]): void;
+  result_blob(context: number, value: Uint8Array|number[]): void;
 
   /**
    * Set the result of a function or vtable column
@@ -944,7 +955,7 @@ declare interface SQLiteAPI {
    * @param pValue `sqlite3_value` pointer
    * @returns value
    */
-  value_blob(pValue: number): Int8Array;
+  value_blob(pValue: number): Uint8Array;
 
   /**
    * Get blob or text size for value
@@ -1228,119 +1239,109 @@ declare module 'wa-sqlite/src/VFS.js' {
      * @param {number} fileId
      * @returns {number|Promise<number>}
      */
-    xClose(fileId: number): number | Promise<number>;
+    xClose(fileId: number): number;
     /**
      * @param {number} fileId
-     * @param {{ size: number, value: Int8Array }} pData
+     * @param {Uint8Array} pData
      * @param {number} iOffset
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
     xRead(fileId: number, pData: {
         size: number;
-        value: Int8Array;
-    }, iOffset: number): number | Promise<number>;
+        value: Uint8Array;
+    }, iOffset: number): number;
     /**
      * @param {number} fileId
-     * @param {{ size: number, value: Int8Array }} pData
+     * @param {Uint8Array} pData
      * @param {number} iOffset
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
     xWrite(fileId: number, pData: {
         size: number;
-        value: Int8Array;
-    }, iOffset: number): number | Promise<number>;
+        value: Uint8Array;
+    }, iOffset: number): number;
     /**
      * @param {number} fileId
      * @param {number} iSize
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xTruncate(fileId: number, iSize: number): number | Promise<number>;
+    xTruncate(fileId: number, iSize: number): number;
     /**
      * @param {number} fileId
      * @param {*} flags
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xSync(fileId: number, flags: any): number | Promise<number>;
+    xSync(fileId: number, flags: any): number;
     /**
      * @param {number} fileId
-     * @param {{ set: function(number): void }} pSize64
+     * @param {DataView} pSize64
      * @returns {number|Promise<number>}
      */
-    xFileSize(fileId: number, pSize64: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
-    /**
-     * @param {number} fileId
-     * @param {number} flags
-     * @returns {number|Promise<number>}
-     */
-    xLock(fileId: number, flags: number): number | Promise<number>;
+    xFileSize(fileId: number, pSize64: DataView): number;
     /**
      * @param {number} fileId
      * @param {number} flags
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xUnlock(fileId: number, flags: number): number | Promise<number>;
-    /**
-     * @param {number} fileId
-     * @param {{ set: function(number): void }} pResOut
-     * @returns {number|Promise<number>}
-     */
-    xCheckReservedLock(fileId: number, pResOut: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xLock(fileId: number, flags: number): number;
     /**
      * @param {number} fileId
      * @param {number} flags
-     * @param {{ value: Int8Array }} pOut
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xFileControl(fileId: number, flags: number, pOut: {
-        value: Int8Array;
-    }): number | Promise<number>;
+    xUnlock(fileId: number, flags: number): number;
     /**
      * @param {number} fileId
-     * @returns {number|Promise<number>}
+     * @param {DataView} pResOut
+     * @returns {number}
      */
-    xSectorSize(fileId: number): number | Promise<number>;
+    xCheckReservedLock(fileId: number, pResOut: DataView): number;
     /**
      * @param {number} fileId
-     * @returns {number|Promise<number>}
+     * @param {number} flags
+     * @param {DataView} pArg
+     * @returns {number}
      */
-    xDeviceCharacteristics(fileId: number): number | Promise<number>;
+    xFileControl(fileId: number, flags: number, pArg: DataView): number;
+    /**
+     * @param {number} fileId
+     * @returns {number}
+     */
+    xSectorSize(fileId: number): number;
+    /**
+     * @param {number} fileId
+     * @returns {number}
+     */
+    xDeviceCharacteristics(fileId: number): number;
     /**
      * @param {string?} name
      * @param {number} fileId
      * @param {number} flags
-     * @param {{ set: function(number): void }} pOutFlags
-     * @returns {number|Promise<number>}
+     * @param {DataView} pOutFlags
+     * @returns {number}
      */
-    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: DataView): number;
     /**
      *
      * @param {string} name
      * @param {number} syncDir
-     * @returns {number|Promise<number>}
+     * @returns {number}
      */
-    xDelete(name: string, syncDir: number): number | Promise<number>;
+    xDelete(name: string, syncDir: number): number;
     /**
      * @param {string} name
      * @param {number} flags
-     * @param {{ set: function(number): void }} pResOut
-     * @returns {number|Promise<number>}
+     * @param {DataView} pResOut
+     * @returns {number}
      */
-    xAccess(name: string, flags: number, pResOut: {
-        set: (arg0: number) => void;
-    }): number | Promise<number>;
+    xAccess(name: string, flags: number, pResOut: DataView): number;
     /**
      * Handle asynchronous operation. This implementation will be overriden on
      * registration by an Asyncify build.
      * @param {function(): Promise<number>} f
-     * @returns {Promise<number>}
+     * @returns {number}
      */
-    handleAsync(f: () => Promise<number>): Promise<number>;
+    handleAsync(f: () => Promise<number>): number;
   }
 }
 

@@ -259,6 +259,7 @@ describe('WebLocksShared', function() {
     await Promise.all(requests);
     for (const objectUnderTest of objectsUnderTest) {
       expect(objectUnderTest.state === VFS.SQLITE_LOCK_SHARED);
+      await expectAsync(objectUnderTest.isSomewhereReserved()).toBeResolvedTo(false);
     }
 
     // Attempt to lock RESERVED.
@@ -269,6 +270,10 @@ describe('WebLocksShared', function() {
       }
     });
     await Promise.all(requests);
+
+    for (const objectUnderTest of objectsUnderTest) {
+      await expectAsync(objectUnderTest.isSomewhereReserved()).toBeResolvedTo(true);
+    }
 
     const reserved = objectsUnderTest.filter(objectUnderTest => {
       return objectUnderTest.state === VFS.SQLITE_LOCK_RESERVED;

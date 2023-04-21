@@ -115,7 +115,7 @@ export function Factory(Module) {
       case 'string':
         return sqlite3.bind_text(stmt, i, value);
       default:
-        if (value instanceof Int8Array || Array.isArray(value)) {
+        if (value instanceof Uint8Array || Array.isArray(value)) {
           return sqlite3.bind_blob(stmt, i, value);
         } else if (value === null) {
           return sqlite3.bind_null(stmt, i);
@@ -139,7 +139,7 @@ export function Factory(Module) {
       // @ts-ignore
       const byteLength = value.byteLength ?? value.length;
       const ptr = Module._sqlite3_malloc(byteLength);
-      Module.HEAP8.subarray(ptr).set(value);
+      Module.HEAPU8.subarray(ptr).set(value);
       const result = f(stmt, i, ptr, byteLength, sqliteFreeAddress);
       // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
@@ -280,7 +280,7 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const nBytes = sqlite3.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
-      const result = Module.HEAP8.subarray(address, address + nBytes);
+      const result = Module.HEAPU8.subarray(address, address + nBytes);
       // trace(fname, result);
       return result;
     };
@@ -419,6 +419,15 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.declare_vtab = (function() {
+    const fname = 'sqlite3_declare_vtab';
+    const f = Module.cwrap(fname, ...decl('ns:n'));
+    return function(pVTab, zSQL) {
+      const result = f(pVTab, zSQL);
+      return check('sqlite3_declare_vtab', result);
+    }
+  })();
+    
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       let columns;
@@ -530,7 +539,7 @@ export function Factory(Module) {
         sqlite3.result_text(context, value);
         break;
       default:
-        if (value instanceof Int8Array || Array.isArray(value)) {
+        if (value instanceof Uint8Array || Array.isArray(value)) {
           sqlite3.result_blob(context, value);
         } else if (value === null) {
           sqlite3.result_null(context);
@@ -552,7 +561,7 @@ export function Factory(Module) {
       // @ts-ignore
       const byteLength = value.byteLength ?? value.length;
       const ptr = Module._sqlite3_malloc(byteLength);
-      Module.HEAP8.subarray(ptr).set(value);
+      Module.HEAPU8.subarray(ptr).set(value);
       f(context, ptr, byteLength, sqliteFreeAddress); // void return
     };
   })();
@@ -611,7 +620,7 @@ export function Factory(Module) {
       // Copy blob if aliasing volatile WebAssembly memory. This avoids an
       // unnecessary copy if users monkey patch column_blob to copy.
       // @ts-ignore
-      row.push(value?.buffer === Module.HEAP8.buffer ? value.slice() : value);
+      row.push(value?.buffer === Module.HEAPU8.buffer ? value.slice() : value);
     }
     return row;
   };
@@ -685,8 +694,8 @@ export function Factory(Module) {
     const sBytes = Module.lengthBytesUTF8(s);
     const newBytes = data.bytes + sBytes;
     const newOffset = Module._sqlite3_malloc(newBytes + 1);
-    const newArray = Module.HEAP8.subarray(newOffset, newOffset + newBytes + 1);
-    newArray.set(Module.HEAP8.subarray(data.offset, data.offset + data.bytes));
+    const newArray = Module.HEAPU8.subarray(newOffset, newOffset + newBytes + 1);
+    newArray.set(Module.HEAPU8.subarray(data.offset, data.offset + data.bytes));
     Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1);
 
     Module._sqlite3_free(data.offset);
@@ -741,7 +750,7 @@ export function Factory(Module) {
     return function(pValue) {
       const nBytes = sqlite3.value_bytes(pValue);
       const address = f(pValue);
-      const result = Module.HEAP8.subarray(address, address + nBytes);
+      const result = Module.HEAPU8.subarray(address, address + nBytes);
       // trace(fname, result);
       return result;
     };

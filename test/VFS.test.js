@@ -98,7 +98,7 @@ function shared(ready) {
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
 
     let result;
-    const cBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const cBlob = new Uint8Array([8, 6, 7, 5, 3, 0, 9]);
     const cDouble = Math.PI;
     const cInt = 42;
     const cNull = null;
@@ -138,7 +138,7 @@ function shared(ready) {
       function(rowData, columnNames) {
         rowData = rowData.map(value => {
           // Blob results do not remain valid so copy to retain.
-          return value instanceof Int8Array ? Array.from(value) : value;
+          return value instanceof Uint8Array ? Array.from(value) : value;
         });
         results.push(rowData);
       });
@@ -229,7 +229,7 @@ function shared(ready) {
     const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
 
     let result;
-    const vBlob = new Int8Array([8, 6, 7, 5, 3, 0, 9]);
+    const vBlob = new Uint8Array([8, 6, 7, 5, 3, 0, 9]);
     const vDouble = Math.PI;
     const vInt = 42;
     const vNull = null;
@@ -260,7 +260,7 @@ function shared(ready) {
     const values = [];
     await sqlite3.exec(db, `SELECT MyFunc(0, value) FROM tbl`, row => {
       // Blob results do not remain valid so copy to retain.
-      const value = row[0] instanceof Int8Array ? Array.from(row[0]) : row[0];
+      const value = row[0] instanceof Uint8Array ? Array.from(row[0]) : row[0];
       values.push(value);
     });
     const expected = [Array.from(vBlob), vDouble, vInt, vNull, vText];

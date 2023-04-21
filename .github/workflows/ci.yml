@@ -5,9 +5,9 @@ name: wa-sqlite CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "breaking-changes" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "breaking-changes" ]
 
 env:
   EM_VERSION: 3.1.31
@@ -43,6 +43,9 @@ jobs:
           ${{ runner.os }}-yarn-
     - run: yarn install
 
+    - name: Test with checked-in WASM files
+      run: yarn test
+
     # Install EMSDK
     - name: Setup Emscripten
       id: cache-system-libraries
@@ -56,5 +59,7 @@ jobs:
         actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
     - run: emcc -v
 
-    - run: make
-    - run: yarn test
+    - name: Test WASM build
+      run: |
+        make clean && make
+        yarn test

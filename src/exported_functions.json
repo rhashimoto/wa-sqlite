@@ -24,6 +24,7 @@
   "_sqlite3_column_text",
   "_sqlite3_column_type",
   "_sqlite3_data_count",
+  "_sqlite3_declare_vtab",
   "_sqlite3_errmsg",
   "_sqlite3_exec",
   "_sqlite3_finalize",

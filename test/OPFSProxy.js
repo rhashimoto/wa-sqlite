@@ -8,24 +8,8 @@ export function makeOPFSProxy() {
     get(target, property, receiver) {
       if (typeof property === 'string' && property.startsWith('x')) {
         return async function(...args) {
-          // Setter functions can't be sent in a message, so replace them
-          // with null and include a list of setter argument indices.
-          const setters = [];
-          const messageArgs = args.map((arg, i) => {
-            if (arg?.set) {
-              setters.push(i);
-              return null;
-            }
-            return arg;
-          });
-
-          // Send the message.
-          const message = {
-            name: property,
-            args: messageArgs,
-            setters
-          };
-          worker.postMessage(message);
+          // All arguments are structured cloneable.
+          worker.postMessage({ name: property, args });
 
           // Wait for the response.
           const response = await new Promise(resolve => {
@@ -34,16 +18,12 @@ export function makeOPFSProxy() {
               resolve(data);
             }, { once: true });
           });
+          if (response.error) throw Object.assign(new Error(), response.error);
 
-          if (response.error) throw new Error(response.error);
-
-          // Copy the setter and Int8Array results into the original
-          // arguments.
-          args.forEach(arg => {
-            if (arg?.set) {
-              arg.set(response.setters.shift());
-            } else if (arg?.value instanceof Int8Array) {
-              arg.value.set(response.values.shift())
+          // Copy changed Uint8Array and DataView contents.
+          response.args.forEach((responseArg, i) => {
+            if (responseArg?.buffer) {
+              new Uint8Array(args[i].buffer).set(new Uint8Array(responseArg.buffer));
             }
           });
           return response.result;

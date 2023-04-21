@@ -15,7 +15,7 @@ const DEFAULT_OPTIONS = { durability: "default" };
  * @typedef FileBlock
  * @property {string} name
  * @property {number} offset negative of position in file
- * @property {Int8Array} data
+ * @property {Uint8Array} data
  */
 
 /**
@@ -58,6 +58,13 @@ export class IDBMinimalVFS extends VFS.Base {
     this.#idb = null;
   }
 
+  /**
+   * @param {string?} name 
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @param {DataView} pOutFlags 
+   * @returns {number}
+   */
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;
@@ -75,22 +82,22 @@ export class IDBMinimalVFS extends VFS.Base {
         this.#mapIdToFile.set(fileId, file);
 
         // Read the last block to get the file size.
-        const lastBlock = await this.#idb.run('readonly', ({blocks}) => {
-          return blocks.get(this.#bound(file, -Infinity));
+        this.#idb.run('readwrite', async ({blocks}) => {
+          const lastBlock = await blocks.get(this.#bound(file, -Infinity));
+          if (lastBlock) {
+            file.fileSize = lastBlock.data.length - lastBlock.offset;
+          } else if (flags & VFS.SQLITE_OPEN_CREATE) {
+            const block = {
+              path: file.path,
+              offset: 0,
+              data: new Uint8Array(0),
+            };
+            blocks.put(block);
+          } else {
+            throw new Error(`file not found: ${file.path}`);
+          }
         });
-        if (lastBlock) {
-          file.fileSize = lastBlock.data.length - lastBlock.offset;
-        } else if (flags & VFS.SQLITE_OPEN_CREATE) {
-          const block = {
-            path: file.path,
-            offset: 0,
-            data: new Int8Array(0),
-          };
-          this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
-        } else {
-          throw new Error(`file not found: ${file.path}`);
-        }
-        pOutFlags.set(flags & VFS.SQLITE_OPEN_READONLY);
+        pOutFlags.setInt32(0, flags & VFS.SQLITE_OPEN_READONLY, true);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);
@@ -99,6 +106,10 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xClose(fileId) {
     return this.handleAsync(async () => {
       try {
@@ -121,10 +132,16 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
-      log(`xRead ${file.path} ${pData.value.length} ${iOffset}`);
+      log(`xRead ${file.path} ${pData.byteLength} ${iOffset}`);
 
       try {
         /** @type {FileBlock} */
@@ -134,12 +151,12 @@ export class IDBMinimalVFS extends VFS.Base {
 
         const blockOffset = iOffset + block.offset;
         const nBytesToCopy = Math.min(
-          Math.max(block.data.length - blockOffset, 0), // source bytes
-          pData.value.length);                          // destination bytes
-        pData.value.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
+          Math.max(block.data.byteLength - blockOffset, 0), // source bytes
+          pData.byteLength);                                // destination bytes
+        pData.set(block.data.subarray(blockOffset, blockOffset + nBytesToCopy));
 
-        if (nBytesToCopy < pData.value.length) {
-          pData.value.fill(0, nBytesToCopy, pData.value.length);
+        if (nBytesToCopy < pData.byteLength) {
+          pData.fill(0, nBytesToCopy, pData.byteLength);
           return VFS.SQLITE_IOERR_SHORT_READ;
         }
         return VFS.SQLITE_OK;
@@ -150,19 +167,25 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xWrite(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${file.path} ${pData.value.length} ${iOffset}`);
+    log(`xWrite ${file.path} ${pData.byteLength} ${iOffset}`);
 
     try {
       // Convert the write directly into an IndexedDB object.
       const block = {
         path: file.path,
         offset: -iOffset,
-        data: pData.value.slice()
+        data: pData.slice()
       };
       this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
-      file.fileSize = Math.max(file.fileSize, iOffset + pData.value.length);
+      file.fileSize = Math.max(file.fileSize, iOffset + pData.byteLength);
       return VFS.SQLITE_OK;
     } catch (e) {
       console.error(e);
@@ -170,6 +193,11 @@ export class IDBMinimalVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} iSize 
+   * @returns {number}
+   */
   xTruncate(fileId, iSize) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xTruncate ${file.path} ${iSize}`);
@@ -182,7 +210,7 @@ export class IDBMinimalVFS extends VFS.Base {
           blocks.put({
             path: file.path,
             offset: 0,
-            data: new Int8Array(0)
+            data: new Uint8Array(0)
           })
         }
       });
@@ -193,6 +221,11 @@ export class IDBMinimalVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {*} flags 
+   * @returns {number}
+   */
   xSync(fileId, flags) {
     if (this.#options.durability !== 'relaxed') {
       return this.handleAsync(async () => {
@@ -211,14 +244,24 @@ export class IDBMinimalVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pSize64 
+   * @returns {number}
+   */
   xFileSize(fileId, pSize64) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xFileSize ${file.path}`);
 
-    pSize64.set(file.fileSize)
+    pSize64.setBigInt64(0, BigInt(file.fileSize), true);
     return VFS.SQLITE_OK;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
@@ -242,6 +285,11 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xUnlock(fileId, flags) {
     return this.handleAsync(async () => {
       const file = this.#mapIdToFile.get(fileId);
@@ -257,11 +305,35 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
+  xCheckReservedLock(fileId, pResOut) {
+    return this.handleAsync(async () => {
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xCheckReservedLock ${file.path}`);
+
+      const isReserved = await file.locks.isSomewhereReserved();
+      pResOut.setInt32(0, isReserved ? 1 : 0, true);
+      return VFS.SQLITE_OK;
+    });
+  }
+
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xSectorSize(fileId) {
     log('xSectorSize');
     return 512;
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
     return VFS.SQLITE_IOCAP_SAFE_APPEND |
@@ -269,6 +341,12 @@ export class IDBMinimalVFS extends VFS.Base {
            VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} flags 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
       const path = new URL(name, 'file://localhost/').pathname;
@@ -279,7 +357,7 @@ export class IDBMinimalVFS extends VFS.Base {
         const key = await this.#idb.run('readonly', ({blocks}) => {
           return blocks.getKey(this.#bound({path}, -Infinity));
         });
-        pResOut.set(key ? 1 : 0);
+        pResOut.setInt32(0, key ? 1 : 0, true);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e);
@@ -288,6 +366,11 @@ export class IDBMinimalVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} syncDir 
+   * @returns {number}
+   */
   xDelete(name, syncDir) {
     return this.handleAsync(async () => {
       const path = new URL(name, 'file://localhost/').pathname;

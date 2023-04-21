@@ -26,8 +26,8 @@ export class MemoryVFS extends VFS.Base {
    * @param {string?} name 
    * @param {number} fileId 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pOutFlags 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pOutFlags 
+   * @returns {number}
    */
   xOpen(name, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
@@ -51,13 +51,13 @@ export class MemoryVFS extends VFS.Base {
 
     // Put the file in the opened files map.
     this.mapIdToFile.set(fileId, file);
-    pOutFlags.set(flags);
+    pOutFlags.setInt32(0, flags, true);
     return VFS.SQLITE_OK;
   }
 
   /**
    * @param {number} fileId 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
@@ -71,25 +71,25 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xRead(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
 
     // Clip the requested read to the file boundary.
     const bgn = Math.min(iOffset, file.size);
-    const end = Math.min(iOffset + pData.size, file.size);
+    const end = Math.min(iOffset + pData.byteLength, file.size);
     const nBytes = end - bgn;
 
     if (nBytes) {
-      pData.value.set(new Int8Array(file.data, bgn, nBytes));
+      pData.set(new Uint8Array(file.data, bgn, nBytes));
     }
 
-    if (nBytes < pData.size) {
+    if (nBytes < pData.byteLength) {
       // Zero unused area of read buffer.
-      pData.value.fill(0, nBytes);
+      pData.fill(0, nBytes);
       return VFS.SQLITE_IOERR_SHORT_READ;
     }
     return VFS.SQLITE_OK;
@@ -97,30 +97,30 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ size: number, value: Int8Array }} pData 
+   * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xWrite(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
-    if (iOffset + pData.size > file.data.byteLength) {
+    if (iOffset + pData.byteLength > file.data.byteLength) {
       // Resize the ArrayBuffer to hold more data.
-      const newSize = Math.max(iOffset + pData.size, 2 * file.data.byteLength);
+      const newSize = Math.max(iOffset + pData.byteLength, 2 * file.data.byteLength);
       const data = new ArrayBuffer(newSize);
-      new Int8Array(data).set(new Int8Array(file.data, 0, file.size));
+      new Uint8Array(data).set(new Uint8Array(file.data, 0, file.size));
       file.data = data;
     }
 
     // Copy data.
-    new Int8Array(file.data, iOffset, pData.size).set(pData.value);
-    file.size = Math.max(file.size, iOffset + pData.size);
+    new Uint8Array(file.data, iOffset, pData.byteLength).set(pData);
+    file.size = Math.max(file.size, iOffset + pData.byteLength);
     return VFS.SQLITE_OK;
   }
 
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xTruncate(fileId, iSize) {
     const file = this.mapIdToFile.get(fileId);
@@ -132,13 +132,13 @@ export class MemoryVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {{ set: function(number): void }} pSize64 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pSize64 
+   * @returns {number}
    */
   xFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
 
-    pSize64.set(file.size);
+    pSize64.setBigInt64(0, BigInt(file.size), true);
     return VFS.SQLITE_OK;
   }
 
@@ -146,7 +146,7 @@ export class MemoryVFS extends VFS.Base {
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns {number|Promise<number>}
+   * @returns {number}
    */
   xDelete(name, syncDir) {
     this.mapNameToFile.delete(name);
@@ -156,12 +156,12 @@ export class MemoryVFS extends VFS.Base {
   /**
    * @param {string} name 
    * @param {number} flags 
-   * @param {{ set: function(number): void }} pResOut 
-   * @returns {number|Promise<number>}
+   * @param {DataView} pResOut 
+   * @returns {number}
    */
   xAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);
-    pResOut.set(file ? 1 : 0);
+    pResOut.setInt32(0, file ? 1 : 0, true);
     return VFS.SQLITE_OK;
   }
 }

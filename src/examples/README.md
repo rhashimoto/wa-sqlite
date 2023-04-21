@@ -35,6 +35,14 @@ with the
 dependent proposal. Note that OPFS works only in a Worker and at this writing is
 [not supported on all browsers](https://caniuse.com/native-filesystem-api).
 
+### AccessHandlePoolVFS
+This VFS uses the new more synchronous OPFS access handle API as described in
+[this discussion](https://github.com/rhashimoto/wa-sqlite/discussions/67)
+to implement a synchronous VFS, i.e. one that does not need Asyncify (or
+any other mechanism to use Promise with WASM). Note that this approach
+does not support SQLite locking so concurrent access would require the
+application to provide synchronization.
+
 ## Module examples
 ### ArrayModule and ArrayAsyncModule
 These are minimal working examples for writing a

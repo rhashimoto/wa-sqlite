@@ -38,6 +38,13 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     }
   }
 
+  /**
+   * @param {string?} name 
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @param {DataView} pOutFlags 
+   * @returns {number}
+   */
   xOpen(name, fileId, flags, pOutFlags) {
     return this.handleAsync(async () => {
       if (name === null) name = `null_${fileId}`;
@@ -65,7 +72,7 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
           // Get an access handle for files that SQLite does not lock.
           await this.#getAccessHandle(fileEntry);
         }
-        pOutFlags.set(0);
+        pOutFlags.setInt32(0, flags, true);
         return VFS.SQLITE_OK;
       } catch (e) {
         console.error(e.message);
@@ -74,6 +81,10 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xClose(fileId) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -93,39 +104,56 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xRead(fileId, pData, iOffset) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
-      log(`xRead ${fileEntry.filename} ${pData.size} ${iOffset}`);
+      log(`xRead ${fileEntry.filename} ${pData.byteLength} ${iOffset}`);
 
       let nBytesRead;
       if (fileEntry.accessHandle) {
-        nBytesRead = fileEntry.accessHandle.read(pData.value, { at: iOffset });
+        nBytesRead = fileEntry.accessHandle.read(pData, { at: iOffset });
       } else {
         // Not using an access handle is slower but allows multiple readers.
         const file = await fileEntry.fileHandle.getFile()
-        const blob = file.slice(iOffset, iOffset + pData.value.byteLength);
+        const blob = file.slice(iOffset, iOffset + pData.byteLength);
         const buffer = await blob.arrayBuffer();
-        pData.value.set(new Int8Array(buffer));
-        nBytesRead = Math.min(pData.value.byteLength, blob.size);
+        pData.set(new Uint8Array(buffer));
+        nBytesRead = Math.min(pData.byteLength, blob.size);
       }
 
-      if (nBytesRead < pData.size) {
-        pData.value.fill(0, nBytesRead, pData.size);
+      if (nBytesRead < pData.byteLength) {
+        pData.fill(0, nBytesRead, pData.byteLength);
         return VFS.SQLITE_IOERR_SHORT_READ;
       }
       return VFS.SQLITE_OK;
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   xWrite(fileId, pData, iOffset) {
     const fileEntry = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${fileEntry.filename} ${pData.size} ${iOffset}`);
+    log(`xWrite ${fileEntry.filename} ${pData.byteLength} ${iOffset}`);
 
-    const nBytes = fileEntry.accessHandle.write(pData.value, { at: iOffset });
-    return nBytes === pData.size ? VFS.SQLITE_OK : VFS.SQLITE_IOERR;
+    const nBytes = fileEntry.accessHandle.write(pData, { at: iOffset });
+    return nBytes === pData.byteLength ? VFS.SQLITE_OK : VFS.SQLITE_IOERR;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} iSize 
+   * @returns {number}
+   */
   xTruncate(fileId, iSize) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -137,6 +165,11 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {*} flags 
+   * @returns {number}
+   */
   xSync(fileId, flags) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -147,6 +180,11 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pSize64 
+   * @returns {number}
+   */
   xFileSize(fileId, pSize64) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -158,11 +196,16 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
       } else {
         size = (await fileEntry.fileHandle.getFile()).size;
       }
-      pSize64.set(size)
+      pSize64.setBigInt64(0, BigInt(size), true)
       return VFS.SQLITE_OK;
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xLock(fileId, flags) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -176,6 +219,11 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   xUnlock(fileId, flags) {
     return this.handleAsync(async () => {
       const fileEntry = this.#mapIdToFile.get(fileId);
@@ -191,32 +239,65 @@ export class OriginPrivateFileSystemVFS extends VFS.Base {
     });
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
+  xCheckReservedLock(fileId, pResOut) {
+    return this.handleAsync(async () => {
+      const fileEntry = this.#mapIdToFile.get(fileId);
+      log(`xCheckReservedLock ${fileEntry.filename}`);
+
+      const isReserved = await fileEntry.locks.isSomewhereReserved();
+      pResOut.setInt32(0, isReserved ? 1 : 0, true);
+      return VFS.SQLITE_OK;
+    });
+  }
+
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xSectorSize(fileId) {
     log('xSectorSize', BLOCK_SIZE);
     return BLOCK_SIZE;
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
   xDeviceCharacteristics(fileId) {
     log('xDeviceCharacteristics');
-    return VFS.SQLITE_IOCAP_SAFE_APPEND |
-           VFS.SQLITE_IOCAP_SEQUENTIAL |
-           VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+    return VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} flags 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
   xAccess(name, flags, pResOut) {
     return this.handleAsync(async () => {
       log(`xAccess ${name} ${flags}`);
       try {
         const [directoryHandle, filename] = await this.#getPathComponents(name, false);
         await directoryHandle.getFileHandle(filename);
-        pResOut.set(1);
+        pResOut.setInt32(0, 1, true);
       } catch (e) {
-        pResOut.set(0);
+        pResOut.setInt32(0, 0, true);
       }
       return VFS.SQLITE_OK;
     });
   }
 
+  /**
+   * @param {string} name 
+   * @param {number} syncDir 
+   * @returns {number}
+   */
   xDelete(name, syncDir) {
     return this.handleAsync(async () => {
       log(`xDelete ${name} ${syncDir}`);
