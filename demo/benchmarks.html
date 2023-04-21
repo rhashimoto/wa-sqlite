@@ -21,6 +21,10 @@
         border-collapse: collapse;
       }
 
+      td:first-child {
+        min-width: 15em;
+      }
+
       td, th {
         border: 1px solid #999;
         padding: 0.5rem;
@@ -32,33 +36,28 @@
   <body>
     <h1>wa-sqlite benchmarks</h1>
     See <a href="https://github.com/rhashimoto/wa-sqlite/discussions/23">discussion post</a>
-    for details.
+    for details. Demos may require more browser features
+    (e.g. <a href="https://caniuse.com/mdn-api_worker_worker_ecmascript_modules">ES6 module Worker</a>)
+    than the library needs.
+
     <div id="controls">
       <textarea id="preamble" rows="2" cols="48">
 -- Pre-run setup
 PRAGMA journal_mode=delete;
       </textarea>
-      <button id="start" disabled>Start</button>
+      <button id="start">Start</button>
     </div>
     <div><pre id="error" style="color: red"></pre></div>
     <div>
       <table>
         <thead>
-          <tr>
+          <tr id="vfs">
             <th>Test</th>
-            <th>default</th>
-            <th>Memory (sync)</th>
-            <th>Memory (async)</th>
-            <th>MemoryAsync</th>
-            <th>IDBMinimal</th>
-            <th>IDBMinimal relaxed</th>
-            <th>IDBBatchAtomic</th>
-            <th>IDBBatchAtomic relaxed</th>
           </tr>
         </thead>
         <tbody>
           <tr id="test1">
-            <td>Test 1: 1000 INSERTs (very slow on IDB)</td>
+            <td>Test 1: 1000 INSERTs (very slow on IDB & OPFS)</td>
           </tr>
           <tr id="test2">
             <td>Test 2: 25000 INSERTs in a transaction</td>

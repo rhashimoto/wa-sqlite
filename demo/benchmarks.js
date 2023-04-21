@@ -1,389 +1,158 @@
 // Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-// @ts-ignore
-import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
-// @ts-ignore
-import SQLiteAsyncESMFactory from '../dist/wa-sqlite-async.mjs';
 
-import * as SQLite from '../src/sqlite-api.js';
+// Define the selectable configurations.
+const CONFIGURATIONS = new Map([
+  {
+    label: 'default',
+    isAsync: false,
+  },
+  {
+    label: 'Memory (sync)',
+    isAsync: false,
+    vfsModule: '../src/examples/MemoryVFS.js',
+    vfsClass: 'MemoryVFS',
+    vfsArgs: []
+  },
+  {
+    label: 'Memory (async)',
+    isAsync: true,
+    vfsModule: '../src/examples/MemoryVFS.js',
+    vfsClass: 'MemoryVFS',
+    vfsArgs: []
+  },
+  {
+    label: 'MemoryAsync',
+    isAsync: true,
+    vfsModule: '../src/examples/MemoryAsyncVFS.js',
+    vfsClass: 'MemoryAsyncVFS',
+    vfsArgs: []
+  },
+  {
+    label: 'IDBMinimal',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBMinimalVFS.js',
+    vfsClass: 'IDBMinimalVFS',
+    vfsArgs: ['demo-IDBMinimalVFS']
+  },
+  {
+    label: 'IDBMinimal relaxed',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBMinimalVFS.js',
+    vfsClass: 'IDBMinimalVFS',
+    vfsArgs: ['demo-IDBMinimalVFS-relaxed', { durability: 'relaxed' }]
+  },
+  {
+    label: 'IDBBatchAtomic',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
+    vfsClass: 'IDBBatchAtomicVFS',
+    vfsArgs: ['demo-IDBBatchAtomicVFS']
+  },
+  {
+    label: 'IDBBatchAtomic relaxed',
+    isAsync: true,
+    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
+    vfsClass: 'IDBBatchAtomicVFS',
+    vfsArgs: ['demo-IDBBatchAtomicVFS-relaxed', { durability: 'relaxed' }]
+  },
+  {
+    label: 'OriginPrivateFileSystem',
+    isAsync: true,
+    vfsModule: '../src/examples/OriginPrivateFileSystemVFS.js',
+    vfsClass: 'OriginPrivateFileSystemVFS',
+    vfsArgs: []
+  },
+  {
+    label: 'AccessHandlePool',
+    isAsync: false,
+    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+    vfsClass: 'AccessHandlePoolVFS',
+    vfsArgs: ['/demo-AccessHandlePoolVFS']
+  }
+].map(obj => [obj.label, obj]));
 
-import { MemoryVFS } from '../src/examples/MemoryVFS.js';
-import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-import { IDBBatchAtomicVFS } from '../src/examples/IDBBatchAtomicVFS.js';
-import { IDBMinimalVFS } from '../src/examples/IDBMinimalVFS.js';
+const benchmarksReady = Promise.all(Array.from(new Array(16), (_, i) => {
+  const filename = `./benchmark${i + 1}.sql`;
+  return fetch(filename).then(response => response.text());
+}));
+  
+const ComlinkReady = import(location.hostname.endsWith('localhost') ?
+'/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
+'https://unpkg.com/comlink/dist/esm/comlink.mjs');
 
-const TESTS = [
-  test1,
-  test2,
-  test3,
-  test4,
-  test5,
-  test6,
-  test7,
-  test8,
-  test9,
-  test10,
-  test11,
-  test12,
-  test13,
-  test14,
-  test15,
-  test16,
-];
+const headers = document.querySelector('thead').firstElementChild;
+for (const config of CONFIGURATIONS.values()) {
+  addEntry(headers, config.label)
+}
 
-(async function() {
-  // Clear IndexedDB.
-  const dbNames = indexedDB.databases
-    ? (await indexedDB.databases()).map(database => database.name)
-    : [
-        'benchmark', 'idb-benchmark', 'idb-benchmark-relaxed',
-        'idb-minimal-benchmark', 'idb-minimal-benchmark-relaxed',
-        'idb-batch-atomic-benchmark', 'idb-batch-atomic-benchmark-relaxed'
-      ];
-  await Promise.all(dbNames.map(dbName => indexedDB.deleteDatabase(dbName)));
+document.getElementById('start').addEventListener('click', async event => {
+  // @ts-ignore
+  event.target.disabled = true;
 
-  const [SQLiteModule, SQLiteAsyncModule] = await Promise.all([
-    SQLiteESMFactory(),
-    SQLiteAsyncESMFactory()
-  ]);
+  // Clear any existing storage state.
+  const cleanWorker = new Worker('./clean-worker.js', { type: 'module' });
+  await new Promise(resolve => {
+    cleanWorker.addEventListener('message', resolve);
+  });
+  cleanWorker.terminate();
 
-  // Build API objects for each module.
-  const sqlite3s = SQLite.Factory(SQLiteModule);
-  const sqlite3a = SQLite.Factory(SQLiteAsyncModule);
-
-  // Register Virtual File Systems with the SQLite runtimes. A
-  // synchronous VFS will work in both the synchronous and asynchronous
-  // runtimes; an asynchronous VFS will work only in the asynchronous
-  // runtime.
-  sqlite3s.vfs_register(new MemoryVFS());
-  sqlite3a.vfs_register(new MemoryVFS());
-  sqlite3a.vfs_register(new MemoryAsyncVFS());
-  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark'));
-  sqlite3a.vfs_register(new IDBMinimalVFS('idb-minimal-benchmark-relaxed', { durability: 'relaxed' }));
-  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark'));
-  sqlite3a.vfs_register(new IDBBatchAtomicVFS('idb-batch-atomic-benchmark-relaxed', { durability: 'relaxed' }));
-
-  /** @type {Array<[SQLiteAPI, string]>} */
-  const configs = [
-    [sqlite3s, undefined],
-    [sqlite3s, 'memory'],
-    [sqlite3a, 'memory'],
-    [sqlite3a, 'memory-async'],
-    [sqlite3a, 'idb-minimal-benchmark'],
-    [sqlite3a, 'idb-minimal-benchmark-relaxed'],
-    [sqlite3a, 'idb-batch-atomic-benchmark'],
-    [sqlite3a, 'idb-batch-atomic-benchmark-relaxed'],
-  ];
-
-  const button = document.getElementById('start');
-  const preamble = document.getElementById('preamble');
-  const error = document.getElementById('error');
-  button.addEventListener('click', async function() {
-    button['disabled'] = true;
-    preamble['disabled'] = true;
-    error.textContent = '';
-
-    const testRows = document.querySelectorAll('tbody tr');
-    for (const row of testRows) {
-      while (row.childElementCount > 1) {
-        row.removeChild(row.lastChild);
+  // Clear timings from the table.
+  Array.from(document.getElementsByTagName('tr'), element => {
+    if (element.parentElement.tagName === 'TBODY') {
+      // Keep only the first child.
+      while (element.firstElementChild.nextElementSibling) {
+        element.firstElementChild.nextElementSibling.remove();
       }
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    try {
-      for (const config of configs) {
-        const rows = Array.from(testRows);
-        for await (const result of benchmark(...config)) {
-          const td = document.createElement('td');
-          td.textContent = `${result / 1000} s`;
-          rows.shift().append(td);
-          await new Promise(resolve => setTimeout(resolve));
-        }
-      }
-    } catch (e) {
-      const report = (window['chrome'] ? '' : `${e.message}\n`) + e.stack;
-      error.textContent = report;
-    } finally {
-      button['disabled'] = false;
-      preamble['disabled'] = false;
     }
   });
-  button['disabled'] = false;
-})();
 
-/**
- * @param {SQLiteAPI} sqlite3 
- * @param {string} vfs 
- */
-async function* benchmark(sqlite3, vfs) {
-  const db = await sqlite3.open_v2('benchmark', undefined, vfs);
+  const benchmarks = await benchmarksReady;
+  const Comlink = await ComlinkReady;
   try {
-    // Delete all tables.
-    const tables = [];
-    await sqlite3.exec(db, `
-      SELECT name FROM sqlite_master WHERE type='table';
-    `, row => {
-      tables.push(row[0]);
-    });
-    for (const table of tables) {
-      await sqlite3.exec(db, `DROP TABLE ${table}`);
+    // @ts-ignore
+    const preamble = document.getElementById('preamble').value;
+    document.getElementById('error').textContent = '';
+    for (const config of CONFIGURATIONS.values()) {
+      const worker = new Worker('./demo-worker.js', { type: 'module' });
+      try {
+        await Promise.race([
+          new Promise(resolve => {
+            worker.addEventListener('message', resolve, { once: true });
+          }),
+          new Promise((_, reject) => setTimeout(() => {
+            reject(new Error(`${config.label} initialization timeout`));
+          }, 5000))
+        ])
+
+        const workerProxy = Comlink.wrap(worker)
+        const sql = await workerProxy(config);
+
+        await sql([preamble], []);
+
+        let tr = document.querySelector('tbody').firstElementChild;
+        for (const benchmark of benchmarks) {
+          const startTime = Date.now();
+          await sql([benchmark], []);
+          const elapsed = (Date.now() - startTime) / 1000;
+
+          addEntry(tr, elapsed.toString());
+          tr = tr.nextElementSibling;
+        }
+      } finally {
+        worker.terminate();
+      }
     }
-
-    // Execute the preamble.
-    const preamble = document.getElementById('preamble')['value'];
-    await sqlite3.exec(db, preamble);
-
-    for (const test of TESTS) {
-      const start = Date.now();
-      await test(sqlite3, db);
-      yield Date.now() - start;
-    }
+  } catch (e) {
+    document.getElementById('error').textContent = e.stack.includes(e.message) ? e.stack : `${e.stack}\n${e.message}`;
+  } finally {
+    // @ts-ignore
+    event.target.disabled = false;
   }
-  finally {
-    await sqlite3.close(db);
-  }
-}
+});
 
-// Test 1: 1000 INSERTs
-async function test1(sqlite3, db) {
-  await sqlite3.exec(db, `
-    CREATE TABLE t1(a INTEGER, b INTEGER, c VARCHAR(100));
-  `);
-  for (let i = 0; i < 1000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      INSERT INTO t1 VALUES(${i + 1}, ${n}, '${numberName(n)}');
-    `);
-  }
-}
-
-// Test 2: 25000 INSERTs in a transaction
-async function test2(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-    CREATE TABLE t2(a INTEGER, b INTEGER, c VARCHAR(100));
-  `);
-  for (let i = 0; i < 25000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      INSERT INTO t2 VALUES(${i + 1}, ${n}, '${numberName(n)}');
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 3: 25000 INSERTs into an indexed table
-async function test3(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-    CREATE TABLE t3(a INTEGER, b INTEGER, c VARCHAR(100));
-    CREATE INDEX i3 ON t3(c);
-  `);
-  for (let i = 0; i < 25000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      INSERT INTO t3 VALUES(${i + 1}, ${n}, '${numberName(n)}');
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 4: 100 SELECTs without an index
-async function test4(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 100; ++i) {
-    await sqlite3.exec(db, `
-      SELECT count(*), avg(b) FROM t2 WHERE b>=${i * 100} AND b<${i * 100 + 1000};
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 5: 100 SELECTs on a string comparison
-async function test5(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 100; ++i) {
-    await sqlite3.exec(db, `
-    SELECT count(*), avg(b) FROM t2 WHERE c LIKE '%${numberName(i + 1)}%';
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 6: Creating an index
-async function test6(sqlite3, db) {
-  await sqlite3.exec(db, `
-    CREATE INDEX i2a ON t2(a);
-    CREATE INDEX i2b ON t2(b);
-  `);
-}
-
-// Test 7: 5000 SELECTs with an index
-async function test7(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 5000; ++i) {
-    await sqlite3.exec(db, `
-      SELECT count(*), avg(b) FROM t2 WHERE b>=${i * 100} AND b<${i * 100 + 100};
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 8: 1000 UPDATEs without an index
-async function test8(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 1000; ++i) {
-    await sqlite3.exec(db, `
-      UPDATE t1 SET b=b*2 WHERE a>=${i * 10} AND a<${i * 10 + 10};
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 9: 25000 UPDATEs with an index
-async function test9(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 25000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      UPDATE t2 SET b=${n} WHERE a=${i + 1};
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 10: 25000 text UPDATEs with an index
-async function test10(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-  `);
-  for (let i = 0; i < 25000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      UPDATE t2 SET c='${numberName(n)}' WHERE a=${i + 1};
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 11: INSERTs from a SELECT
-async function test11(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-    INSERT INTO t1 SELECT b,a,c FROM t2;
-    INSERT INTO t2 SELECT b,a,c FROM t1;
-    COMMIT;
-  `);
-}
-
-// Test 12: DELETE without an index
-async function test12(sqlite3, db) {
-  await sqlite3.exec(db, `
-    DELETE FROM t2 WHERE c LIKE '%fifty%';
-  `);
-}
-
-// Test 13: DELETE with an index
-async function test13(sqlite3, db) {
-  await sqlite3.exec(db, `
-    DELETE FROM t2 WHERE a>10 AND a<20000;
-  `);
-}
-
-// Test 14: A big INSERT after a big DELETE
-async function test14(sqlite3, db) {
-  await sqlite3.exec(db, `
-    INSERT INTO t2 SELECT * FROM t1;
-  `);
-}
-
-// Test 15: A big DELETE followed by many small INSERTs
-async function test15(sqlite3, db) {
-  await sqlite3.exec(db, `
-    BEGIN;
-    DELETE FROM t1;
-  `);
-  for (let i = 0; i < 12000; ++i) {
-    const n = Math.floor(Math.random() * 100000);
-    await sqlite3.exec(db, `
-      INSERT INTO t1 VALUES(${i + 1}, ${n}, '${numberName(n)}');
-    `);
-  }
-  await sqlite3.exec(db, `
-    COMMIT;
-  `);
-}
-
-// Test 16: DROP TABLE
-async function test16(sqlite3, db) {
-  await sqlite3.exec(db, `
-    DROP TABLE t1;
-    DROP TABLE t2;
-    DROP TABLE t3;
-  `);
-}
-
-const digits = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-const names100 = [
-  ...digits,
-  ...['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'],
-  ...digits.map(digit => `twenty${digit && '-' + digit}`),
-  ...digits.map(digit => `thirty${digit && '-' + digit}`),
-  ...digits.map(digit => `forty${digit && '-' + digit}`),
-  ...digits.map(digit => `fifty${digit && '-' + digit}`),
-  ...digits.map(digit => `sixty${digit && '-' + digit}`),
-  ...digits.map(digit => `seventy${digit && '-' + digit}`),
-  ...digits.map(digit => `eighty${digit && '-' + digit}`),
-  ...digits.map(digit => `ninety${digit && '-' + digit}`),
-]
-function numberName(n) {
-  if (n === 0) return 'zero';
-
-  const name = [];
-  const d43 = Math.floor(n / 1000);
-  if (d43) {
-    name.push(names100[d43]);
-    name.push('thousand');
-    n -= d43 * 1000;
-  }
-
-  const d2 = Math.floor(n / 100);
-  if (d2) {
-    name.push(names100[d2]);
-    name.push('hundred');
-    n -= d2 * 100;
-  }
-
-  const d10 = n;
-  if (d10) {
-    name.push(names100[d10]);
-  }
-
-  return name.join(' ');
+function addEntry(parent, text) {
+  const tag = parent.parentElement.tagName === 'TBODY' ? 'td' : 'th';
+  const child = document.createElement(tag);
+  child.textContent = text;
+  parent.appendChild(child);
 }
