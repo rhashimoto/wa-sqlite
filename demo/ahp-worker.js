@@ -81,6 +81,11 @@ class DatabaseService {
     // Create the query interface.
     this.#tag = createTag(sqlite3, db);
     this.#isTransactionPending = () => !sqlite3.get_autocommit(db);
+
+    this.query(`
+      PRAGMA locking_mode=exclusive;
+      PRAGMA journal_mode=truncate;
+    `);
   }
 }
 
