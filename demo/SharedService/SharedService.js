@@ -15,7 +15,7 @@ export class SharedService extends EventTarget {
   /** @type {MessagePort} */ #servicePort;
   /** @type {Map<string, { resolve, reject }>} */ #callbacks = new Map();
 
-  /** @type {{ [method: string] : (...args: any) => Promise<*> }} */ proxy;
+  proxy;
 
   /**
    * @param {string} name 
@@ -155,7 +155,7 @@ export class SharedService extends EventTarget {
 
 /**
  * Wrap a target with MessagePort for proxying.
- * @param {{ [method: string]: (...args) => any }} target 
+ * @param {object} target 
  * @returns 
  */
 export function createSharedServicePort(target) {
