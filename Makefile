@@ -94,17 +94,28 @@ WASQLITE_DEFINES ?= \
 	-DSQLITE_USE_ALLOCA \
 	-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE
 
+WASQLITE_KS_DEFINES ?= $(WASQLITE_DEFINES) \
+  -DSQLITE_ENABLE_FTS5 \
+  -DSQLITE_ENABLE_RTREE \
+  -DSQLITE_ENABLE_EXPLAIN_COMMENTS \
+  -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION \
+  -DSQLITE_ENABLE_STMTVTAB \
+  -DSQLITE_ENABLE_DBPAGE_VTAB \
+  -DSQLITE_ENABLE_DBSTAT_VTAB \
+  -DSQLITE_ENABLE_BYTECODE_VTAB \
+  -DSQLITE_ENABLE_OFFSET_SQL_FUNC
+
 # directories
 .PHONY: all
 all: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist debug tmp
+	rm -rf dist dist-xl debug tmp
 
 .PHONY: spotless
 spotless:
-	rm -rf dist debug tmp deps cache
+	rm -rf dist dist-xl debug tmp deps cache
 
 ## cache
 .PHONY: clean-cache
@@ -232,3 +243,28 @@ dist/wa-sqlite-async.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNC
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(BITCODE_FILES_DIST) -o $@
+
+# dist-xl
+.PHONY: clean-dist-xl
+clean-dist-xl:
+	rm -f dist-xl.zip
+	rm -rf dist-xl
+
+.PHONY: dist-xl
+dist-xl: dist-xl/wa-sqlite.mjs dist-xl/wa-sqlite-async.mjs
+	zip -r dist-xl dist-xl/
+	
+dist-xl/wa-sqlite.mjs: deps/$(SQLITE_AMALGAMATION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS) src/*.c
+	mkdir -p dist-xl
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_KS_DEFINES) $(EMFLAGS_DIST) \
+	  $(EMFLAGS_INTERFACES) \
+	  $(EMFLAGS_LIBRARIES) \
+	  $^ -o $@
+
+dist-xl/wa-sqlite-async.mjs: deps/$(SQLITE_AMALGAMATION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS) src/*.c
+	mkdir -p dist-xl
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_KS_DEFINES) $(EMFLAGS_DIST) \
+	  $(EMFLAGS_INTERFACES) \
+	  $(EMFLAGS_LIBRARIES) \
+	  $(EMFLAGS_ASYNCIFY_DIST) \
+	  $^ -o $@
