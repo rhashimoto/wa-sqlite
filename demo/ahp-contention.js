@@ -45,6 +45,7 @@ const DATE_OPTIONS = {
   fractionalSecondDigits: 3
 };
 
+const SHARED_SERVICE_NAME = 'ahp-demo';
 const SUBS_REGEX = /:[A-Za-z][A-Za-z0-9_]*/g;
 
 class ContentionDemo extends EventTarget {
@@ -100,7 +101,7 @@ class ContentionDemo extends EventTarget {
 
       // Instantiate the database Worker.
       const worker = new Worker('./ahp-worker.js', { type: 'module' });
-      const sharedService = new SharedService('ahp-contention', async () => {
+      const sharedService = new SharedService(SHARED_SERVICE_NAME, async () => {
         const providerPort = await new Promise(resolve => {
           worker.addEventListener('message', event => {
             resolve(event.ports[0]);

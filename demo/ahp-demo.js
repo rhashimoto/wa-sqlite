@@ -17,6 +17,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
 CREATE TABLE IF NOT EXISTS copied AS SELECT * FROM goog;
 SELECT * FROM copied LIMIT 5;`.trim();
 
+const SHARED_SERVICE_NAME = 'ahp-demo';
 const SQL_KEY = 'wa-sqlite demo sql';
 
 window.addEventListener('DOMContentLoaded', async function() {
@@ -55,7 +56,7 @@ window.addEventListener('DOMContentLoaded', async function() {
 
   // Connect Worker and SharedService.
   const worker = new Worker('./ahp-worker.js', { type: 'module' });
-  const sharedService = new SharedService('ahp-demo', async () => {
+  const sharedService = new SharedService(SHARED_SERVICE_NAME, async () => {
     const providerPort = await new Promise(resolve => {
       worker.addEventListener('message', event => {
         resolve(event.ports[0]);
