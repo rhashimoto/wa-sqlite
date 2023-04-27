@@ -99,6 +99,7 @@ export class SharedService extends EventTarget {
   }
 
   #configureServicePort(servicePort) {
+    this.#servicePort?.close();
     this.#servicePort = servicePort;
     this.#servicePort.addEventListener('message', ({data}) => {
       const callbacks = this.#callbacks.get(data.nonce);
@@ -117,6 +118,7 @@ export class SharedService extends EventTarget {
    */
   #providerChange() {
     // Fetch the new port for proxying calls.
+    this.#servicePort?.close();
     this.#servicePort = null;
     this.#requestServicePort();
 
