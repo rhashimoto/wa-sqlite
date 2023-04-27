@@ -687,7 +687,7 @@ declare interface SQLiteAPI {
    * result code).
    * @see https://sqlite.org/c3ref/open.html
    * @param zFilename 
-   * @param iFlags `SQLite.CREATE | SQLite.READWRITE` (0x6) if omitted
+   * @param iFlags `SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE` (0x6) if omitted
    * @param zVfs VFS name
    * @returns Promise-wrapped database pointer.
    */
