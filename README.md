@@ -17,7 +17,7 @@ If you do want to build - e.g. you want to change build flags, use a specific EM
 
 * Building on Debian Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
-* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 2.0.26+.
+* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 3.1.25+.
 * `curl`, `make`, `openssl`, `sed`, `unzip`
 
 Here are the build steps:
