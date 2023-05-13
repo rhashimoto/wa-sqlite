@@ -490,7 +490,7 @@ export function Factory(Module) {
       zVfs = createUTF8(zVfs);
       const result = await f(zFilename, tmpPtr[0], flags, zVfs);
 
-      const db = Module.getValue(tmpPtr[0], 'i32');
+      const db = Module.getValue(tmpPtr[0], '*');
       databases.add(db);
       Module._sqlite3_free(zVfs);
 
@@ -507,10 +507,10 @@ export function Factory(Module) {
       const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
       check(fname, result, db);
 
-      const stmt = Module.getValue(tmpPtr[0], 'i32');
+      const stmt = Module.getValue(tmpPtr[0], '*');
       if (stmt) {
         mapStmtToDB.set(stmt, db);
-        return { stmt, sql: Module.getValue(tmpPtr[1], 'i32') };
+        return { stmt, sql: Module.getValue(tmpPtr[1], '*') };
       }
       return null;
     };

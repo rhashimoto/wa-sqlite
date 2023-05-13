@@ -63,7 +63,7 @@ const mod_methods = {
       const struct = {};
       struct['nConstraint'] = getValue(p + offset[0], 'i32');
       struct['aConstraint'] = [];
-      const constraintPtr = getValue(p + offset[1], 'i32');
+      const constraintPtr = getValue(p + offset[1], '*');
       const constraintSize = mapStructToLayout.get('sqlite3_index_constraint').size;
       for (let i = 0; i < struct['nConstraint']; ++i) {
         struct['aConstraint'].push(
@@ -71,7 +71,7 @@ const mod_methods = {
       }
       struct['nOrderBy'] = getValue(p + offset[2], 'i32');
       struct['aOrderBy'] = [];
-      const orderPtr = getValue(p + offset[3], 'i32');
+      const orderPtr = getValue(p + offset[3], '*');
       const orderSize = mapStructToLayout.get('sqlite3_index_orderby').size;
       for (let i = 0; i < struct['nOrderBy']; ++i) {
         struct['aOrderBy'].push(
@@ -117,7 +117,7 @@ const mod_methods = {
     function pack_sqlite3_index_info(p, struct) {
       const layout = mapStructToLayout.get('sqlite3_index_info');
       const offset = layout.offsets;
-      const usagePtr = getValue(p + offset[4], 'i32');
+      const usagePtr = getValue(p + offset[4], '*');
       const usageSize = mapStructToLayout.get('sqlite3_index_constraint_usage').size;
       for (let i = 0; i < struct['nConstraint']; ++i) {
         pack_sqlite_index_constraint_usage(
@@ -129,7 +129,7 @@ const mod_methods = {
         const length = lengthBytesUTF8(struct['idxStr']);
         const z = ccall('sqlite3_malloc', 'number', ['number'], [length + 1]);
         stringToUTF8(struct['idxStr'], z, length + 1);
-        setValue(p + offset[6], z, 'i32');
+        setValue(p + offset[6], z, '*');
         setValue(p + offset[7], 1, 'i32');
       }
       setValue(p + offset[8], struct['orderByConsumed'], 'i32');
