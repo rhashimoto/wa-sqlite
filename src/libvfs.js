@@ -24,7 +24,7 @@ const vfs_methods = {
       const result = ccall('register_vfs', 'number', ['string', 'number', 'number', 'number'],
         [vfs.name, mxPathName, makeDefault ? 1 : 0, out]);
       if (!result) {
-        const id = getValue(out, 'i32');
+        const id = getValue(out, '*');
         mapIdToVFS.set(id, vfs);
       }
       Module['_free'](out);
@@ -65,6 +65,13 @@ const vfs_methods = {
       });
     }
 
+    // Convert 64-bit unsigned int in WASM memory to Number. The unsigned
+    // int is assumed to be <= Number.MAX_SAFE_INTEGER;
+    function u64(ptr) {
+      const index = ptr >> 2;
+      return HEAPU32[index] + (HEAPU32[index + 1] * (2**32));
+    }
+
     const closedFiles = hasAsyncify ? new Set() : null;
 
     // int xClose(sqlite3_file* file);
@@ -88,20 +95,20 @@ const vfs_methods = {
     _vfsRead = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
       const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
-      return vfs['xRead'](file, pDataArray, getValue(iOffset, 'i64'));
+      return vfs['xRead'](file, pDataArray, u64(iOffset));
     }
 
     // int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
     _vfsWrite = function(file, pData, iAmt, iOffset) {
       const vfs = mapFileToVFS.get(file);
       const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
-      return vfs['xWrite'](file, pDataArray, getValue(iOffset, 'i64'));
+      return vfs['xWrite'](file, pDataArray, u64(iOffset));
     }
 
     // int xTruncate(sqlite3_file* file, sqlite3_int64 size);
     _vfsTruncate = function(file, iSize) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xTruncate'](file, getValue(iSize, 'i64'));
+      return vfs['xTruncate'](file, u64(iSize));
     }
 
     // int xSync(sqlite3_file* file, int flags);
