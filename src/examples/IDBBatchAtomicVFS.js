@@ -4,6 +4,7 @@ import { WebLocksExclusive as WebLocks } from './WebLocks.js';
 import { IDBContext } from './IDBContext.js';
 
 const SECTOR_SIZE = 512;
+const MAX_TASK_MILLIS = 3000;
 
 /**
  * @typedef VFSOptions
@@ -52,6 +53,9 @@ export class IDBBatchAtomicVFS extends VFS.Base {
 
   /** @type {IDBContext} */ #idb;
   /** @type {Set<string>} */ #pendingPurges = new Set();
+
+  #taskTimestamp = performance.now();
+  #pendingAsync = new Set();
 
   constructor(idbDatabaseName = 'wa-sqlite', options = DEFAULT_OPTIONS) {
     super();
@@ -203,6 +207,36 @@ export class IDBBatchAtomicVFS extends VFS.Base {
    * @returns {number}
    */
   xWrite(fileId, pData, iOffset) {
+    // Handle asynchronously every MAX_TASK_MILLIS milliseconds. This is
+    // tricky because Asyncify calls asynchronous methods twice: once
+    // to initiate the call and unwinds the stack, then rewinds the
+    // stack and calls again to retrieve the completed result.
+    const rewound = this.#pendingAsync.has(fileId);
+    if (rewound || performance.now() - this.#taskTimestamp > MAX_TASK_MILLIS) {
+      const result = this.handleAsync(async () => {
+        if (this.handleAsync !== super.handleAsync) {
+          this.#pendingAsync.add(fileId);
+        }
+        await new Promise(resolve => setTimeout(resolve));
+
+        const result = this.#xWriteHelper(fileId, pData, iOffset);
+        this.#taskTimestamp = performance.now();
+        return result;
+      });
+
+      if (rewound) this.#pendingAsync.delete(fileId);
+      return result;
+    }
+    return this.#xWriteHelper(fileId, pData, iOffset);
+  }
+
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
+  #xWriteHelper(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
     log(`xWrite ${file.path} ${pData.byteLength} ${iOffset}`);
 
@@ -279,17 +313,45 @@ export class IDBBatchAtomicVFS extends VFS.Base {
    * @returns {number}
    */
   xSync(fileId, flags) {
-    return this.handleAsync(async () => {
-      const file = this.#mapIdToFile.get(fileId);
-      log(`xSync ${file.path} ${flags}`);
-      try {
-        await this.#idb.sync();
-      } catch (e) {
-        console.error(e);
-        return VFS.SQLITE_IOERR;
-      }
-      return VFS.SQLITE_OK;
-    });
+    // Skip IndexedDB sync if durability is relaxed and the last
+    // sync was recent enough.
+    const rewound = this.#pendingAsync.has(fileId);
+    if (rewound || this.#options.durability !== 'relaxed' ||
+        performance.now() - this.#taskTimestamp > MAX_TASK_MILLIS) {
+      const result = this.handleAsync(async () => {
+        if (this.handleAsync !== super.handleAsync) {
+          this.#pendingAsync.add(fileId);
+        }
+
+        const result = await this.#xSyncHelper(fileId, flags);
+        this.#taskTimestamp = performance.now();
+        return result;
+      });
+
+      if (rewound) this.#pendingAsync.delete(fileId);
+      return result;
+    }
+
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xSync ${file.path} ${flags}`);
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {Promise<number>}
+   */
+  async #xSyncHelper(fileId, flags) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xSync ${file.path} ${flags}`);
+    try {
+      await this.#idb.sync();
+    } catch (e) {
+      console.error(e);
+      return VFS.SQLITE_IOERR;
+    }
+    return VFS.SQLITE_OK;
   }
 
   /**
@@ -399,12 +461,6 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log(`xFileControl ${file.path} ${op}`);
 
     switch (op) {
-      case 5: // SQLITE_FCNTL_SIZE_HINT
-        return this.handleAsync(async () => {
-          await new Promise(resolve => setTimeout(resolve));
-          return VFS.SQLITE_OK;
-        });
-
       case 11: //SQLITE_FCNTL_OVERWRITE
         // This called on VACUUM. Set a flag so we know whether to check
         // later if the page size changed.
