@@ -275,25 +275,21 @@ export class IDBBatchAtomicVFS extends VFS.Base {
 
   /**
    * @param {number} fileId 
-   * @param {*} flags 
+   * @param {number} flags 
    * @returns {number}
    */
   xSync(fileId, flags) {
-    const file = this.#mapIdToFile.get(fileId);
-    log(`xSync ${file.path} ${flags}`);
-
-    try {
-      if (this.#options.durability !== 'relaxed') {
-        return this.handleAsync(async () => {
-          await this.#idb.sync();
-          return VFS.SQLITE_OK;
-        });
+    return this.handleAsync(async () => {
+      const file = this.#mapIdToFile.get(fileId);
+      log(`xSync ${file.path} ${flags}`);
+      try {
+        await this.#idb.sync();
+      } catch (e) {
+        console.error(e);
+        return VFS.SQLITE_IOERR;
       }
       return VFS.SQLITE_OK;
-    } catch (e) {
-      console.error(e);
-      return VFS.SQLITE_IOERR;
-    }
+    });
   }
 
   /**
@@ -403,6 +399,12 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log(`xFileControl ${file.path} ${op}`);
 
     switch (op) {
+      case 5: // SQLITE_FCNTL_SIZE_HINT
+        return this.handleAsync(async () => {
+          await new Promise(resolve => setTimeout(resolve));
+          return VFS.SQLITE_OK;
+        });
+
       case 11: //SQLITE_FCNTL_OVERWRITE
         // This called on VACUUM. Set a flag so we know whether to check
         // later if the page size changed.

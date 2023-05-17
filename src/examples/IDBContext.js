@@ -1,5 +1,6 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
 
+// IndexedDB transactions older than this will be replaced.
 const MAX_TRANSACTION_LIFETIME_MILLIS = 5_000;
 
 // For debugging.
@@ -8,8 +9,6 @@ const mapTxToId = new WeakMap();
 function log(...args) {
   // console.debug(...args);
 }
-
-const mapTxToLastRequest = new WeakMap();
 
 // This class manages IDBTransaction and IDBRequest instances. It tries
 // to reuse transactions to minimize transaction overhead.
@@ -20,7 +19,8 @@ export class IDBContext {
 
   /** @type {IDBTransaction} */ #tx = null;
   #txTimestamp = 0;
-  #chain = Promise.resolve();
+  #runChain = Promise.resolve();
+  #putChain = Promise.resolve();
 
   /**
    * @param {IDBDatabase|Promise<IDBDatabase>} idbDatabase
@@ -43,8 +43,8 @@ export class IDBContext {
    */
   async run(mode, f) {
     // Ensure that functions run sequentially.
-    const result = this.#chain.then(() => this.#run(mode, f));
-    this.#chain = result.catch(() => {});
+    const result = this.#runChain.then(() => this.#run(mode, f));
+    this.#runChain = result.catch(() => {});
     return result;
   }
 
@@ -55,13 +55,21 @@ export class IDBContext {
    */
   async #run(mode, f) {
     const db = this.#db ?? await this.#dbReady;
-    if ((mode === 'readwrite' && this.#tx?.mode === 'readonly') ||
-         performance.now() - this.#txTimestamp > MAX_TRANSACTION_LIFETIME_MILLIS) {
-      // if (this.#tx?.mode === 'readwrite') {
-      //   await new Promise(resolve => setTimeout(resolve));
-      // }
+    if (mode === 'readwrite' && this.#tx?.mode === 'readonly') {
+      // Mode requires a new transaction.
+      this.#tx = null;
+    } else if (performance.now() - this.#txTimestamp > MAX_TRANSACTION_LIFETIME_MILLIS) {
+      // Chrome times out transactions after 60 seconds so refresh preemptively.
+      try {
+        this.#tx?.commit();
+      } catch (e) {
+        // Explicit commit can fail but this can be ignored if it will
+        // auto-commit anyway.
+        if (e.name !== 'InvalidStateError') throw e;
+      }
 
-      // Force creation of a new transaction.
+      // Skip to the next task to allow processing.
+      await new Promise(resolve => setTimeout(resolve));
       this.#tx = null;
     }
 
@@ -70,19 +78,30 @@ export class IDBContext {
       if (!this.#tx) {
         // @ts-ignore
         this.#tx = db.transaction(db.objectStoreNames, mode, this.#txOptions);
-        this.#txTimestamp = performance.now();
-        this.#tx.addEventListener('complete', event => {
-          if (this.#tx === event.target) {
-            this.#tx = null;
-          }
-          log(`transaction ${mapTxToId.get(event.target)} complete`);
-        });
-        this.#tx.addEventListener('abort', event => {
-          if (this.#tx === event.target) {
-            this.#tx = null;
-          }
-          // @ts-ignore
-          log(`transaction ${mapTxToId.get(event.target)} aborted`, event.target.error);
+        const timestamp = this.#txTimestamp = performance.now();
+
+        // Chain the result of every transaction. If any transaction is
+        // aborted then the next sync() call will throw.
+        this.#putChain = this.#putChain.then(() => {
+          return new Promise((resolve, reject) => {
+            this.#tx.addEventListener('complete', event => {
+              resolve();
+              if (this.#tx === event.target) {
+                this.#tx = null;
+              }
+              log(`transaction ${mapTxToId.get(event.target)} complete`);
+            });
+            this.#tx.addEventListener('abort', event => {
+              console.warn('tx abort', (performance.now() - timestamp)/1000);
+              // @ts-ignore
+              const e = event.target.error;
+              reject(e);
+              if (this.#tx === event.target) {
+                this.#tx = null;
+              }
+              log(`transaction ${mapTxToId.get(event.target)} aborted`, e);
+            });
+          });
         });
 
         log(`new transaction ${nextTxId} ${mode}`);
@@ -103,29 +122,26 @@ export class IDBContext {
   }
 
   async sync() {
-    // Wait until all previously queued request functions have run.
-    await this.#chain;
-    if (this.#tx) {
-      await new Promise(resolve => {
-        this.#tx.addEventListener('complete', resolve);
-        this.#tx.addEventListener('abort', resolve);
-      });
-    }
+    // Wait until all transactions since the previous sync have committed.
+    // Throw if any transaction failed.
+    await this.#putChain;
+    this.#putChain = Promise.resolve();
   }
 }
 
 /**
+ * Helper to convert IDBRequest to Promise.
  * @param {IDBRequest} request 
+ * @returns {Promise}
  */
 function wrapRequest(request) {
-  mapTxToLastRequest.set(request.transaction, request);
   return new Promise((resolve, reject) => {
     request.addEventListener('success', () => resolve(request.result));
     request.addEventListener('error', () => reject(request.error));
   });
 }
 
-// IDBObjectStore wrapper passed to IDBActivity run functions.
+// IDBObjectStore wrapper passed to IDBContext run functions.
 class ObjectStore {
   #objectStore;
 
