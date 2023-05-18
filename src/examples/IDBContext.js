@@ -1,5 +1,7 @@
 // Copyright 2022 Roy T. Hashimoto. All Rights Reserved.
-const RETRYABLE_EXCEPTIONS = new Set(['TransactionInactiveError', 'InvalidStateError']);
+
+// IndexedDB transactions older than this will be replaced.
+const MAX_TRANSACTION_LIFETIME_MILLIS = 5_000;
 
 // For debugging.
 let nextTxId = 0;
@@ -11,24 +13,27 @@ function log(...args) {
 // This class manages IDBTransaction and IDBRequest instances. It tries
 // to reuse transactions to minimize transaction overhead.
 export class IDBContext {
+  /** @type {IDBDatabase} */ #db;
   /** @type {Promise<IDBDatabase>} */ #dbReady;
   #txOptions;
 
   /** @type {IDBTransaction} */ #tx = null;
-  /** @type {Promise<void>} */ #txComplete = null;
-  /** @type {IDBRequest} */ #request = null;
-  #chain = Promise.resolve();
+  #txTimestamp = 0;
+  #runChain = Promise.resolve();
+  #putChain = Promise.resolve();
 
   /**
    * @param {IDBDatabase|Promise<IDBDatabase>} idbDatabase
    */
   constructor(idbDatabase, txOptions = { durability: 'default' }) {
-    this.#dbReady = Promise.resolve(idbDatabase);
+    this.#dbReady = Promise.resolve(idbDatabase).then(db => this.#db = db);
     this.#txOptions = txOptions;
   }
 
   async close() {
-    const db = await this.#dbReady;
+    const db = this.#db ?? await this.#dbReady;
+    await this.#runChain;
+    await this.sync();
     db.close();
   }
   
@@ -36,97 +41,117 @@ export class IDBContext {
    * Run a function with the provided object stores. The function
    * should be idempotent in case it is passed an expired transaction.
    * @param {IDBTransactionMode} mode
-   * @param {(stores: Object.<string, Store>) => any} f 
+   * @param {(stores: Object.<string, ObjectStore>) => any} f 
    */
   async run(mode, f) {
     // Ensure that functions run sequentially.
-    return this.#chain = this.#chain.then(() => {
-      return this.#run(mode, f);
-    });
+    const result = this.#runChain.then(() => this.#run(mode, f));
+    this.#runChain = result.catch(() => {});
+    return result;
   }
 
   /**
    * @param {IDBTransactionMode} mode
-   * @param {(stores: Object.<string, Store>) => any} f 
+   * @param {(stores: Object.<string, ObjectStore>) => any} f 
    * @returns 
    */
   async #run(mode, f) {
-    const db = await this.#dbReady;
-    const storeNames = Array.from(db.objectStoreNames);
-    if (mode !== 'readonly' && this.#tx?.mode === 'readonly') {
-      // Force creation of a new read-write transaction.
+    const db = this.#db ?? await this.#dbReady;
+    if (mode === 'readwrite' && this.#tx?.mode === 'readonly') {
+      // Mode requires a new transaction.
       this.#tx = null;
-    } else if (this.#request?.readyState === 'pending') {
-      // Wait for pending IDBRequest so the IDBTransaction is active.
-      await new Promise(done => {
-        this.#request.addEventListener('success', done);
-        this.#request.addEventListener('error', done);
-      });
+    } else if (performance.now() - this.#txTimestamp > MAX_TRANSACTION_LIFETIME_MILLIS) {
+      // Chrome times out transactions after 60 seconds so refresh preemptively.
+      try {
+        this.#tx?.commit();
+      } catch (e) {
+        // Explicit commit can fail but this can be ignored if it will
+        // auto-commit anyway.
+        if (e.name !== 'InvalidStateError') throw e;
+      }
+
+      // Skip to the next task to allow processing.
+      await new Promise(resolve => setTimeout(resolve));
+      this.#tx = null;
     }
 
     // Run the user function with a retry in case the transaction is invalid.
     for (let i = 0; i < 2; ++i) {
       if (!this.#tx) {
         // @ts-ignore
-        this.#tx = db.transaction(storeNames, mode, this.#txOptions);
-        this.#txComplete = new Promise(resolve => {
-          this.#tx.addEventListener('complete', event => {
-            if (this.#tx === event.target) {
-              this.#tx = null
-            }
-            resolve();
-            log(`transaction ${mapTxToId.get(event.target)} complete`);
+        this.#tx = db.transaction(db.objectStoreNames, mode, this.#txOptions);
+        const timestamp = this.#txTimestamp = performance.now();
+
+        // Chain the result of every transaction. If any transaction is
+        // aborted then the next sync() call will throw.
+        this.#putChain = this.#putChain.then(() => {
+          return new Promise((resolve, reject) => {
+            this.#tx.addEventListener('complete', event => {
+              resolve();
+              if (this.#tx === event.target) {
+                this.#tx = null;
+              }
+              log(`transaction ${mapTxToId.get(event.target)} complete`);
+            });
+            this.#tx.addEventListener('abort', event => {
+              console.warn('tx abort', (performance.now() - timestamp)/1000);
+              // @ts-ignore
+              const e = event.target.error;
+              reject(e);
+              if (this.#tx === event.target) {
+                this.#tx = null;
+              }
+              log(`transaction ${mapTxToId.get(event.target)} aborted`, e);
+            });
           });
         });
+
         log(`new transaction ${nextTxId} ${mode}`);
         mapTxToId.set(this.#tx, nextTxId++);
       }
 
       try {
-        const stores = Object.fromEntries(storeNames.map(name => {
-          const objectStore = this.#tx.objectStore(name);
-          const store = new Store(objectStore, request => this.#setRequest(request));
-          return [name, store];
+        const stores = Object.fromEntries(Array.from(db.objectStoreNames, name => {
+          return [name, new ObjectStore(this.#tx.objectStore(name))];
         }));
         return await f(stores);
       } catch (e) {
-        if (i || !RETRYABLE_EXCEPTIONS.has(e.name)) {
-          // On failure make sure nothing is committed.
-          try { this.#tx.abort() } catch (ignored) {}
-          throw e;
-        }
         this.#tx = null;
+        if (i) throw e;
+        // console.warn('retrying with new transaction');
       }
     }
   }
 
   async sync() {
-    // Wait until all previously queued request functions have run.
-    await new Promise(resolve => this.run('readwrite', resolve));
-    return this.#txComplete;
-  }
-
-  /**
-   * @param {IDBRequest} request 
-   */
-  #setRequest(request) {
-    this.#request = request;
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    // Wait until all transactions since the previous sync have committed.
+    // Throw if any transaction failed.
+    await this.#putChain;
+    this.#putChain = Promise.resolve();
   }
 }
 
-// IDBStore wrapper passed to IDBActivity run functions.
-class Store {
+/**
+ * Helper to convert IDBRequest to Promise.
+ * @param {IDBRequest} request 
+ * @returns {Promise}
+ */
+function wrapRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error));
+  });
+}
+
+// IDBObjectStore wrapper passed to IDBContext run functions.
+class ObjectStore {
+  #objectStore;
+
   /**
-   * @param {IDBObjectStore} store 
-   * @param {(request: IDBRequest) => Promise} addRequest
+   * @param {IDBObjectStore} objectStore 
    */
-  constructor(store, addRequest) {
-    this.store = store;
-    this.addRequest = addRequest;
+  constructor(objectStore) {
+    this.#objectStore = objectStore;
   }
 
   /**
@@ -134,9 +159,9 @@ class Store {
    * @returns {Promise}
    */
   get(query) {
-    log(`get ${this.store.name}`, query);
-    const request = this.store.get(query);
-    return this.addRequest(request);
+    log(`get ${this.#objectStore.name}`, query);
+    const request = this.#objectStore.get(query);
+    return wrapRequest(request);
   }
 
   /**
@@ -145,9 +170,9 @@ class Store {
    * @returns {Promise}
    */
    getAll(query, count) {
-    log(`getAll ${this.store.name}`, query, count);
-    const request = this.store.getAll(query, count);
-    return this.addRequest(request);
+    log(`getAll ${this.#objectStore.name}`, query, count);
+    const request = this.#objectStore.getAll(query, count);
+    return wrapRequest(request);
   }
 
   /**
@@ -155,9 +180,9 @@ class Store {
    * @returns {Promise<IDBValidKey>}
    */
   getKey(query) {
-    log(`getKey ${this.store.name}`, query);
-    const request = this.store.getKey(query);
-    return this.addRequest(request);
+    log(`getKey ${this.#objectStore.name}`, query);
+    const request = this.#objectStore.getKey(query);
+    return wrapRequest(request);
   }
 
   /**
@@ -166,9 +191,9 @@ class Store {
    * @returns {Promise}
    */
    getAllKeys(query, count) {
-    log(`getAllKeys ${this.store.name}`, query, count);
-    const request = this.store.getAllKeys(query, count);
-    return this.addRequest(request);
+    log(`getAllKeys ${this.#objectStore.name}`, query, count);
+    const request = this.#objectStore.getAllKeys(query, count);
+    return wrapRequest(request);
   }
 
   /**
@@ -177,9 +202,9 @@ class Store {
    * @returns {Promise}
    */
    put(value, key) {
-    log(`put ${this.store.name}`, value, key);
-    const request = this.store.put(value, key);
-    return this.addRequest(request);
+    log(`put ${this.#objectStore.name}`, value, key);
+    const request = this.#objectStore.put(value, key);
+    return wrapRequest(request);
   }
 
   /**
@@ -187,30 +212,30 @@ class Store {
    * @returns {Promise}
    */
    delete(query) {
-    log(`delete ${this.store.name}`, query);
-    const request = this.store.delete(query);
-    return this.addRequest(request);
+    log(`delete ${this.#objectStore.name}`, query);
+    const request = this.#objectStore.delete(query);
+    return wrapRequest(request);
   }
 
   clear() {
-    log(`clear ${this.store.name}`);
-    const request = this.store.clear();
-    return this.addRequest(request);
+    log(`clear ${this.#objectStore.name}`);
+    const request = this.#objectStore.clear();
+    return wrapRequest(request);
   }
 
   index(name) {
-    return new Index(this.store.index(name), request => this.addRequest(request));
+    return new Index(this.#objectStore.index(name));
   }
 }
 
 class Index {
+  /** @type {IDBIndex} */ #index;
+
   /**
    * @param {IDBIndex} index 
-   * @param {(request: IDBRequest) => Promise} addRequest
    */
-   constructor(index, addRequest) {
-    this.index = index;
-    this.addRequest = addRequest;
+   constructor(index) {
+    this.#index = index;
   }
 
   /**
@@ -219,8 +244,8 @@ class Index {
    * @returns {Promise<IDBValidKey[]>}
    */
   getAllKeys(query, count) {
-    log(`IDBIndex.getAllKeys ${this.index.objectStore.name}<${this.index.name}>`, query, count);
-    const request = this.index.getAllKeys(query, count);
-    return this.addRequest(request);
+    log(`IDBIndex.getAllKeys ${this.#index.objectStore.name}<${this.#index.name}>`, query, count);
+    const request = this.#index.getAllKeys(query, count);
+    return wrapRequest(request);
   }
 }

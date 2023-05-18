@@ -3,16 +3,12 @@ import { configureTests } from "./VFSTests.js";
 
 const IDB_DATABASE_NAME = 'IDBBatchAtomicVFS_DB';
 
-// jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
 
 class TestVFS extends IDBBatchAtomicVFS {
   constructor(options) {
     super(IDB_DATABASE_NAME, options);
     TestVFS.instances.push(this);
-  }
-
-  handleAsync(f) {
-    return f();
   }
 
   static instances = [];
@@ -26,9 +22,9 @@ class TestVFS extends IDBBatchAtomicVFS {
 
     // Remove the IndexedDB database.
     await new Promise((resolve, reject) => {
-      const db = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
-      db.addEventListener('success', resolve);
-      db.addEventListener('error', reject);
+      const deleteRequest = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
+      deleteRequest.addEventListener('success', resolve);
+      deleteRequest.addEventListener('error', reject);
     });
 
     // Clear all WebLocks.
