@@ -71,7 +71,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       await this.xClose(fileId);
     }
 
-    this.#idb?.close();
+    await this.#idb?.close();
     this.#idb = null;
   }
 
