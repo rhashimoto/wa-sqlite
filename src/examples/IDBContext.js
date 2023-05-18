@@ -32,6 +32,8 @@ export class IDBContext {
 
   async close() {
     const db = this.#db ?? await this.#dbReady;
+    await this.#runChain;
+    await this.sync();
     db.close();
   }
   

@@ -15,10 +15,6 @@ class TestVFS extends IDBMinimalVFS {
     TestVFS.instances.push(this);
   }
 
-  handleAsync(f) {
-    return f();
-  }
-
   static instances = [];
 
   static async clear() {
@@ -30,9 +26,9 @@ class TestVFS extends IDBMinimalVFS {
 
     // Remove the IndexedDB database.
     await new Promise((resolve, reject) => {
-      const db = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
-      db.addEventListener('success', resolve);
-      db.addEventListener('error', reject);
+      const deleteRequest = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
+      deleteRequest.addEventListener('success', resolve);
+      deleteRequest.addEventListener('error', reject);
     });
 
     // Clear all WebLocks.
