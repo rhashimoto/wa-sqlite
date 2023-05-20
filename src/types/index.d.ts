@@ -680,6 +680,19 @@ declare interface SQLiteAPI {
   libversion_number(): number
 
   /**
+   * Set a usage limit on a connection.
+   * @see https://www.sqlite.org/c3ref/limit.html
+   * @param db database pointer
+   * @param id limit category
+   * @param newVal 
+   * @returns previous setting
+   */
+  limit(
+    db: number,
+    id: number,
+    newVal: number): number;
+
+  /**
    * Opening a new database connection.
    * 
    * Note that this function differs from the C API in that it

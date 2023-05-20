@@ -255,3 +255,17 @@ export const SQLITE_RECURSIVE           = 33;
 // Authorizer return codes
 export const SQLITE_DENY   = 1;
 export const SQLITE_IGNORE = 2;
+
+// Limit categories
+export const SQLITE_LIMIT_LENGTH              = 0;
+export const SQLITE_LIMIT_SQL_LENGTH          = 1;
+export const SQLITE_LIMIT_COLUMN              = 2;
+export const SQLITE_LIMIT_EXPR_DEPTH          = 3;
+export const SQLITE_LIMIT_COMPOUND_SELECT     = 4;
+export const SQLITE_LIMIT_VDBE_OP             = 5;
+export const SQLITE_LIMIT_FUNCTION_ARG        = 6;
+export const SQLITE_LIMIT_ATTACHED            = 7;
+export const SQLITE_LIMIT_LIKE_PATTERN_LENGTH = 8;
+export const SQLITE_LIMIT_VARIABLE_NUMBER     = 9;
+export const SQLITE_LIMIT_TRIGGER_DEPTH       = 10;
+export const SQLITE_LIMIT_WORKER_THREADS      = 11;

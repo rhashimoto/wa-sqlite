@@ -482,6 +482,15 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.limit = (function() {
+    const fname = 'sqlite3_limit';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(db, id, newVal) {
+      const result = f(db, id, newVal);
+      return result;
+    };
+  })();
+
   sqlite3.open_v2 = (function() {
     const fname = 'sqlite3_open_v2';
     const f = Module.cwrap(fname, ...decl('snnn:n'), { async });

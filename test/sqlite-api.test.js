@@ -297,6 +297,16 @@ function shared(sqlite3Ready) {
     expect(calls.length).toBe(0);
   });
 
+  it('limit', async function() {
+    let result;
+    result = sqlite3.limit(db, SQLite.SQLITE_LIMIT_SQL_LENGTH, -1);
+    expect(result).toBeGreaterThan(64);
+
+    sqlite3.limit(db, SQLite.SQLITE_LIMIT_SQL_LENGTH, 8);
+    await expectAsync(sqlite3.exec(db, 'PRAGMA page_count'))
+      .toBeRejectedWithError(/too big/);
+  });
+
   it('statements', async function() {
     sinon.spy(sqlite3, 'finalize');
 
