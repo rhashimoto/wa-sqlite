@@ -54,3 +54,5 @@ declare var _modCommit;
 declare var _modRollback;
 declare var _modFindFunction;
 declare var _modRename;
+
+declare var _jsAuth;

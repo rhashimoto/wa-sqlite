@@ -10,7 +10,7 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 
-LIBRARY_FILES = src/libfunction.js src/libmodule.js src/libvfs.js
+LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libvfs.js
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
@@ -19,12 +19,14 @@ ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 OBJ_FILES_DEBUG = \
 	tmp/obj/debug/sqlite3.o tmp/obj/debug/extension-functions.o \
+	tmp/obj/debug/libauthorizer.o \
 	tmp/obj/debug/libfunction.o \
 	tmp/obj/debug/libmodule.o \
 	tmp/obj/debug/libvfs.o
 
 OBJ_FILES_DIST = \
 	tmp/obj/dist/sqlite3.o tmp/obj/dist/extension-functions.o \
+	tmp/obj/dist/libauthorizer.o \
 	tmp/obj/dist/libfunction.o \
 	tmp/obj/dist/libmodule.o \
 	tmp/obj/dist/libvfs.o
@@ -62,6 +64,7 @@ EMFLAGS_INTERFACES = \
 	-s EXPORTED_RUNTIME_METHODS=@$(EXPORTED_RUNTIME_METHODS)
 
 EMFLAGS_LIBRARIES = \
+	--js-library src/libauthorizer.js \
 	--js-library src/libfunction.js \
 	--js-library src/libmodule.js \
 	--js-library src/libvfs.js
@@ -171,6 +174,10 @@ tmp/obj/debug/libfunction.o: src/libfunction.c
 	mkdir -p tmp/obj/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
+tmp/obj/debug/libauthorizer.o: src/libauthorizer.c
+	mkdir -p tmp/obj/debug
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
+
 tmp/obj/debug/libmodule.o: src/libmodule.c
 	mkdir -p tmp/obj/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
@@ -188,6 +195,10 @@ tmp/obj/dist/extension-functions.o: deps/$(EXTENSION_FUNCTIONS)
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/obj/dist/libfunction.o: src/libfunction.c
+	mkdir -p tmp/obj/dist
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+
+tmp/obj/dist/libauthorizer.o: src/libauthorizer.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
