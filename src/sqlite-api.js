@@ -625,6 +625,12 @@ export function Factory(Module) {
     return row;
   };
 
+  sqlite3.set_authorizer = function(db, authFunction, userData) {
+    verifyDatabase(db);
+    const result = Module.setAuthorizer(db, authFunction, userData);
+    return check('sqlite3_set_authorizer', result, db);
+  };;
+  
   sqlite3.sql = (function() {
     const fname = 'sqlite3_sql';
     const f = Module.cwrap(fname, ...decl('n:s'));

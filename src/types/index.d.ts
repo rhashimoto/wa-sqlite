@@ -817,6 +817,18 @@ declare interface SQLiteAPI {
   row(stmt: number): Array<SQLiteCompatibleType|null>;
 
   /**
+   * Register a callback function that is invoked to authorize certain SQL statement actions.
+   * @see https://www.sqlite.org/c3ref/set_authorizer.html
+   * @param db database pointer
+   * @param authFunction 
+   * @param userData 
+   */
+  set_authorizer(
+    db: number,
+    authFunction: (userData: any, iActionCode: number, param3: string|null, param4: string|null, param5: string|null, param6: string|null) => number,
+    userData: any): number;
+  
+  /**
    * Get statement SQL
    * @see https://www.sqlite.org/c3ref/expanded_sql.html
    * @param stmt prepared statement pointer
@@ -857,7 +869,7 @@ declare interface SQLiteAPI {
    * is abandoned before completion (`for await` and other implicit
    * traversals provided by Javascript do this automatically)
    * to ensure that all allocated resources are released.
-   * @param db 
+   * @param db database pointer
    * @param sql 
    */
   statements(db: number, sql: string): AsyncIterable<number>;

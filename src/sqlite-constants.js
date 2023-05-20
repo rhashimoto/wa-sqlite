@@ -215,3 +215,43 @@ export const SQLITE_INNOCUOUS     = 0x000200000;
 export const SQLITE_SYNC_NORMAL   = 0x00002;
 export const SQLITE_SYNC_FULL     = 0x00003;
 export const SQLITE_SYNC_DATAONLY = 0x00010;
+
+// Authorizer action codes
+export const SQLITE_CREATE_INDEX        = 1;
+export const SQLITE_CREATE_TABLE        = 2;
+export const SQLITE_CREATE_TEMP_INDEX   = 3;
+export const SQLITE_CREATE_TEMP_TABLE   = 4;
+export const SQLITE_CREATE_TEMP_TRIGGER = 5;
+export const SQLITE_CREATE_TEMP_VIEW    = 6;
+export const SQLITE_CREATE_TRIGGER      = 7;
+export const SQLITE_CREATE_VIEW         = 8;
+export const SQLITE_DELETE              = 9;
+export const SQLITE_DROP_INDEX          = 10;
+export const SQLITE_DROP_TABLE          = 11;
+export const SQLITE_DROP_TEMP_INDEX     = 12;
+export const SQLITE_DROP_TEMP_TABLE     = 13;
+export const SQLITE_DROP_TEMP_TRIGGER   = 14;
+export const SQLITE_DROP_TEMP_VIEW      = 15;
+export const SQLITE_DROP_TRIGGER        = 16;
+export const SQLITE_DROP_VIEW           = 17;
+export const SQLITE_INSERT              = 18;
+export const SQLITE_PRAGMA              = 19;
+export const SQLITE_READ                = 20;
+export const SQLITE_SELECT              = 21;
+export const SQLITE_TRANSACTION         = 22;
+export const SQLITE_UPDATE              = 23;
+export const SQLITE_ATTACH              = 24;
+export const SQLITE_DETACH              = 25;
+export const SQLITE_ALTER_TABLE         = 26;
+export const SQLITE_REINDEX             = 27;
+export const SQLITE_ANALYZE             = 28;
+export const SQLITE_CREATE_VTABLE       = 29;
+export const SQLITE_DROP_VTABLE         = 30;
+export const SQLITE_FUNCTION            = 31;
+export const SQLITE_SAVEPOINT           = 32;
+export const SQLITE_COPY                = 0;
+export const SQLITE_RECURSIVE           = 33;
+
+// Authorizer return codes
+export const SQLITE_DENY   = 1;
+export const SQLITE_IGNORE = 2;
