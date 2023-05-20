@@ -482,6 +482,15 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.limit = (function() {
+    const fname = 'sqlite3_limit';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(db, id, newVal) {
+      const result = f(db, id, newVal);
+      return result;
+    };
+  })();
+
   sqlite3.open_v2 = (function() {
     const fname = 'sqlite3_open_v2';
     const f = Module.cwrap(fname, ...decl('snnn:n'), { async });
@@ -625,6 +634,12 @@ export function Factory(Module) {
     return row;
   };
 
+  sqlite3.set_authorizer = function(db, authFunction, userData) {
+    verifyDatabase(db);
+    const result = Module.setAuthorizer(db, authFunction, userData);
+    return check('sqlite3_set_authorizer', result, db);
+  };;
+  
   sqlite3.sql = (function() {
     const fname = 'sqlite3_sql';
     const f = Module.cwrap(fname, ...decl('n:s'));
