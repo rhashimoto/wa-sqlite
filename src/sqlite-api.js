@@ -446,12 +446,17 @@ export function Factory(Module) {
     const fname = 'sqlite3_finalize';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
-      verifyStatement(stmt);
+      if (!mapStmtToDB.has(stmt)) {
+        return SQLite.SQLITE_MISUSE;
+      }
       const result = await f(stmt);
 
       const db = mapStmtToDB.get(stmt);
       mapStmtToDB.delete(stmt)
-      return check(fname, result, db);
+
+      // Don't throw on error here. Typically the error has already been
+      // thrown and finalize() is part of the cleanup.
+      return result;
     };
   })();
 
@@ -524,6 +529,11 @@ export function Factory(Module) {
       return null;
     };
   })();
+
+  sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
+    verifyDatabase(db);
+    Module.progressHandler(db, nProgressOps, handler, userData);
+  };;
 
   sqlite3.reset = (function() {
     const fname = 'sqlite3_reset';
@@ -862,10 +872,11 @@ function trace(...args) {
 // Helper function to use a more compact signature specification.
 function decl(s) {
   const result = [];
-  const m = s.match(/([ns@]*):([ns@])/);
+  const m = s.match(/([ns@]*):([nsv@])/);
   switch (m[2]) {
     case 'n': result.push('number'); break;
     case 's': result.push('string'); break;
+    case 'v': result.push(null); break;
   }
 
   const args = [];

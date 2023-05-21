@@ -10,7 +10,7 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 
-LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libvfs.js
+LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libprogress.js src/libvfs.js
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
@@ -22,6 +22,7 @@ BITCODE_FILES_DEBUG = \
 	tmp/bc/debug/libauthorizer.bc \
 	tmp/bc/debug/libfunction.bc \
 	tmp/bc/debug/libmodule.bc \
+	tmp/bc/debug/libprogress.bc \
 	tmp/bc/debug/libvfs.bc
 
 BITCODE_FILES_DIST = \
@@ -29,6 +30,7 @@ BITCODE_FILES_DIST = \
 	tmp/bc/dist/libauthorizer.bc \
 	tmp/bc/dist/libfunction.bc \
 	tmp/bc/dist/libmodule.bc \
+	tmp/bc/dist/libprogress.bc \
 	tmp/bc/dist/libvfs.bc
 
 # build options
@@ -66,6 +68,7 @@ EMFLAGS_LIBRARIES = \
 	--js-library src/libauthorizer.js \
 	--js-library src/libfunction.js \
 	--js-library src/libmodule.js \
+	--js-library src/libprogress.js \
 	--js-library src/libvfs.js
 
 EMFLAGS_ASYNCIFY_COMMON = \
@@ -91,7 +94,6 @@ WASQLITE_DEFINES ?= \
 	-DSQLITE_OMIT_DECLTYPE \
 	-DSQLITE_OMIT_DEPRECATED \
 	-DSQLITE_OMIT_LOAD_EXTENSION \
-	-DSQLITE_OMIT_PROGRESS_CALLBACK \
 	-DSQLITE_OMIT_SHARED_CACHE \
 	-DSQLITE_THREADSAFE=0 \
 	-DSQLITE_USE_ALLOCA \
@@ -181,6 +183,10 @@ tmp/bc/debug/libmodule.bc: src/libmodule.c
 	mkdir -p tmp/bc/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
+tmp/bc/debug/libprogress.bc: src/libprogress.c
+	mkdir -p tmp/bc/debug
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
+
 tmp/bc/debug/libvfs.bc: src/libvfs.c
 	mkdir -p tmp/bc/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
@@ -202,6 +208,10 @@ tmp/bc/dist/libfunction.bc: src/libfunction.c
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/bc/dist/libmodule.bc: src/libmodule.c
+	mkdir -p tmp/bc/dist
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+
+tmp/bc/dist/libprogress.bc: src/libprogress.c
 	mkdir -p tmp/bc/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
