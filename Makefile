@@ -10,7 +10,7 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 
-LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libvfs.js
+LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libprogress.js src/libvfs.js
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
@@ -22,6 +22,7 @@ OBJ_FILES_DEBUG = \
 	tmp/obj/debug/libauthorizer.o \
 	tmp/obj/debug/libfunction.o \
 	tmp/obj/debug/libmodule.o \
+	tmp/obj/debug/libprogress.o \
 	tmp/obj/debug/libvfs.o
 
 OBJ_FILES_DIST = \
@@ -29,6 +30,7 @@ OBJ_FILES_DIST = \
 	tmp/obj/dist/libauthorizer.o \
 	tmp/obj/dist/libfunction.o \
 	tmp/obj/dist/libmodule.o \
+	tmp/obj/dist/libprogress.o \
 	tmp/obj/dist/libvfs.o
 
 # build options
@@ -67,6 +69,7 @@ EMFLAGS_LIBRARIES = \
 	--js-library src/libauthorizer.js \
 	--js-library src/libfunction.js \
 	--js-library src/libmodule.js \
+	--js-library src/libprogress.js \
 	--js-library src/libvfs.js
 
 EMFLAGS_ASYNCIFY_COMMON = \
@@ -92,7 +95,6 @@ WASQLITE_DEFINES ?= \
 	-DSQLITE_OMIT_DECLTYPE \
 	-DSQLITE_OMIT_DEPRECATED \
 	-DSQLITE_OMIT_LOAD_EXTENSION \
-	-DSQLITE_OMIT_PROGRESS_CALLBACK \
 	-DSQLITE_OMIT_SHARED_CACHE \
 	-DSQLITE_THREADSAFE=0 \
 	-DSQLITE_USE_ALLOCA \
@@ -182,6 +184,10 @@ tmp/obj/debug/libmodule.o: src/libmodule.c
 	mkdir -p tmp/obj/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
+tmp/obj/debug/libprogress.o: src/libprogress.c
+	mkdir -p tmp/obj/debug
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
+
 tmp/obj/debug/libvfs.o: src/libvfs.c
 	mkdir -p tmp/obj/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
@@ -203,6 +209,10 @@ tmp/obj/dist/libauthorizer.o: src/libauthorizer.c
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/obj/dist/libmodule.o: src/libmodule.c
+	mkdir -p tmp/obj/dist
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+
+tmp/obj/dist/libprogress.o: src/libprogress.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 

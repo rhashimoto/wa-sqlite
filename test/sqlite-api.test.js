@@ -569,6 +569,33 @@ function shared(sqlite3Ready) {
     await sqlite3.exec(db, 'ROLLBACK');
     expect(sqlite3.get_autocommit(db)).toBeTruthy();
   });
+
+  it('progress_handler', async function() {
+    let handlerArg;
+    let handlerCount = 0;
+    function handler(userData) {
+      handlerArg = userData;
+      return ++handlerCount > 5 ? 1 : 0;
+    }
+    sqlite3.progress_handler(db, 1, handler, 42);
+
+    let result;
+    result = sqlite3.exec(db, `
+      WITH RECURSIVE numbers(n)
+        AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 10)
+        SELECT * FROM numbers;
+    `);
+    await expectAsync(result).toBeRejectedWithError(/interrupted/);
+    expect(handlerArg).toBe(42);
+
+    sqlite3.progress_handler(db, 0, null, 42);
+    result = sqlite3.exec(db, `
+      WITH RECURSIVE numbers(n)
+        AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers LIMIT 10)
+        SELECT * FROM numbers;
+    `);
+    await expectAsync(result).toBeResolved();
+  });
 }
 
 describe('sqlite-api', function() {
