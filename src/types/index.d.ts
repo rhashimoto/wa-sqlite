@@ -651,9 +651,11 @@ declare interface SQLiteAPI {
 
   /**
    * Destroy a prepared statement object compiled with {@link prepare_v2}
+   * 
+   * This function does *not* throw on error.
    * @see https://www.sqlite.org/c3ref/finalize.html
    * @param stmt prepared statement pointer
-   * @returns Promise resolving to `SQLITE_OK` (rejects on error)
+   * @returns Promise resolving to `SQLITE_OK` or error status
    */
   finalize(stmt: number): Promise<number>;
 
@@ -754,6 +756,15 @@ declare interface SQLiteAPI {
    * no statement remains
    */
   prepare_v2(db: number, sql: number): Promise<{ stmt: number, sql: number}|null>;
+
+  /**
+   * Specify callback to be invoked between long-running queries
+   * @param db database pointer
+   * @param nProgressOps target number of database operations between handler invocations
+   * @param handler 
+   * @param userData 
+   */
+  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number, userData);
 
   /**
    * Reset a prepared statement object
