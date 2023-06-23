@@ -1,6 +1,8 @@
 /** @type {Map<string, MessagePort>} */
 const mapNameToProviderPort = new Map();
 
+const broadcast = new BroadcastChannel('SharedService');
+
 globalThis.addEventListener('connect', event => {
   const workerPort = event.ports[0];
   workerPort.addEventListener('message', async event => {
@@ -12,7 +14,7 @@ globalThis.addEventListener('connect', event => {
       mapNameToProviderPort.get(name)?.close();
       mapNameToProviderPort.set(name, providerPort);
 
-      new BroadcastChannel('SharedService').postMessage(name);
+      broadcast.postMessage(name);
     } else {
       // Handle port provider request.
       const { name, lockId } = event.data;
