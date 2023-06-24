@@ -38,7 +38,7 @@ navigator.serviceWorker.register('SharedService_ServiceWorker.js');
 
 // Create the shared service.
 log('start');
-const sharedService = new SharedService('test', portProvider);
+const sharedService = new SharedService('test-sw', portProvider);
 sharedService.activate();
 
 for (const button of Array.from(document.getElementsByTagName('button'))) {
