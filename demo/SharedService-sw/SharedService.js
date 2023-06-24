@@ -1,7 +1,4 @@
 const PROVIDER_REQUEST_TIMEOUT = 1000;
-const DEFAULT_SHARED_WORKER_PATH = './SharedService_SharedWorker.js';
-
-const sharedWorker = new SharedWorker(DEFAULT_SHARED_WORKER_PATH);
 
 export class SharedService extends EventTarget {
   /** @type {string} */ #serviceName;
@@ -23,7 +20,7 @@ export class SharedService extends EventTarget {
   #providerCounter = 0;
   #providerChangeCleanup = [];
 
-  proxy;
+  /** @type {{ [method: string] : (...args: any) => Promise<*> }} */ proxy;
 
   /**
    * @param {string} serviceName
@@ -116,16 +113,34 @@ export class SharedService extends EventTarget {
   }
 
   async #sendPortToClient(message, port) {
-    sharedWorker.port.postMessage(message, [port]);
+    // Return the port to the client via the service worker.
+    const serviceWorker = await navigator.serviceWorker.ready;
+    serviceWorker.active.postMessage(message, [port]);
   };
 
   async #getClientId() {
-    // Use a Web Lock to determine our clientId.
-    const nonce = Math.random().toString();
-    const clientId = await navigator.locks.request(nonce, async () => {
-      const { held } = await navigator.locks.query();
-      return held.find(lock => lock.name === nonce)?.clientId;
-    })
+    // Getting the clientId from the service worker accomplishes two things:
+    // 1. It gets the clientId for this context.
+    // 2. It ensures that the service worker is activated.
+    //
+    // It is possible to do this without polling but it requires about the
+    // same amount of code and using fetch makes 100% certain the service
+    // worker is handling requests.
+    let clientId;
+    while (!clientId) {
+      clientId = await fetch('./clientId').then(response => {
+        if (response.ok) {
+          return response.text();
+        }
+        console.warn('service worker not ready, retrying...');
+        return new Promise(resolve => setTimeout(resolve, 100));
+      });
+    }
+
+    navigator.serviceWorker.addEventListener('message', event => {
+      event.data.ports = event.ports;
+      this.dispatchEvent(new MessageEvent('message', { data: event.data }));
+    });
 
     // Acquire a Web Lock named after the clientId. This lets other contexts
     // track this context's lifetime.
@@ -135,17 +150,6 @@ export class SharedService extends EventTarget {
         this.#onClose.signal.addEventListener('abort', releaseLock);
       }));
     });
-
-    // Configure message forwarding via the SharedWorker. This must be
-    // done after acquiring the clientId lock to avoid a race condition
-    // in the SharedWorker.
-    sharedWorker.port.addEventListener('message', event => {
-      event.data.ports = event.ports;
-      this.dispatchEvent(new MessageEvent('message', { data: event.data }));
-    });
-    sharedWorker.port.start();
-    sharedWorker.port.postMessage({ clientId });
-
     return clientId;
   }
 
@@ -250,7 +254,7 @@ export class SharedService extends EventTarget {
 
 /**
  * Wrap a target with MessagePort for proxying.
- * @param {object} target 
+ * @param {{ [method: string]: (...args) => any }} target 
  * @returns 
  */
 export function createSharedServicePort(target) {
