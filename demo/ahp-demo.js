@@ -64,7 +64,7 @@ window.addEventListener('DOMContentLoaded', async function() {
       worker.postMessage(null);
     });
     return providerPort;
-  }, './SharedService/SharedService_SharedWorker.js');
+  });
   sharedService.activate();
 
   // Execute SQL on button click.

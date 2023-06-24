@@ -109,7 +109,7 @@ class ContentionDemo extends EventTarget {
           worker.postMessage(null);
         });
         return providerPort;
-      }, './SharedService/SharedService_SharedWorker.js');
+      });
       sharedService.activate();
 
       this.#dbProxy = sharedService.proxy;
