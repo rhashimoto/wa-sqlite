@@ -11,10 +11,8 @@ globalThis.addEventListener('activate', (/** @type {ExtendableEvent} */ event) =
 // Forward messages (and ports) from client to client.
 globalThis.addEventListener('message', async event => {
   if (event.data?.sharedService) {
-    const data = event.data;
-    const ports = event.ports;
-    const client = await globalThis.clients.get(data.clientId);
-    client.postMessage(data, ports);
+    const client = await globalThis.clients.get(event.data.clientId);
+    client.postMessage(event.data, event.ports);
   }
 });
 

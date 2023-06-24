@@ -1,7 +1,7 @@
 const PROVIDER_REQUEST_TIMEOUT = 1000;
 
 export class SharedService extends EventTarget {
-  /** @type {string} */ #name;
+  /** @type {string} */ #serviceName;
   /** @type {Promise<string>} */ #clientId;
   /** @type {() => MessagePort|Promise<MessagePort>} */ #portProviderFunc;
 
@@ -18,17 +18,18 @@ export class SharedService extends EventTarget {
   /** @type {Promise<MessagePort>} */ #providerPort;
   /** @type {Map<string, { resolve, reject }>} */ providerCallbacks = new Map();
   #providerCounter = 0;
+  #providerChangeCleanup = [];
 
   /** @type {{ [method: string] : (...args: any) => Promise<*> }} */ proxy;
 
   /**
-   * @param {string} name 
+   * @param {string} serviceName
    * @param {() => MessagePort|Promise<MessagePort>} portProviderFunc 
    */
-  constructor(name, portProviderFunc) {
+  constructor(serviceName, portProviderFunc) {
     super();
 
-    this.#name = name;
+    this.#serviceName = serviceName;
     this.#portProviderFunc = portProviderFunc;
 
     this.#clientId = this.#getClientId();
@@ -36,7 +37,9 @@ export class SharedService extends EventTarget {
     // Connect to the current provider and future providers.
     this.#providerPort = this.#providerChange();
     this.#clientChannel.addEventListener('message', ({data}) => {
-      if (data?.type === 'provider' && data?.sharedService === this.#name) {
+      if (data?.type === 'provider' && data?.sharedService === this.#serviceName) {
+        // A context (possibly this one) announced itself as the new provider.
+        // Discard any old provider and connect to the new one.
         this.#closeProviderPort(this.#providerPort);
         this.#providerPort = this.#providerChange();
       }
@@ -48,13 +51,15 @@ export class SharedService extends EventTarget {
   activate() {
     if (this.#onDeactivate) return;
 
-    // If we acquire the lock then we are the service provider.
+    // When acquire a lock on the service name then we become the service
+    // provider. Only one instance at a time will get the lock; the rest
+    // will wait their turn.
     this.#onDeactivate = new AbortController();
     navigator.locks.request(
-      `SharedService-${this.#name}`,
+      `SharedService-${this.#serviceName}`,
       { signal: this.#onDeactivate.signal },
       async () => {
-        // Get the port to request ports.
+        // Get the port to request client ports.
         const port = await this.#portProviderFunc();
         port.start();
 
@@ -64,7 +69,7 @@ export class SharedService extends EventTarget {
         const providerId = await this.#clientId;
         const broadcastChannel = new BroadcastChannel('SharedService');
         broadcastChannel.addEventListener('message', async ({data}) => {
-          if (data?.type === 'request' && data?.sharedService === this.#name) {
+          if (data?.type === 'request' && data?.sharedService === this.#serviceName) {
             // Get a port to send to the client.
             const requestedPort = await new Promise(resolve => {
               port.addEventListener('message', event => {
@@ -73,7 +78,7 @@ export class SharedService extends EventTarget {
               port.postMessage(data.clientId);
             });
 
-            // Attach a port and forward to the client via the service worker.
+            // Return the port to the client via the service worker.
             const serviceWorker = await navigator.serviceWorker.ready;
             serviceWorker.active.postMessage(data, [requestedPort]);
           }
@@ -82,7 +87,7 @@ export class SharedService extends EventTarget {
         // Tell everyone that we are the new provider.
         broadcastChannel.postMessage({
           type: 'provider',
-          sharedService: this.#name,
+          sharedService: this.#serviceName,
           providerId
         });
 
@@ -112,7 +117,11 @@ export class SharedService extends EventTarget {
   async #getClientId() {
     // Getting the clientId from the service worker accomplishes two things:
     // 1. It gets the clientId for this context.
-    // 2. It ensures that the service worker is ready.
+    // 2. It ensures that the service worker is activated.
+    //
+    // It is possible to do this without polling but it requires about the
+    // same amount of code and using fetch makes 100% certain the service
+    // worker is handling requests.
     let clientId;
     while (!clientId) {
       clientId = await fetch('./clientId').then(response => {
@@ -147,44 +156,45 @@ export class SharedService extends EventTarget {
     /** @type {MessagePort} */ let providerPort;
     const clientId = await this.#clientId;
     while (!providerPort && providerCounter === this.#providerCounter) {
-      const abortController = new AbortController();
-      try {
-        // Broadcast a request for the port.
-        const nonce = randomString();
-        this.#clientChannel.postMessage({
-          type: 'request', nonce,
-          sharedService: this.#name,
-          clientId
-        });
+      // Broadcast a request for the port.
+      const nonce = randomString();
+      this.#clientChannel.postMessage({
+        type: 'request', nonce,
+        sharedService: this.#serviceName,
+        clientId
+      });
 
-        // Wait for the provider to respond (via the service worker) or
-        // timeout. A timeout can occur if there is no provider to receive
-        // the broadcast or if the provider is too busy.
-        const providerPortReady = new Promise(resolve => {
-          navigator.serviceWorker.addEventListener('message', event => {
-            if (event.data?.nonce === nonce) {
-              resolve(event.ports[0]);
-            }
-          }, { signal: abortController.signal });
-        });
+      // Wait for the provider to respond (via the service worker) or
+      // timeout. A timeout can occur if there is no provider to receive
+      // the broadcast or if the provider is too busy.
+      const providerPortReady = new Promise(resolve => {
+        const abortController = new AbortController();
+        navigator.serviceWorker.addEventListener('message', event => {
+          if (event.data?.nonce === nonce) {
+            resolve(event.ports[0]);
+            abortController.abort();
+          }
+        }, { signal: abortController.signal });
+        this.#providerChangeCleanup.push(() => abortController.abort());
+      });
 
-        providerPort = await Promise.race([
-          providerPortReady,
-          new Promise(resolve => setTimeout(() => resolve(null), PROVIDER_REQUEST_TIMEOUT))
-        ]);
+      providerPort = await Promise.race([
+        providerPortReady,
+        new Promise(resolve => setTimeout(() => resolve(null), PROVIDER_REQUEST_TIMEOUT))
+      ]);
 
-        if (!providerPort) {
-          // Close the port if it arrives after the timeout.
-          providerPortReady.then(port => port?.close());
-        }
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        abortController.abort();
+      if (!providerPort) {
+        // The provider request timed out. If it does eventually arrive
+        // just close it.
+        providerPortReady.then(port => port?.close());
       }
     }
 
     if (providerPort && providerCounter === this.#providerCounter) {
+      // Clean up all earlier attempts to get the provider port.
+      this.#providerChangeCleanup.forEach(f => f());
+      this.#providerChangeCleanup = [];
+
       // Configure the port.
       providerPort.addEventListener('message', ({data}) => {
         const callbacks = this.providerCallbacks.get(data.nonce);
@@ -197,6 +207,9 @@ export class SharedService extends EventTarget {
       providerPort.start();
       return providerPort;
     } else {
+      // Either there is no port because this request timed out, or there
+      // is a port but it is already obsolete because a new provider has
+      // announced itself.
       providerPort?.close();
       return null;
     }
