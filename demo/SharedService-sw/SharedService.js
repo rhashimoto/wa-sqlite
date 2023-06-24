@@ -78,9 +78,7 @@ export class SharedService extends EventTarget {
               port.postMessage(data.clientId);
             });
 
-            // Return the port to the client via the service worker.
-            const serviceWorker = await navigator.serviceWorker.ready;
-            serviceWorker.active.postMessage(data, [requestedPort]);
+            this.#sendPortToClient(data, requestedPort);
           }
         }, { signal: this.#onDeactivate.signal });
 
@@ -114,6 +112,12 @@ export class SharedService extends EventTarget {
     }
   }
 
+  async #sendPortToClient(message, port) {
+    // Return the port to the client via the service worker.
+    const serviceWorker = await navigator.serviceWorker.ready;
+    serviceWorker.active.postMessage(message, [port]);
+  };
+
   async #getClientId() {
     // Getting the clientId from the service worker accomplishes two things:
     // 1. It gets the clientId for this context.
@@ -132,6 +136,11 @@ export class SharedService extends EventTarget {
         return new Promise(resolve => setTimeout(resolve, 100));
       });
     }
+
+    navigator.serviceWorker.addEventListener('message', event => {
+      event.data.ports = event.ports;
+      this.dispatchEvent(new MessageEvent('message', { data: event.data }));
+    });
 
     // Acquire a Web Lock named after the clientId. This lets other contexts
     // track this context's lifetime.
@@ -169,9 +178,9 @@ export class SharedService extends EventTarget {
       // the broadcast or if the provider is too busy.
       const providerPortReady = new Promise(resolve => {
         const abortController = new AbortController();
-        navigator.serviceWorker.addEventListener('message', event => {
+        this.addEventListener('message', event => {
           if (event.data?.nonce === nonce) {
-            resolve(event.ports[0]);
+            resolve(event.data.ports[0]);
             abortController.abort();
           }
         }, { signal: abortController.signal });
@@ -198,7 +207,7 @@ export class SharedService extends EventTarget {
       // Configure the port.
       providerPort.addEventListener('message', ({data}) => {
         const callbacks = this.providerCallbacks.get(data.nonce);
-        if (data.result) {
+        if (!data.error) {
           callbacks.resolve(data.result);
         } else {
           callbacks.reject(Object.assign(new Error(), data.error));

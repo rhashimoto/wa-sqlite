@@ -1,58 +1,52 @@
+const PROVIDER_REQUEST_TIMEOUT = 1000;
 const DEFAULT_SHARED_WORKER_PATH = './SharedService_SharedWorker.js';
 
+const sharedWorker = new SharedWorker(DEFAULT_SHARED_WORKER_PATH);
+
 export class SharedService extends EventTarget {
-  /** @type {string} */ #name;
+  /** @type {string} */ #serviceName;
+  /** @type {Promise<string>} */ #clientId;
   /** @type {() => MessagePort|Promise<MessagePort>} */ #portProviderFunc;
 
-  /** @type {SharedWorker} */ #sharedWorker;
+  // This BroadcastChannel is used for client messaging. The provider
+  // must have a separate BroadcastChannel in case the instance is
+  // both client and provider.
+  #clientChannel = new BroadcastChannel('SharedService');
 
-  /** @type {AbortController} */ #onClose = new AbortController();
   /** @type {AbortController} */ #onDeactivate;
+  /** @type {AbortController} */ #onClose = new AbortController();
 
-  /** @type {string} */ #clientId;
-  /** @type {Promise} */ #hasOwnLock;
-
-  /** @type {MessagePort} */ #servicePort;
-  /** @type {Map<string, { resolve, reject }>} */ #callbacks = new Map();
+  // This is client state to track the provider. The provider state is
+  // mostly managed within activate().
+  /** @type {Promise<MessagePort>} */ #providerPort;
+  /** @type {Map<string, { resolve, reject }>} */ providerCallbacks = new Map();
+  #providerCounter = 0;
+  #providerChangeCleanup = [];
 
   /** @type {{ [method: string] : (...args: any) => Promise<*> }} */ proxy;
 
   /**
-   * @param {string} name 
+   * @param {string} serviceName
    * @param {() => MessagePort|Promise<MessagePort>} portProviderFunc 
-   * @param {string} [sharedWorkerPath] 
    */
-  constructor(name, portProviderFunc, sharedWorkerPath = DEFAULT_SHARED_WORKER_PATH) {
+  constructor(serviceName, portProviderFunc) {
     super();
 
-    this.#name = name;
+    this.#serviceName = serviceName;
     this.#portProviderFunc = portProviderFunc;
 
-    // A SharedWorker provides a MessagePort to the service.
-    this.#sharedWorker = new SharedWorker(sharedWorkerPath);
-    this.#sharedWorker.port.addEventListener('message', event => {
-      this.#configureServicePort(event.ports[0]);
-      this.dispatchEvent(new CustomEvent('service-port'));
-    });
-    this.#sharedWorker.port.start();
+    this.#clientId = this.#getClientId();
 
-    // The SharedWorker also broadcasts when the service provider changes.
-    new BroadcastChannel('SharedService').addEventListener('message', ({data}) => {
-      if (data === this.#name) {
-        this.#providerChange();
+    // Connect to the current provider and future providers.
+    this.#providerPort = this.#providerChange();
+    this.#clientChannel.addEventListener('message', ({data}) => {
+      if (data?.type === 'provider' && data?.sharedService === this.#serviceName) {
+        // A context (possibly this one) announced itself as the new provider.
+        // Discard any old provider and connect to the new one.
+        this.#closeProviderPort(this.#providerPort);
+        this.#providerPort = this.#providerChange();
       }
     }, { signal: this.#onClose.signal });
-
-    // Acquire an exclusive lock on our own random id. This allows the
-    // service to clean up our channel after we go away.
-    this.#hasOwnLock = new Promise(resolve => {
-      this.#clientId = `SharedService-${this.#name}-${randomString()}`;
-      navigator.locks.request(this.#clientId, () => new Promise(releaseLock => {
-        resolve();
-        this.#onClose.signal.addEventListener('abort', releaseLock);
-      }));
-    });
-    this.#requestServicePort();
 
     this.proxy = this.#createProxy();
   }
@@ -60,19 +54,50 @@ export class SharedService extends EventTarget {
   activate() {
     if (this.#onDeactivate) return;
 
-    // If we acquire the lock then we are the service provider.
+    // When acquire a lock on the service name then we become the service
+    // provider. Only one instance at a time will get the lock; the rest
+    // will wait their turn.
     this.#onDeactivate = new AbortController();
     navigator.locks.request(
-      `SharedService-${this.#name}`,
+      `SharedService-${this.#serviceName}`,
       { signal: this.#onDeactivate.signal },
       async () => {
-        // Register a new port provider with the SharedWorker.
+        // Get the port to request client ports.
         const port = await this.#portProviderFunc();
-        this.#sharedWorker.port.postMessage(this.#name, [port]);
+        port.start();
+
+        // Listen for client requests. A separate BroadcastChannel
+        // instance is necessary because we may be serving our own
+        // request.
+        const providerId = await this.#clientId;
+        const broadcastChannel = new BroadcastChannel('SharedService');
+        broadcastChannel.addEventListener('message', async ({data}) => {
+          if (data?.type === 'request' && data?.sharedService === this.#serviceName) {
+            // Get a port to send to the client.
+            const requestedPort = await new Promise(resolve => {
+              port.addEventListener('message', event => {
+                resolve(event.ports[0]);
+              }, { once: true });
+              port.postMessage(data.clientId);
+            });
+
+            this.#sendPortToClient(data, requestedPort);
+          }
+        }, { signal: this.#onDeactivate.signal });
+
+        // Tell everyone that we are the new provider.
+        broadcastChannel.postMessage({
+          type: 'provider',
+          sharedService: this.#serviceName,
+          providerId
+        });
 
         // Release the lock only on user abort or context destruction.
         return new Promise((_, reject) => {
-          this.#onDeactivate.signal.addEventListener('abort', reject);
+          this.#onDeactivate.signal.addEventListener('abort', () => {
+            broadcastChannel.close();
+            reject(this.#onDeactivate.signal.reason);
+          });
         });
       });
   }
@@ -85,45 +110,119 @@ export class SharedService extends EventTarget {
   close() {
     this.deactivate();
     this.#onClose.abort();
-    for (const { reject } of this.#callbacks.values()) {
+    for (const { reject } of this.providerCallbacks.values()) {
       reject(new Error('SharedService closed'));
     }
   }
 
-  async #requestServicePort() {
-    await this.#hasOwnLock;
-    this.#sharedWorker.port.postMessage({
-      name: this.#name,
-      lockId: this.#clientId
+  async #sendPortToClient(message, port) {
+    sharedWorker.port.postMessage(message, [port]);
+  };
+
+  async #getClientId() {
+    // Use a Web Lock to determine our clientId.
+    const nonce = Math.random().toString();
+    const clientId = await navigator.locks.request(nonce, async () => {
+      const { held } = await navigator.locks.query();
+      return held.find(lock => lock.name === nonce)?.clientId;
+    })
+
+    // Acquire a Web Lock named after the clientId. This lets other contexts
+    // track this context's lifetime.
+    await new Promise(resolve => {
+      navigator.locks.request(clientId, () => new Promise(releaseLock => {
+        resolve();
+        this.#onClose.signal.addEventListener('abort', releaseLock);
+      }));
     });
+
+    // Configure message forwarding via the SharedWorker. This must be
+    // done after acquiring the clientId lock to avoid a race condition
+    // in the SharedWorker.
+    sharedWorker.port.addEventListener('message', event => {
+      event.data.ports = event.ports;
+      this.dispatchEvent(new MessageEvent('message', { data: event.data }));
+    });
+    sharedWorker.port.start();
+    sharedWorker.port.postMessage({ clientId });
+
+    return clientId;
   }
 
-  #configureServicePort(servicePort) {
-    this.#servicePort?.close();
-    this.#servicePort = servicePort;
-    this.#servicePort.addEventListener('message', ({data}) => {
-      const callbacks = this.#callbacks.get(data.nonce);
-      if (data.result) {
-        callbacks.resolve(data.result);
-      } else {
-        callbacks.reject(Object.assign(new Error(), data.error));
+  async #providerChange() {
+    // Multiple calls to this function could be in flight at once. If that
+    // happens, we only care about the most recent call, i.e. the one
+    // assigned to this.#providerPort. This counter lets us determine
+    // whether this call is still the most recent.
+    const providerCounter = ++this.#providerCounter;
+
+    // Obtain a MessagePort from the provider. The request can fail during
+    // a provider transition, so retry until successful.
+    /** @type {MessagePort} */ let providerPort;
+    const clientId = await this.#clientId;
+    while (!providerPort && providerCounter === this.#providerCounter) {
+      // Broadcast a request for the port.
+      const nonce = randomString();
+      this.#clientChannel.postMessage({
+        type: 'request', nonce,
+        sharedService: this.#serviceName,
+        clientId
+      });
+
+      // Wait for the provider to respond (via the service worker) or
+      // timeout. A timeout can occur if there is no provider to receive
+      // the broadcast or if the provider is too busy.
+      const providerPortReady = new Promise(resolve => {
+        const abortController = new AbortController();
+        this.addEventListener('message', event => {
+          if (event.data?.nonce === nonce) {
+            resolve(event.data.ports[0]);
+            abortController.abort();
+          }
+        }, { signal: abortController.signal });
+        this.#providerChangeCleanup.push(() => abortController.abort());
+      });
+
+      providerPort = await Promise.race([
+        providerPortReady,
+        new Promise(resolve => setTimeout(() => resolve(null), PROVIDER_REQUEST_TIMEOUT))
+      ]);
+
+      if (!providerPort) {
+        // The provider request timed out. If it does eventually arrive
+        // just close it.
+        providerPortReady.then(port => port?.close());
       }
-    });
-    this.#servicePort.start();
+    }
+
+    if (providerPort && providerCounter === this.#providerCounter) {
+      // Clean up all earlier attempts to get the provider port.
+      this.#providerChangeCleanup.forEach(f => f());
+      this.#providerChangeCleanup = [];
+
+      // Configure the port.
+      providerPort.addEventListener('message', ({data}) => {
+        const callbacks = this.providerCallbacks.get(data.nonce);
+        if (!data.error) {
+          callbacks.resolve(data.result);
+        } else {
+          callbacks.reject(Object.assign(new Error(), data.error));
+        }
+      });
+      providerPort.start();
+      return providerPort;
+    } else {
+      // Either there is no port because this request timed out, or there
+      // is a port but it is already obsolete because a new provider has
+      // announced itself.
+      providerPort?.close();
+      return null;
+    }
   }
 
-  /**
-   * This handler is called when the SharedWorker broadcasts a change
-   * in the service provider.
-   */
-  #providerChange() {
-    // Fetch the new port for proxying calls.
-    this.#servicePort?.close();
-    this.#servicePort = null;
-    this.#requestServicePort();
-
-    // Reject any pending calls.
-    for (const { reject } of this.#callbacks.values()) {
+  #closeProviderPort(providerPort) {
+    providerPort.then(port => port?.close());
+    for (const { reject } of this.providerCallbacks.values()) {
       reject(new Error('SharedService provider change'));
     }
   }
@@ -136,18 +235,12 @@ export class SharedService extends EventTarget {
           // the responses to be out of order.
           const nonce = randomString();
 
-          // Wait for a valid service port.
-          const servicePort = this.#servicePort || await new Promise(resolve => {
-            this.addEventListener('service-port', () => {
-              resolve(this.#servicePort);
-            }, { once: true });
-          });
-
+          const providerPort = await this.#providerPort;
           return new Promise((resolve, reject) => {
-            this.#callbacks.set(nonce, { resolve, reject });
-            servicePort.postMessage({ nonce, method, args });
+            this.providerCallbacks.set(nonce, { resolve, reject });
+            providerPort.postMessage({ nonce, method, args });
           }).finally(() => {
-            this.#callbacks.delete(nonce);
+            this.providerCallbacks.delete(nonce);
           });
         }
       }
@@ -162,12 +255,12 @@ export class SharedService extends EventTarget {
  */
 export function createSharedServicePort(target) {
   const { port1: providerPort1, port2: providerPort2 } = new MessageChannel();
-  providerPort1.addEventListener('message', ({data: lockId}) => {
+  providerPort1.addEventListener('message', ({data: clientId}) => {
     const { port1, port2 } = new MessageChannel();
 
     // The port requester holds a lock while using the channel. When the
     // lock is released by the requester, clean up the port on this side.
-    navigator.locks.request(lockId, () => {
+    navigator.locks.request(clientId, () => {
       port1.close();
     });
 
