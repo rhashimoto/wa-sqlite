@@ -1,7 +1,9 @@
 const PROVIDER_REQUEST_TIMEOUT = 1000;
-const DEFAULT_SHARED_WORKER_PATH = './SharedService_SharedWorker.js';
+const DEFAULT_SHARED_WORKER_PATH = new URL('./SharedService_SharedWorker.js', import.meta.url);
 
-const sharedWorker = new SharedWorker(DEFAULT_SHARED_WORKER_PATH);
+const sharedWorker = globalThis.SharedWorker ?
+  new SharedWorker(DEFAULT_SHARED_WORKER_PATH) :
+  null;
 
 export class SharedService extends EventTarget {
   /** @type {string} */ #serviceName;
