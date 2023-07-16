@@ -368,8 +368,6 @@ export class AccessHandlePoolVFS extends VFS.Base {
       // This OPFS file doesn't represent any SQLite file so it doesn't
       // need to keep any data.
       accessHandle.truncate(HEADER_OFFSET_DATA);
-
-      this.#mapPathToAccessHandle.delete(path);
       this.#availableAccessHandles.add(accessHandle);
     }
   }
@@ -420,6 +418,7 @@ export class AccessHandlePoolVFS extends VFS.Base {
     const accessHandle = this.#mapPathToAccessHandle.get(path);
     if (accessHandle) {
       // Un-associate the SQLite path from the OPFS file.
+      this.#mapPathToAccessHandle.delete(path);
       this.#setAssociatedPath(accessHandle, '', 0);
     }
   }
