@@ -25,7 +25,7 @@ export class SharedService extends EventTarget {
   #providerCounter = 0;
   #providerChangeCleanup = [];
 
-  /** @type {{ [method: string] : (...args: any) => Promise<*> }} */ proxy;
+  proxy;
 
   /**
    * @param {string} serviceName
@@ -252,7 +252,7 @@ export class SharedService extends EventTarget {
 
 /**
  * Wrap a target with MessagePort for proxying.
- * @param {{ [method: string]: (...args) => any }} target 
+ * @param {object} target 
  * @returns 
  */
 export function createSharedServicePort(target) {
