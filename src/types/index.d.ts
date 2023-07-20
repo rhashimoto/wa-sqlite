@@ -15,7 +15,7 @@
  * each element converted to a byte); SQLite always returns blob data as
  * `Uint8Array`
  */
-type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|BigInt|null;
+type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|bigint|null;
 
 /**
  * SQLite Virtual File System object
