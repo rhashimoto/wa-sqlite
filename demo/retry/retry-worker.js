@@ -152,8 +152,12 @@ class DatabaseService {
     }
 
     // The default journal mode DELETE is not compatible with the
-    // RetryVFS. Use TRUNCATE instead.
-    this.query('PRAGMA journal_mode=TRUNCATE;');
+    // RetryVFS so use TRUNCATE instead. RetryVFS cannot delete files
+    // so temporary tables and indices must be stored in memory.
+    this.query(`
+      PRAGMA journal_mode=TRUNCATE;
+      PRAGMA temp_store=MEMORY;
+    `);
   }
 }
 
