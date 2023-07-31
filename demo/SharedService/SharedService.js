@@ -131,12 +131,10 @@ export class SharedService extends EventTarget {
 
     // Acquire a Web Lock named after the clientId. This lets other contexts
     // track this context's lifetime.
-    await new Promise(resolve => {
-      navigator.locks.request(clientId, () => new Promise(releaseLock => {
-        resolve();
-        this.#onClose.signal.addEventListener('abort', releaseLock);
-      }));
-    });
+    // TODO: It would be better to lock on the clientId+serviceName (passing
+    // that lock name in the service request). That would allow independent
+    // instance lifetime tracking.
+    await SharedService.#acquireContextLock(clientId);
 
     // Configure message forwarding via the SharedWorker. This must be
     // done after acquiring the clientId lock to avoid a race condition
@@ -248,6 +246,17 @@ export class SharedService extends EventTarget {
       }
     });
   }
+
+  static #acquireContextLock = (function() {
+    let p;
+    return function(clientId) {
+      return p ? p : p = new Promise(resolve => {
+        navigator.locks.request(clientId, () => new Promise(_ => {
+          resolve();
+        }));
+      });
+    }
+  })();
 }
 
 /**
