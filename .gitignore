@@ -1,3 +1,5 @@
+.DS_Store
+
 # https://yarnpkg.com/getting-started/qa/#which-files-should-be-gitignored
 .yarn/*
 !.yarn/patches

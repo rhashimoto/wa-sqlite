@@ -89,9 +89,11 @@ const mod_methods = {
       struct['idxStr'] = null;
       struct['orderByConsumed'] = !!getValue(p + offset[8], 'i8');
       struct['estimatedCost'] = getValue(p + offset[9], 'double');
-      struct['estimatedRows'] = getValue(p + offset[10], 'i64');
+      // TODO: Get i64 as bigint.
+      struct['estimatedRows'] = getValue(p + offset[10], 'i32');
       struct['idxFlags'] = getValue(p + offset[11], 'i32');
-      struct['colUsed'] = getValue(p + offset[12], 'i64');
+      // TODO: Get i64 as bigint.
+      struct['colUsed'] = getValue(p + offset[12], 'i32');
       return struct;
     }
 
@@ -134,7 +136,8 @@ const mod_methods = {
       }
       setValue(p + offset[8], struct['orderByConsumed'], 'i32');
       setValue(p + offset[9], struct['estimatedCost'], 'double');
-      setValue(p + offset[10], struct['estimatedRows'], 'i64');
+      // TODO: Get i64 as bigint.
+      setValue(p + offset[10], struct['estimatedRows'], 'i32');
       setValue(p + offset[11], struct['idxFlags'], 'i32');
     }
 
