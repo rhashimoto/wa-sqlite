@@ -44,7 +44,7 @@ jobs:
     - run: yarn install
 
     - name: Test with checked-in WASM files
-      run: yarn test
+      run: yarn test --reporters progress
 
     # Install EMSDK
     - name: Setup Emscripten
@@ -62,4 +62,4 @@ jobs:
     - name: Test WASM build
       run: |
         make clean && make
-        yarn test
+        yarn test --reporters progress
