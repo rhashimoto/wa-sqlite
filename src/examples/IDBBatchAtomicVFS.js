@@ -39,6 +39,7 @@ function log(...args) {
  * @property {string} path
  * @property {number} flags
  * @property {FileBlock} block0
+ * @property {boolean} isMetadataChanged
  * @property {WebLocks} locks
  * 
  * @property {Set<number>} [changedPages]
@@ -94,6 +95,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           path: url.pathname,
           flags,
           block0: null,
+          isMetadataChanged: true,
           locks: new WebLocks(url.pathname)
         };
         this.#mapIdToFile.set(fileId, file);
@@ -241,12 +243,17 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     log(`xWrite ${file.path} ${pData.byteLength} ${iOffset}`);
 
     try {
+      // Update file size if appending.
+      const prevFileSize = file.block0.fileSize;
+      if (file.block0.fileSize < iOffset + pData.byteLength) {
+        file.block0.fileSize = iOffset + pData.byteLength;
+        file.isMetadataChanged = true;
+      }
+
       // Convert the write directly into an IndexedDB object. Our assumption
       // is that SQLite will only overwrite data with an xWrite of the same
       // offset and size unless the database page size changes, except when
       // changing database page size which is handled by #reblockIfNeeded().
-      const prevFileSize = file.block0.fileSize;
-      file.block0.fileSize = Math.max(file.block0.fileSize, iOffset + pData.byteLength);
       const block = iOffset === 0 ? file.block0 : {
         path: file.path,
         offset: -iOffset,
@@ -271,6 +278,9 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // Not a batch atomic write so write through.
         this.#idb.run('readwrite', ({blocks}) => blocks.put(block));
       }
+
+      // Clear dirty flag if page 0 was written.
+      file.isMetadataChanged = iOffset === 0 ? false : file.isMetadataChanged;
       return VFS.SQLITE_OK;
     } catch (e) {
       console.error(e);
@@ -485,6 +495,18 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             return VFS.SQLITE_IOERR;
           }
         }
+
+        if (file.isMetadataChanged) {
+          // Metadata has changed so write block 0 to IndexedDB.
+          try {
+            this.#idb.run('readwrite', async ({blocks}) => {
+              await blocks.put(file.block0);
+            });
+          } catch (e) {
+            console.error(e);
+            return VFS.SQLITE_IOERR;
+          }
+        }
         return VFS.SQLITE_OK;
 
       case 22: // SQLITE_FCNTL_COMMIT_PHASETWO
@@ -522,6 +544,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
           block0.data = block0.data.slice();
           const changedPages = file.changedPages;
           file.changedPages = null;
+          file.isMetadataChanged = false;
           this.#idb.run('readwrite', async ({blocks})=> {
             // Write block 0 to commit the new version.
             blocks.put(block0);
@@ -557,6 +580,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             // be left in IndexedDB to be removed by the next atomic write
             // transaction.
             file.changedPages = null;
+            file.isMetadataChanged = false;
             file.block0 = await this.#idb.run('readonly', ({blocks}) => {
               return blocks.get([file.path, 0, file.block0.version + 1]);
             });
