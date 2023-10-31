@@ -10,11 +10,27 @@ const DBFILE_MAGIC = 'SQLite format 3\x00';
 document.getElementById('file-import').addEventListener('change', async event => {
   let vfs;
   try {
-    log('Importing database...');
+    log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
     vfs = new IDBBatchAtomicVFS(IDB_NAME);
     // @ts-ignore
     await importDatabase(vfs, DB_NAME, event.target.files[0].stream());
     log('Import complete');
+
+    log('Verifying database integrity');
+    const url = new URL('./verifier.js', location.href);
+    url.searchParams.set('idb', IDB_NAME);
+    url.searchParams.set('db', DB_NAME);
+    const worker = new Worker(url, { type: 'module' });
+    await new Promise(resolve => {
+      worker.addEventListener('message', ({data}) => {
+        resolve();
+        for (const row of data) {
+          log(`integrity result: ${row}`);
+        }
+        worker.terminate();
+      });
+    });
+    log('Verification complete');
   } catch (e) {
     log(e.toString());
     throw e;
@@ -34,6 +50,7 @@ async function importDatabase(vfs, path, stream) {
     const reader = stream.getReader();
 
     // Read at least the file header fields we need.
+    log('Reading file header...');
     while (chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0) < 32) {
       const { done, value } = await reader.read();
       if (done) throw new Error('Unexpected end of file');
@@ -55,7 +72,9 @@ async function importDatabase(vfs, path, stream) {
     // Extract page parameters.
     const pageSize = (field => field === 1 ? 65536 : field)(header.getUint16(16));
     const pageCount = header.getUint32(28);
+    log(`${pageCount} pages, ${pageSize} bytes each, ${pageCount * pageSize} bytes total`);
 
+    log('Copying pages...');
     for (let i = 0; i < pageCount; ++i) {
       // Read enough chunks to produce the next page.
       while (chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0) < pageSize) {
@@ -92,10 +111,11 @@ async function importDatabase(vfs, path, stream) {
 
   const onFinally = [];
   try {
-    // Delete any existing file.
-    await vfs.xDelete(path, 0);
+    log(`Deleting ${path}...`);
+    await vfs.xDelete(path, 1);
 
     // Create the file.
+    log(`Creating ${path}...`);
     const fileId = 1234;
     const flags = VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE;
     await check(vfs.xOpen(path, fileId, flags, new DataView(new ArrayBuffer(4))));
