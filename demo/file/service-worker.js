@@ -100,6 +100,6 @@ class DatabaseSource {
 
 async function check(code) {
   if (await code !== VFS.SQLITE_OK) {
-    throw new Error(`Error code: ${code}`);
+    throw new Error(`Error code: ${await code}`);
   }
 }
