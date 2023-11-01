@@ -7,6 +7,33 @@ const DB_NAME = SEARCH_PARAMS.get('db') ?? 'sqlite.db';
 
 const DBFILE_MAGIC = 'SQLite format 3\x00';
 
+// Use a service worker for downloading. This is currently the only
+// cross-browser way to stream to a local file.
+navigator.serviceWorker.register('service-worker.js', { type: 'module' });
+(async function() {
+  // Enable the export button when the service worker is responding.
+  while (true) {
+    let delay = 25;
+    const response = await fetch('./export?check=true');
+    if (response.ok) {
+      // @ts-ignore
+      document.getElementById('file-export').disabled = false;
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay = Math.min(delay * 2, 5000);
+  }
+})();
+
+document.getElementById('file-export').addEventListener('click', async () => {
+  // Fetch from the special URL handled by the service worker. All
+  // the magic happens there.
+  const url = new URL('./export', location.href);
+  url.searchParams.set('idb', IDB_NAME);
+  url.searchParams.set('db', DB_NAME);
+  window.open(url);
+});
+
 document.getElementById('file-import').addEventListener('change', async event => {
   let vfs;
   try {
@@ -16,6 +43,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
     await importDatabase(vfs, DB_NAME, event.target.files[0].stream());
     log('Import complete');
 
+    // Use a Worker to verify the database with SQLite.
     log('Verifying database integrity');
     const url = new URL('./verifier.js', location.href);
     url.searchParams.set('idb', IDB_NAME);
@@ -45,6 +73,8 @@ document.getElementById('file-import').addEventListener('change', async event =>
  * @param {ReadableStream} stream 
  */
 async function importDatabase(vfs, path, stream) {
+  // This generator converts arbitrary sized chunks from the stream
+  // into SQLite pages.
   async function* pagify() {
     /** @type {Uint8Array[]} */ const chunks = [];
     const reader = stream.getReader();
@@ -57,7 +87,7 @@ async function importDatabase(vfs, path, stream) {
       chunks.push(value);
     }
 
-    // Assemble the file header.
+    // Consolidate the header into a single DataView.
     let copyOffset = 0;
     const header = new DataView(new ArrayBuffer(32));
     for (const chunk of chunks) {
@@ -71,11 +101,12 @@ async function importDatabase(vfs, path, stream) {
       throw new Error('Not a SQLite database file');
     }
 
-    // Extract page parameters.
+    // Extract page fields.
     const pageSize = (field => field === 1 ? 65536 : field)(header.getUint16(16));
     const pageCount = header.getUint32(28);
     log(`${pageCount} pages, ${pageSize} bytes each, ${pageCount * pageSize} bytes total`);
 
+    // Yield each page in sequence.
     log('Copying pages...');
     for (let i = 0; i < pageCount; ++i) {
       // Read enough chunks to produce the next page.
@@ -85,7 +116,7 @@ async function importDatabase(vfs, path, stream) {
         chunks.push(value);
       }
 
-      // Assemble the page.
+      // Assemble the page into a single Uint8Array.
       // TODO: Optimize case where first chunk has >= pageSize bytes.
       let copyOffset = 0;
       const page = new Uint8Array(pageSize);
@@ -94,8 +125,8 @@ async function importDatabase(vfs, path, stream) {
         const src = chunks[0].subarray(0, pageSize - copyOffset);
         const dst = new Uint8Array(page.buffer, copyOffset);
         dst.set(src);
-
         copyOffset += src.byteLength;
+
         if (src.byteLength === chunks[0].byteLength) {
           // All the bytes in the chunk were consumed.
           chunks.shift();
@@ -130,8 +161,8 @@ async function importDatabase(vfs, path, stream) {
     onFinally.push(() => vfs.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED));
     await check(vfs.xLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE));
 
-    const empty = new DataView(new ArrayBuffer(4));
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, empty);
+    const ignored = new DataView(new ArrayBuffer(4));
+    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ignored);
 
     // Write pages.
     let iOffset = 0;
@@ -140,8 +171,8 @@ async function importDatabase(vfs, path, stream) {
       iOffset += page.byteLength;
     }
 
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE, empty);
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, empty);
+    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE, ignored);
+    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, ignored);
     await vfs.xSync(fileId, VFS.SQLITE_SYNC_NORMAL);
   } finally {
     while (onFinally.length) {
