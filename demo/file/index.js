@@ -61,8 +61,10 @@ async function importDatabase(vfs, path, stream) {
     let copyOffset = 0;
     const header = new DataView(new ArrayBuffer(32));
     for (const chunk of chunks) {
+      const src = chunk.subarray(0, header.byteLength - copyOffset);
       const dst = new Uint8Array(header.buffer, copyOffset);
-      dst.set(chunk.subarray(0, header.byteLength - copyOffset));
+      dst.set(src);
+      copyOffset += src.byteLength;
     }
 
     if (new TextDecoder().decode(header.buffer.slice(0, 16)) !== DBFILE_MAGIC) {
