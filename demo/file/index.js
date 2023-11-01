@@ -12,16 +12,18 @@ const DBFILE_MAGIC = 'SQLite format 3\x00';
 navigator.serviceWorker.register('service-worker.js', { type: 'module' });
 (async function() {
   // Enable the export button when the service worker is responding.
+  let delay = 25;
+  const start = performance.now();
   while (true) {
-    let delay = 25;
     const response = await fetch('./export?check=true');
     if (response.ok) {
       // @ts-ignore
       document.getElementById('file-export').disabled = false;
       return;
     }
+    if (performance.now() - start > 60_000) throw new Error('service worker timeout');
     await new Promise(resolve => setTimeout(resolve, delay));
-    delay = Math.min(delay * 2, 5000);
+    delay *= 2;
   }
 })();
 
