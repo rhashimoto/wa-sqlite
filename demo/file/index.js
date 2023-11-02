@@ -146,9 +146,6 @@ async function importDatabase(vfs, path, stream) {
 
   const onFinally = [];
   try {
-    log(`Deleting ${path}...`);
-    await vfs.xDelete(path, 1);
-
     // Create the file.
     log(`Creating ${path}...`);
     const fileId = 1234;
@@ -165,6 +162,9 @@ async function importDatabase(vfs, path, stream) {
 
     const ignored = new DataView(new ArrayBuffer(4));
     await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ignored);
+
+    // Truncate file.
+    await check(vfs.xTruncate(fileId, 0));
 
     // Write pages.
     let iOffset = 0;
