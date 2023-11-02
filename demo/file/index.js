@@ -33,7 +33,10 @@ document.getElementById('file-export').addEventListener('click', async () => {
   const url = new URL('./export', location.href);
   url.searchParams.set('idb', IDB_NAME);
   url.searchParams.set('db', DB_NAME);
-  window.open(url);
+
+  const a = /** @type {HTMLAnchorElement} */(document.getElementById('file-download'));
+  a.href = url.href;
+  a.click();
 });
 
 document.getElementById('file-import').addEventListener('change', async event => {
