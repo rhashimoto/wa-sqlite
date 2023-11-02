@@ -14,22 +14,28 @@ globalThis.addEventListener('fetch', async (/** @type {FetchEvent} */ event) => 
   if (!url.href.includes(globalThis.registration.scope)) return;
   if (!url.pathname.endsWith('export')) return;
 
+  // A "check" request just returns a valid response. This lets any
+  // client context test whether the service worker is active.
   if (url.searchParams.has('check')) {
     return event.respondWith(new Response('OK'));
   }
 
+  // Create the VFS and streaming source using the request parameters.
   const vfs = new IDBBatchAtomicVFS(url.searchParams.get('idb'));
   const path = url.searchParams.get('db');
   const source = new DatabaseSource(vfs, path);
+
+  // Keep the service worker alive until the download is complete.
   event.waitUntil(source.isDone.finally(() => vfs.close()));
   return event.respondWith(new Response(new ReadableStream(source), {
     headers: {
-      "Content-Type": 'application/octet-stream',
-      "Content-Disposition": `attachment; filename=sqlite.db`
+      "Content-Type": 'application/vnd.sqlite3',
+      "Content-Disposition": `attachment; filename=${path.match(/[^/]+$/)[0]}`
     }
   }));
 });
 
+// This is a stateful source object for a ReadableStream.
 class DatabaseSource {
   isDone;
 
