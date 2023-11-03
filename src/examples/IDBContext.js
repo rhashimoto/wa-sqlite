@@ -126,6 +126,7 @@ export class IDBContext {
   async sync() {
     // Wait until all transactions since the previous sync have committed.
     // Throw if any transaction failed.
+    await this.#runChain;
     await this.#putChain;
     this.#putChain = Promise.resolve();
   }
