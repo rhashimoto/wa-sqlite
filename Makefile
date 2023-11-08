@@ -1,65 +1,62 @@
 # dependencies
-
-SQLITE_AMALGAMATION = sqlite-amalgamation-3440000
-SQLITE_AMALGAMATION_ZIP_URL = https://www.sqlite.org/2023/${SQLITE_AMALGAMATION}.zip
-SQLITE_AMALGAMATION_ZIP_SHA3 = 91b5884ad3dd634f84a0096751d6c36812542e1e0042ad7b2ba059e639921d7e
+SQLITE_VERSION = version-3.44.0
+SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=${SQLITE_VERSION}
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
 EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd4814807faabfa
 
 # source files
+CFILES = \
+	sqlite3.c \
+	extension-functions.c \
+	libauthorizer.c \
+	libfunction.c \
+	libmodule.c \
+	libprogress.c \
+	libvfs.c \
+	$(CFILES_EXTRA)
 
-LIBRARY_FILES = src/libauthorizer.js src/libfunction.js src/libmodule.js src/libprogress.js src/libvfs.js
+vpath %.c src
+vpath %.c deps
+vpath %.c deps/$(SQLITE_VERSION)
+
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 # intermediate files
-
-OBJ_FILES_DEBUG = \
-	tmp/obj/debug/sqlite3.o tmp/obj/debug/extension-functions.o \
-	tmp/obj/debug/libauthorizer.o \
-	tmp/obj/debug/libfunction.o \
-	tmp/obj/debug/libmodule.o \
-	tmp/obj/debug/libprogress.o \
-	tmp/obj/debug/libvfs.o
-
-OBJ_FILES_DIST = \
-	tmp/obj/dist/sqlite3.o tmp/obj/dist/extension-functions.o \
-	tmp/obj/dist/libauthorizer.o \
-	tmp/obj/dist/libfunction.o \
-	tmp/obj/dist/libmodule.o \
-	tmp/obj/dist/libprogress.o \
-	tmp/obj/dist/libvfs.o
+OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
+OBJ_FILES_DIST = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
 
 # build options
-
 EMCC ?= emcc
 
 CFLAGS_COMMON = \
-	-I'deps/$(SQLITE_AMALGAMATION)' \
-	-Wno-non-literal-null-conversion
-
-CFLAGS_DEBUG = $(CFLAGS_COMMON) -g
-
-CFLAGS_DIST = $(CFLAGS_COMMON) -Oz -flto
+	-I'deps/$(SQLITE_VERSION)' \
+	-Wno-non-literal-null-conversion \
+	$(CFLAGS_EXTRA)
+CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
+CFLAGS_DIST =  -Oz -flto $(CFLAGS_COMMON)
 
 EMFLAGS_COMMON = \
 	-s ALLOW_MEMORY_GROWTH=1 \
 	-s WASM=1 \
 	-s INVOKE_RUN \
 	-s ENVIRONMENT="web,worker" \
-	-s STACK_SIZE=512KB
+	-s STACK_SIZE=512KB \
+	$(EMFLAGS_EXTRA)
 
-EMFLAGS_DEBUG = $(EMFLAGS_COMMON) \
+EMFLAGS_DEBUG = \
 	-s ASSERTIONS=1 \
-	-g
+	-g \
+	$(EMFLAGS_COMMON)
 
-EMFLAGS_DIST = $(EMFLAGS_COMMON) \
+EMFLAGS_DIST = \
 	-Oz \
 	-flto \
-	--closure 1
+	--closure 1 \
+	$(EMFLAGS_COMMON)
 
 EMFLAGS_INTERFACES = \
 	-s EXPORTED_FUNCTIONS=@$(EXPORTED_FUNCTIONS) \
@@ -85,7 +82,7 @@ EMFLAGS_ASYNCIFY_DIST = \
 	-s ASYNCIFY_STACK_SIZE=16384
 
 # https://www.sqlite.org/compile.html
-WASQLITE_DEFINES ?= \
+WASQLITE_DEFINES = \
 	-DSQLITE_DEFAULT_MEMSTATUS=0 \
 	-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1 \
 	-DSQLITE_DQS=0 \
@@ -98,18 +95,8 @@ WASQLITE_DEFINES ?= \
 	-DSQLITE_OMIT_SHARED_CACHE \
 	-DSQLITE_THREADSAFE=0 \
 	-DSQLITE_USE_ALLOCA \
-	-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE
-
-WASQLITE_KS_DEFINES ?= $(WASQLITE_DEFINES) \
-  -DSQLITE_ENABLE_FTS5 \
-  -DSQLITE_ENABLE_RTREE \
-  -DSQLITE_ENABLE_EXPLAIN_COMMENTS \
-  -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION \
-  -DSQLITE_ENABLE_STMTVTAB \
-  -DSQLITE_ENABLE_DBPAGE_VTAB \
-  -DSQLITE_ENABLE_DBSTAT_VTAB \
-  -DSQLITE_ENABLE_BYTECODE_VTAB \
-  -DSQLITE_ENABLE_OFFSET_SQL_FUNC
+	-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE \
+	$(WASQLITE_EXTRA_DEFINES)
 
 # directories
 .PHONY: all
@@ -128,10 +115,6 @@ spotless:
 clean-cache:
 	rm -rf cache
 
-cache/$(SQLITE_AMALGAMATION).zip:
-	mkdir -p cache
-	curl -LsSf '$(SQLITE_AMALGAMATION_ZIP_URL)' -o $@
-
 cache/$(EXTENSION_FUNCTIONS):
 	mkdir -p cache
 	curl -LsSf '$(EXTENSION_FUNCTIONS_URL)' -o $@
@@ -142,15 +125,13 @@ clean-deps:
 	rm -rf deps
 
 .PHONY: deps
-deps: deps/$(SQLITE_AMALGAMATION) deps/$(EXTENSION_FUNCTIONS) deps/$(EXPORTED_FUNCTIONS)
+deps: deps/$(SQLITE_AMALGAMATION) deps/$(EXTENSION_FUNCTIONS)
 
-deps/$(SQLITE_AMALGAMATION): cache/$(SQLITE_AMALGAMATION).zip
-	mkdir -p deps
-	openssl dgst -sha3-256 -r cache/$(SQLITE_AMALGAMATION).zip | sed -e 's/\s.*//' > deps/sha3
-	echo $(SQLITE_AMALGAMATION_ZIP_SHA3) | cmp deps/sha3
-	rm -rf deps/sha3 $@
-	unzip 'cache/$(SQLITE_AMALGAMATION).zip' -d deps/
-	touch $@
+deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
+	mkdir -p cache/$(SQLITE_VERSION)
+	curl -LsS $(SQLITE_TARBALL_URL) | tar -xzf - -C cache/$(SQLITE_VERSION)/ --strip-components=1
+	mkdir -p deps/$(SQLITE_VERSION)
+	(cd deps/$(SQLITE_VERSION); ../../cache/$(SQLITE_VERSION)/configure --enable-all && make sqlite3.c)
 
 deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 	mkdir -p deps
@@ -164,61 +145,14 @@ deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 clean-tmp:
 	rm -rf tmp
 
-tmp/obj/debug/sqlite3.o: deps/$(SQLITE_AMALGAMATION)
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^/sqlite3.c -c -o $@
-
-tmp/obj/debug/extension-functions.o: deps/$(EXTENSION_FUNCTIONS)
+tmp/obj/debug/%.o: %.c
 	mkdir -p tmp/obj/debug
 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
 
-tmp/obj/debug/libfunction.o: src/libfunction.c
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/debug/libauthorizer.o: src/libauthorizer.c
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/debug/libmodule.o: src/libmodule.c
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/debug/libprogress.o: src/libprogress.c
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/debug/libvfs.o: src/libvfs.c
-	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/dist/sqlite3.o: deps/$(SQLITE_AMALGAMATION)
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^/sqlite3.c -c -o $@
-
-tmp/obj/dist/extension-functions.o: deps/$(EXTENSION_FUNCTIONS)
+tmp/obj/dist/%.o: %.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
-tmp/obj/dist/libfunction.o: src/libfunction.c
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/dist/libauthorizer.o: src/libauthorizer.c
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/dist/libmodule.o: src/libmodule.c
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/dist/libprogress.o: src/libprogress.c
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
-
-tmp/obj/dist/libvfs.o: src/libvfs.c
-	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 ## debug
 .PHONY: clean-debug
@@ -228,14 +162,14 @@ clean-debug:
 .PHONY: debug
 debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
 
-debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(OBJ_FILES_DEBUG) -o $@
 
-debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
@@ -251,42 +185,17 @@ clean-dist:
 .PHONY: dist
 dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs
 
-dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(OBJ_FILES_DIST) -o $@
 
-dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(OBJ_FILES_DIST) -o $@
-
-# dist-xl
-.PHONY: clean-dist-xl
-clean-dist-xl:
-	rm -f dist-xl.zip
-	rm -rf dist-xl
-
-.PHONY: dist-xl
-dist-xl: dist-xl/wa-sqlite.mjs dist-xl/wa-sqlite-async.mjs
-	zip -r dist-xl dist-xl/
-	
-dist-xl/wa-sqlite.mjs: deps/$(SQLITE_AMALGAMATION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS) src/*.c
-	mkdir -p dist-xl
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_KS_DEFINES) $(EMFLAGS_DIST) \
-	  $(EMFLAGS_INTERFACES) \
-	  $(EMFLAGS_LIBRARIES) \
-	  $^ -o $@
-
-dist-xl/wa-sqlite-async.mjs: deps/$(SQLITE_AMALGAMATION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS) src/*.c
-	mkdir -p dist-xl
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_KS_DEFINES) $(EMFLAGS_DIST) \
-	  $(EMFLAGS_INTERFACES) \
-	  $(EMFLAGS_LIBRARIES) \
-	  $(EMFLAGS_ASYNCIFY_DIST) \
-	  $^ -o $@
