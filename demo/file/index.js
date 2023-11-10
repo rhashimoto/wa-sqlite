@@ -39,6 +39,32 @@ document.getElementById('file-export').addEventListener('click', async () => {
   a.click();
 });
 
+document.getElementById('file-fetch').addEventListener('click', async () => {
+  let vfs;
+  try {
+    log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
+    vfs = new IDBBatchAtomicVFS(IDB_NAME);
+
+    // @ts-ignore
+    const importURL = document.getElementById('file-url').value;
+    const response = await fetch(importURL);
+    await importDatabase(vfs, DB_NAME, response.body);
+
+    log('Import complete');
+
+    // Use a Worker to verify the database with SQLite.
+    log('Verifying database integrity');
+    await verify();
+    log('Verification complete');
+  } catch (e) {
+    log(e.toString());
+    throw e;
+  } finally {
+    vfs?.close();
+  }
+
+});
+
 document.getElementById('file-import').addEventListener('change', async event => {
   let vfs;
   try {
@@ -50,19 +76,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
 
     // Use a Worker to verify the database with SQLite.
     log('Verifying database integrity');
-    const url = new URL('./verifier.js', location.href);
-    url.searchParams.set('idb', IDB_NAME);
-    url.searchParams.set('db', DB_NAME);
-    const worker = new Worker(url, { type: 'module' });
-    await new Promise(resolve => {
-      worker.addEventListener('message', ({data}) => {
-        resolve();
-        for (const row of data) {
-          log(`integrity result: ${row}`);
-        }
-        worker.terminate();
-      });
-    });
+    await verify();
     log('Verification complete');
   } catch (e) {
     log(e.toString());
@@ -184,6 +198,22 @@ async function importDatabase(vfs, path, stream) {
       await onFinally.pop()();
     }
   }
+}
+
+async function verify() {
+  const verifierURL = new URL('./verifier.js', location.href);
+  verifierURL.searchParams.set('idb', IDB_NAME);
+  verifierURL.searchParams.set('db', DB_NAME);
+  const worker = new Worker(verifierURL, { type: 'module' });
+  await new Promise(resolve => {
+    worker.addEventListener('message', ({data}) => {
+      resolve();
+      for (const row of data) {
+        log(`integrity result: ${row}`);
+      }
+      worker.terminate();
+    });
+  });
 }
 
 function log(...args) {
