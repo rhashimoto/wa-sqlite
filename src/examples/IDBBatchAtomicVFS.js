@@ -356,6 +356,13 @@ export class IDBBatchAtomicVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     log(`xSync ${file.path} ${flags}`);
     try {
+      if (file.isMetadataChanged) {
+        // Metadata has changed so write block 0 to IndexedDB.
+        this.#idb.run('readwrite', async ({blocks}) => {
+          await blocks.put(file.block0);
+        }); 
+        file.isMetadataChanged = false;
+      }
       await this.#idb.sync();
     } catch (e) {
       console.error(e);
@@ -502,6 +509,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
             this.#idb.run('readwrite', async ({blocks}) => {
               await blocks.put(file.block0);
             });
+            file.isMetadataChanged = false;
           } catch (e) {
             console.error(e);
             return VFS.SQLITE_IOERR;
