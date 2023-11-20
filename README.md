@@ -13,7 +13,9 @@ The primary motivation for this project is to enable additions to SQLite with on
 Note that earlier versions of the project only provided pre-built artifacts in the
 "buildless" branch; that branch will no longer be maintained.
 
-If you do want to build - e.g. you want to change build flags, use a specific EMSDK version, or modify wa-sqlite itself - here are the prerequisites:
+Minor build customization (e.g. changing build defines or flags) can be done with [make arguments](https://github.com/rhashimoto/wa-sqlite/discussions/128), and the helper project [sqwab](https://github.com/rhashimoto/sqwab) can be used to build without a local build environment.
+
+If you do want to build yourself, here are the prerequisites:
 
 * Building on Debian Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
