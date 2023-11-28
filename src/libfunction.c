@@ -18,6 +18,12 @@ static void xFinal(sqlite3_context* pContext) {
   jsFinal(sqlite3_user_data(pContext), pContext);
 }
 
+static void xUpdateHook(void *pApp, int updateType, const char *dbName, const char *tblName, sqlite3_int64 rowid) {
+  int hi32 = ((rowid & 0xFFFFFFFF00000000LL) >> 32);
+  int lo32 = (rowid & 0xFFFFFFFFLL);
+  jsUpdateHook(pApp, updateType, dbName, tblName, lo32, hi32);
+}
+
 int EMSCRIPTEN_KEEPALIVE create_function(
   sqlite3* db,
   const char* zFunctionName,
@@ -34,4 +40,10 @@ int EMSCRIPTEN_KEEPALIVE create_function(
     functionType == 0 ? &xFunc : 0,
     functionType == 0 ? 0 : &xStep,
     functionType == 0 ? 0 : &xFinal);
+}
+
+void EMSCRIPTEN_KEEPALIVE update_hook(
+    sqlite3 *db,
+    void *pApp) {
+  sqlite3_update_hook(db, &xUpdateHook, pApp);
 }

@@ -959,6 +959,12 @@ declare interface SQLiteAPI {
    */
   str_finish(str: number): void;
 
+  update_hook(
+    db: number,
+    xUpdate:
+      (updateType: 9 | 18 | 23, dbName: string, tblName: string, rowid: bigint) => void
+  ): void;
+
   /**
    * Get application data in custom function implementation
    * @see https://sqlite.org/c3ref/user_data.html

@@ -745,6 +745,12 @@ export function Factory(Module) {
     return strings.get(str).offset;
   };
 
+  sqlite3.update_hook = function(db, xUpdate) {
+    verifyDatabase(db);
+    Module.updateHook(db, xUpdate);
+    return SQLite.SQLITE_OK;
+  }
+
   sqlite3.user_data = function(context) {
     return Module.getFunctionUserData(context);
   };
