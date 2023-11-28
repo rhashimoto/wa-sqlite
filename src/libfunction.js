@@ -3,6 +3,19 @@
 const fn_methods = {
   $fn_method_support__postset: 'fn_method_support();',
   $fn_method_support: function() {
+    function pullCstr(heap, index) {
+      const chars = [];
+      for (let i = 0; heap[index + i] != 0; ++i) {
+        if (i > 1000) {
+          throw new Error('C-string never terminated after 1k characters');
+        }
+
+        chars.push(heap[index + i]);
+      }
+
+      return String.fromCharCode(...chars);
+    }
+    
     const mapIdToFunction = new Map();
     const mapContextToAppData = new Map();
 
@@ -39,6 +52,17 @@ const fn_methods = {
       return mapContextToAppData.get(pContext);
     }
 
+    Module['updateHook'] = function(db, f) {
+      const key = mapIdToFunction.size;
+      mapIdToFunction.set(key, f);
+      return ccall(
+        'update_hook',
+        'void',
+        ['number', 'number'],
+        [db, key]
+      );
+    }
+
     _jsFunc = function(pApp, pContext, iCount, ppValues) {
       const f = mapIdToFunction.get(pApp);
       mapContextToAppData.set(pContext, f.appData);
@@ -59,13 +83,21 @@ const fn_methods = {
       f.final(pContext);
       mapContextToAppData.delete(pContext);
     }
+
+    _jsUpdateHook = function(pApp, updateType, dbName, tblName, lo32, hi32) {
+      const f = mapIdToFunction.get(pApp);
+      const heap = HEAPU8;
+      const rowid = (BigInt(hi32) << 32n) | (BigInt(lo32) & 0xffffffffn);
+      f(updateType, pullCstr(heap, dbName), pullCstr(heap, tblName), rowid);
+    }
   }
 };
 
 const FN_METHOD_NAMES = [
   "jsFunc",
   "jsStep",
-  "jsFinal"
+  "jsFinal",
+  "jsUpdateHook"
 ];
 for (const method of FN_METHOD_NAMES) {
   fn_methods[method] = function() {};

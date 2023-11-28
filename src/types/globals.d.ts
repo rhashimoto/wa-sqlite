@@ -33,6 +33,7 @@ declare var _vfsWrite;
 declare var _jsFunc;
 declare var _jsStep;
 declare var _jsFinal;
+declare var _jsUpdateHook;
 
 declare var _modStruct;
 declare var _modCreate;
