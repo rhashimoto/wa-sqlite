@@ -5,6 +5,7 @@
 extern void jsFunc(void* pApp, sqlite3_context* pContext, int iCount, sqlite3_value** ppValues);
 extern void jsStep(void* pApp, sqlite3_context* pContext, int iCount, sqlite3_value** ppValues);
 extern void jsFinal(void* pApp, sqlite3_context* pContext);
+extern int jsUpdateHook(void *pApp, int updateType, const char *dbName, const char *tblName, int lo32, int hi32);
 
 static void xFunc(sqlite3_context* pContext, int iCount, sqlite3_value** ppValues) {
   jsFunc(sqlite3_user_data(pContext), pContext, iCount, ppValues);
