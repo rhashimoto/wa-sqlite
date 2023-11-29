@@ -2,7 +2,7 @@
 # Packages are versioned as `0.0.0-{tag}-DATETIMESTAMP`
 name: Packages Deploy
 
-on: workflow_dispatch
+on: push
 
 jobs:
   publish:
