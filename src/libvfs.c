@@ -23,6 +23,11 @@ extern int vfsOpen(sqlite3_vfs* vfs, const char *zName, sqlite3_file* file, int 
 extern int vfsDelete(sqlite3_vfs* vfs, const char *zName, int syncDir);
 extern int vfsAccess(sqlite3_vfs* vfs, const char *zName, int flags, int *pResOut);
 
+// This is undefined in the WASM linker step if not specified
+extern int __rust_no_alloc_shim_is_unstable = 0;
+extern int sqlite3_powersync_init(sqlite3 *db, char **pzErrMsg,
+                           const sqlite3_api_routines *pApi);
+
 // Glue functions to pass 64-bit integers by pointer.
 static int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset) {
   return vfsRead(file, pData, iAmt, &iOffset);
@@ -119,4 +124,8 @@ void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
 int main() {
   sqlite3_initialize();
   return 0;
+}
+
+int setup_powersync() {
+   return sqlite3_auto_extension((void (*)(void)) &sqlite3_powersync_init);
 }

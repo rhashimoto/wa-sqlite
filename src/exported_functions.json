@@ -53,5 +53,8 @@
   "_sqlite3_value_int64",
   "_sqlite3_value_text",
   "_sqlite3_value_type",
-  "_sqlite3_vfs_find"
+  "_sqlite3_vfs_find",
+  "_sqlite3_last_insert_rowid",
+  "_setup_powersync",
+  "_register_table_update_hook"
 ]

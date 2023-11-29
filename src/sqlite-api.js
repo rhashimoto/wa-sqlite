@@ -3,6 +3,16 @@
 import * as SQLite from './sqlite-constants.js';
 export * from './sqlite-constants.js';
 
+/**
+ * Need to have a serializer for bigint
+ * https://github.com/GoogleChromeLabs/jsbi/issues/30
+ */
+if (typeof BigInt.prototype['toJSON'] == 'undefined') {
+  BigInt.prototype['toJSON'] = function() {
+    return this.toString();
+  };
+}
+
 const MAX_INT64 = 0x7fffffffffffffffn;
 const MIN_INT64 = -0x8000000000000000n;
 
@@ -14,6 +24,11 @@ export class SQLiteError extends Error {
 }
 
 const async = true;
+
+const onTableChangeCallbacks = {};
+globalThis.__onTablesChanged = function(db, opType, tableName, rowId) {
+  setTimeout(() => onTableChangeCallbacks[db]?.(opType, tableName, rowId), 0);
+};
 
 /**
  * Builds a Javascript API from the Emscripten module. This API is still
@@ -51,11 +66,17 @@ export function Factory(Module) {
     return (BigInt(hi32) << 32n) | (BigInt(lo32) & 0xffffffffn);
   }
 
+  // /**
+  //  * Setup table change update callback
+  //  */
+  // var onTableChangedFunctionPointer = Module.addFunction(onTableUpdate);
+  // var passFnPointer = Module.cwrap('passFnPointer', 'undefined', ['number']);
+  // passFnPointer(onTableChangedFunctionPointer);
   /**
    * Concatenate 32-bit numbers and return as number or BigInt, depending
    * on the value.
-   * @param {number} lo32 
-   * @param {number} hi32 
+   * @param {number} lo32
+   * @param {number} hi32
    * @returns {number|bigint}
    */
   const cvt32x2AsSafe = (function() {
@@ -70,9 +91,9 @@ export function Factory(Module) {
         // Combine the upper and lower 32-bit numbers. The complication is
         // that lo32 is a signed integer which makes manipulating its bits
         // a little tricky - the sign bit gets handled separately.
-        return (hi32 * 0x100000000) + (lo32 & 0x7fffffff) - (lo32 & 0x80000000);
+        return hi32 * 0x100000000 + (lo32 & 0x7fffffff) - (lo32 & 0x80000000);
       }
-    }
+    };
   })();
 
   const databases = new Set();
@@ -232,6 +253,17 @@ export function Factory(Module) {
 
   sqlite3.changes = (function() {
     const fname = 'sqlite3_changes';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(db) {
+      verifyDatabase(db);
+      const result = f(db);
+      // trace(fname, result);
+      return result;
+    };
+  })();
+
+  sqlite3.last_insert_id = (function() {
+    const fname = 'sqlite3_last_insert_rowid';
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(db) {
       verifyDatabase(db);
@@ -427,11 +459,11 @@ export function Factory(Module) {
       return check('sqlite3_declare_vtab', result);
     }
   })();
-    
+
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       let columns;
-      while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+      while ((await sqlite3.step(stmt)) === SQLite.SQLITE_ROW) {
         if (callback) {
           columns = columns ?? sqlite3.column_names(stmt);
           const row = sqlite3.row(stmt);
@@ -452,7 +484,7 @@ export function Factory(Module) {
       const result = await f(stmt);
 
       const db = mapStmtToDB.get(stmt);
-      mapStmtToDB.delete(stmt)
+      mapStmtToDB.delete(stmt);
 
       // Don't throw on error here. Typically the error has already been
       // thrown and finalize() is part of the cleanup.
@@ -502,9 +534,12 @@ export function Factory(Module) {
     return async function(zFilename, flags, zVfs) {
       flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
       zVfs = createUTF8(zVfs);
+      Module.ccall('setup_powersync', 'int', []);
+
       const result = await f(zFilename, tmpPtr[0], flags, zVfs);
 
       const db = Module.getValue(tmpPtr[0], '*');
+
       databases.add(db);
       Module._sqlite3_free(zVfs);
 
@@ -513,6 +548,30 @@ export function Factory(Module) {
       return db;
     };
   })();
+
+  sqlite3.register_table_onchange_hook = function(db, callback) {
+    // Register hooks for this DB as a global hook
+    // It will call the global handler above
+    Module.ccall('register_table_update_hook', 'int', ['number'], [db]);
+
+    onTableChangeCallbacks[db] = function(opType, tableNamePtr, rowId) {
+      // Need to get the string from the pointer
+      // const tableName = Module.UTF8ToString(Module.getValue(tableNamePtr, '*'));
+      const memory = new DataView(Module.HEAPU8.buffer);
+
+      // Find the null terminator to determine the string length
+      let length = 0;
+      while (memory.getUint8(tableNamePtr + length) !== 0) {
+        length++;
+      }
+
+      // Extract the string content
+      const stringBytes = new Uint8Array(Module.HEAPU8.buffer, tableNamePtr, length);
+      const tableName = new TextDecoder().decode(stringBytes);
+
+      return callback(opType, tableName, rowId);
+    };
+  };
 
   sqlite3.prepare_v2 = (function() {
     const fname = 'sqlite3_prepare_v2';
@@ -533,7 +592,7 @@ export function Factory(Module) {
   sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
     verifyDatabase(db);
     Module.progressHandler(db, nProgressOps, handler, userData);
-  };;
+  };
 
   sqlite3.reset = (function() {
     const fname = 'sqlite3_reset';
@@ -570,7 +629,6 @@ export function Factory(Module) {
         }
         break;
     }
-
   };
 
   sqlite3.result_blob = (function() {
@@ -648,8 +706,8 @@ export function Factory(Module) {
     verifyDatabase(db);
     const result = Module.setAuthorizer(db, authFunction, userData);
     return check('sqlite3_set_authorizer', result, db);
-  };;
-  
+  };
+
   sqlite3.sql = (function() {
     const fname = 'sqlite3_sql';
     const f = Module.cwrap(fname, ...decl('n:s'));
@@ -666,7 +724,7 @@ export function Factory(Module) {
       const str = sqlite3.str_new(db, sql);
       let prepared = { stmt: null, sql: sqlite3.str_value(str) };
       try {
-        while (prepared = await sqlite3.prepare_v2(db, prepared.sql)) {
+        while ((prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
           // console.log(sqlite3.sql(prepared.stmt));
           yield prepared.stmt;
           sqlite3.finalize(prepared.stmt);
@@ -851,9 +909,7 @@ export function Factory(Module) {
   function check(fname, result, db = null, allowed = [SQLite.SQLITE_OK]) {
     // trace(fname, result);
     if (allowed.includes(result)) return result;
-    const message = db ?
-      Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :
-      fname;
+    const message = db ? Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) : fname;
     throw new SQLiteError(message, result);
   }
 
@@ -874,16 +930,26 @@ function decl(s) {
   const result = [];
   const m = s.match(/([ns@]*):([nsv@])/);
   switch (m[2]) {
-    case 'n': result.push('number'); break;
-    case 's': result.push('string'); break;
-    case 'v': result.push(null); break;
+    case 'n':
+      result.push('number');
+      break;
+    case 's':
+      result.push('string');
+      break;
+    case 'v':
+      result.push(null);
+      break;
   }
 
   const args = [];
   for (let c of m[1]) {
     switch (c) {
-      case 'n': args.push('number'); break;
-      case 's': args.push('string'); break;
+      case 'n':
+        args.push('number');
+        break;
+      case 's':
+        args.push('string');
+        break;
     }
   }
   result.push(args);
