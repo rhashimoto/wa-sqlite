@@ -1,0 +1,32 @@
+# Action to publish packages under the `next` tag for testing
+# Packages are versioned as `0.0.0-{tag}-DATETIMESTAMP`
+name: Packages Deploy
+
+on: push
+
+jobs:
+  publish:
+    name: Publish Dev Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v2
+        with:
+          node-version: 18
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn
+          echo "Yarn version: $(yarn -v)"
+          echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_TOKEN}}" >> ~/.npmrc
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Version packages
+        run: yarn changeset version --no-git-tag --snapshot dev
+
+      - name: Publish
+        run: yarn changeset publish --tag dev

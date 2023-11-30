@@ -1,0 +1,3 @@
+[submodule "powersync-sqlite-core"]
+	path = powersync-sqlite-core
+	url = git@github.com:powersync-ja/powersync-sqlite-core.git

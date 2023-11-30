@@ -1,5 +1,9 @@
 [![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=breaking-changes)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml?branch=breaking-changes)
 
+# Beta
+This package is currently in a beta release.
+
+
 # wa-sqlite
 This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems and virtual table modules completely in Javascript. This allows alternative browser storage options such as IndexedDB and File System Access. Applications can opt to use either a synchronous or asynchronous (using Asyncify) SQLite library build (an asynchronous build is required for asynchronous extensions).
 
@@ -13,14 +17,12 @@ The primary motivation for this project is to enable additions to SQLite with on
 Note that earlier versions of the project only provided pre-built artifacts in the
 "buildless" branch; that branch will no longer be maintained.
 
-Minor build customization (e.g. changing build defines or flags) can be done with [make arguments](https://github.com/rhashimoto/wa-sqlite/discussions/128), and the helper project [sqwab](https://github.com/rhashimoto/sqwab) can be used to build without a local build environment.
-
-If you do want to build yourself, here are the prerequisites:
+If you do want to build - e.g. you want to change build flags, use a specific EMSDK version, or modify wa-sqlite itself - here are the prerequisites:
 
 * Building on Debian Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
 * [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 3.1.25+.
-* `curl`, `make`, `openssl`, `sed`, `tclsh`, `unzip`
+* `curl`, `make`, `openssl`, `sed`, `unzip`
 
 Here are the build steps:
 * Make sure `emcc` works.
@@ -30,6 +32,38 @@ Here are the build steps:
 * `make` (or `yarn prepack`)
 
 The default build produces ES6 modules + WASM, [synchronous and asynchronous](https://github.com/rhashimoto/wa-sqlite/issues/7) (using Asyncify) in `dist/`.
+
+## JouneyApps instructions
+
+Note as per above that this is known to compile under Debian. 
+
+MacOS initially complained about OpenSSL config. Compiling on MacOS may be possible with additional config, but this is currently unknown.
+
+Development has been done using VSCode's [development container](https://code.visualstudio.com/docs/devcontainers/containers) feature.
+
+```bash
+git clone [this repo]
+```
+
+
+```bash
+git submodule init
+```
+
+```bash
+git submodule update --recursive
+```
+
+```bash
+yarn install
+
+```
+
+
+```bash 
+make -B
+```
+
 
 ## API
 Javascript wrappers for core SQLITE C API functions (and some others) are provided. Some convenience functions are also provided to reduce boilerplate. Here's sample code to load the library and call the API:

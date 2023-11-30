@@ -32,6 +32,18 @@ extern int modRollback(sqlite3_vtab *pVTab);
 //                        void (**pxFunc)(sqlite3_context*,int,sqlite3_value**),
 //                        void **ppArg);
 extern int modRename(sqlite3_vtab *pVtab, const char *zNew);
+extern void onTableChangeCallback(sqlite3*, int, const char *, int);
+
+EMSCRIPTEN_KEEPALIVE
+void on_tables_changed(void *db, int opType, char const *dbName,
+                        char const *tableName, sqlite3_int64 rowId) {
+  onTableChangeCallback((sqlite3 *) db, opType, tableName, rowId);
+}
+
+void register_table_update_hook(sqlite3 *db) {
+    sqlite3_update_hook(db, on_tables_changed,
+                      (void *)(db));
+}
 
 static int xCreate(
   sqlite3* db,
@@ -64,6 +76,7 @@ static int xConnect(
   }
   return result;
 }
+
 
 static int xOpen(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor) {
   *ppCursor = (sqlite3_vtab_cursor*)sqlite3_malloc(sizeof(sqlite3_vtab_cursor));

@@ -77,7 +77,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('clear')) {
     localStorage.clear();
-    const worker = new Worker('./clean-worker.js', { type: 'module' });
+    const worker = new Worker('./demo/clean-worker.js', { type: 'module' });
     await new Promise(resolve => {
       worker.addEventListener('message', resolve);
     });
@@ -129,7 +129,7 @@ window.addEventListener('DOMContentLoaded', async function() {
 
     // Restart the worker.
     worker?.terminate();
-    worker = new Worker('./demo-worker.js', { type: 'module' });
+    worker = new Worker('./demo/demo-worker.js', { type: 'module' });
     await new Promise(resolve => {
       worker.addEventListener('message', resolve, { once: true });
     });

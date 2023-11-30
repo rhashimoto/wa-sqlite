@@ -1,6 +1,13 @@
 {
-  "name": "wa-sqlite",
-  "version": "0.9.9",
+  "name": "@journeyapps/wa-sqlite",
+  "version": "0.0.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/powersync-ja/wa-sqlite.git"
+  },
   "type": "module",
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
@@ -15,12 +22,13 @@
   ],
   "scripts": {
     "build-docs": "typedoc",
-    "prepack": "make",
+    "release": "yarn changeset publish",
     "start": "web-dev-server --node-resolve",
     "test": "karma start karma.conf.cjs --browsers ChromeHeadless",
     "test-manual": "karma start karma.conf.cjs --auto-watch --no-single-run --reporters progress"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.26.2",
     "@web/dev-server": "^0.1.13",
     "comlink": "^4.4.1",
     "jasmine-core": "^4.5.0",
