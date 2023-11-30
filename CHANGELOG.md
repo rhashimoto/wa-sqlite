@@ -1,5 +1,11 @@
 # @journeyapps/wa-sqlite
 
+## 0.1.0
+
+### Minor Changes
+
+- aba7b5b: Beta release
+
 ## 0.0.2
 
 ### Patch Changes
