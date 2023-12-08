@@ -1,10 +1,19 @@
 [
+  "addFunction",
   "ccall",
   "cwrap",
   "getTempRet0",
   "getValue",
   "setValue",
-  "UTF8ToString",
+  "lengthBytesUTF8",
   "stringToUTF8",
-  "lengthBytesUTF8"
+  "stringToUTF16",
+  "stringToUTF32",
+  "AsciiToString",
+  "UTF8ToString",
+  "UTF16ToString",
+  "UTF32ToString",
+  "intArrayFromString",
+  "intArrayToString",
+  "writeArrayToMemory"
 ]

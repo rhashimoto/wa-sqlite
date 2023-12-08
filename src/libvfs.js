@@ -3,10 +3,13 @@ const vfs_methods = {
   $vfs_method_support__postset: 'vfs_method_support();',
   $vfs_method_support: function() {
     const hasAsyncify = typeof Asyncify === 'object';
+    if (hasAsyncify) {
+      Module['handleAsync'] = Asyncify.handleAsync;
+    }
 
     const mapIdToVFS = new Map();
     const mapFileToVFS = new Map();
-
+    
     Module['registerVFS'] = function(vfs, makeDefault) {
       const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'],
         [vfs.name]);
