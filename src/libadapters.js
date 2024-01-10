@@ -1,6 +1,34 @@
 // Method names for these signatures must be in src/asyncify_imports.json.
 const SIGNATURES = ['ii'];
 
+// This list of methods must match exactly with libadapters.c.
+const VFS_METHODS = [
+  'xOpen',
+  'xDelete',
+  'xAccess',
+  'xFullPathname',
+  'xCurrentTime',
+  'xGetLastError',
+  'xCurrentTimeInt64',
+
+  'xClose',
+  'xRead',
+  'xWrite',
+  'xTruncate',
+  'xSync',
+  'xFileSize',
+  'xLock',
+  'xUnlock',
+  'xCheckReservedLock',
+  'xFileControl',
+  'xSectorSize',
+  'xDeviceCharacteristics',
+  'xShmMap',
+  'xShmLock',
+  'xShmBarrier',
+  'xShmUnmap'
+];
+
 // @ts-ignore
 // This object will define the methods callable from WebAssembly.
 // See https://emscripten.org/docs/porting/connecting_cpp_and_javascript/Interacting-with-code.html#implement-a-c-api-in-javascript
@@ -15,6 +43,11 @@ const SIGNATURES = ['ii'];
 // calls the appropriate receiver and method.
 const adapters = {
   $adapters_support: function() {
+    // Expose handleAsync to library and application code.
+    if (typeof Asyncify === 'object' && Asyncify.handleAsync) {
+      Module['handleAsync'] = Asyncify.handleAsync.bind(Asyncify);
+    }
+
     // This map contains the objects to which calls will be relayed, e.g.
     // a VFS. The key is typically the corresponding WebAssembly pointer.
     const targets = new Map();
@@ -26,6 +59,12 @@ const adapters = {
       },
 
       testAsync(x) {
+        if (Module['handleAsync']) {
+          return Module['handleAsync'](async () => {
+            console.log('testAsync', x);
+            return x + 1;
+          });
+        }
         console.log('testAsync', x);
         return Promise.resolve(x + 1);
       }
@@ -37,6 +76,9 @@ const adapters = {
       const receiver = targets.get(key);
       const m = UTF8ToString(methodName);
       return receiver[m](...args);
+    };
+
+    Module['registerVFS'] = function(vfs, makeDefault) {
     };
   },
   $adapters_support__deps: ['$UTF8ToString'],
