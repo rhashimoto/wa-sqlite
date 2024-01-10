@@ -8,9 +8,9 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 CFILES = \
-	main.c \
 	sqlite3.c \
 	extension-functions.c \
+	libadapters.c \
 	$(CFILES_EXTRA)
 
 vpath %.c src
@@ -52,14 +52,13 @@ EMFLAGS_DEBUG = \
 EMFLAGS_DIST = \
 	-Oz \
 	-flto \
-	--closure 1 \
 	$(EMFLAGS_COMMON)
 
 EMFLAGS_INTERFACES = \
 	-s EXPORTED_FUNCTIONS=@$(EXPORTED_FUNCTIONS) \
 	-s EXPORTED_RUNTIME_METHODS=@$(EXPORTED_RUNTIME_METHODS)
 
-EMFLAGS_LIBRARIES =
+EMFLAGS_LIBRARIES = --js-library src/libxyz.js
 
 EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
