@@ -12,7 +12,5 @@
 /cache
 /debug
 /deps
+/dist
 /tmp
-
-/dist-xl.zip
-/dist-xl
