@@ -8,13 +8,9 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 
 # source files
 CFILES = \
+	main.c \
 	sqlite3.c \
 	extension-functions.c \
-	libauthorizer.c \
-	libfunction.c \
-	libmodule.c \
-	libprogress.c \
-	libvfs.c \
 	$(CFILES_EXTRA)
 
 vpath %.c src
@@ -24,6 +20,7 @@ vpath %.c deps/$(SQLITE_VERSION)
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
+ASYNCIFY_EXPORTS = src/asyncify_exports.json
 
 # intermediate files
 OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
@@ -62,12 +59,7 @@ EMFLAGS_INTERFACES = \
 	-s EXPORTED_FUNCTIONS=@$(EXPORTED_FUNCTIONS) \
 	-s EXPORTED_RUNTIME_METHODS=@$(EXPORTED_RUNTIME_METHODS)
 
-EMFLAGS_LIBRARIES = \
-	--js-library src/libauthorizer.js \
-	--js-library src/libfunction.js \
-	--js-library src/libmodule.js \
-	--js-library src/libprogress.js \
-	--js-library src/libvfs.js
+EMFLAGS_LIBRARIES =
 
 EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
@@ -80,6 +72,11 @@ EMFLAGS_ASYNCIFY_DEBUG = \
 EMFLAGS_ASYNCIFY_DIST = \
 	$(EMFLAGS_ASYNCIFY_COMMON) \
 	-s ASYNCIFY_STACK_SIZE=16384
+
+EMFLAGS_JSPI = \
+	-s ASYNCIFY=2 \
+	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json \
+	-s ASYNCIFY_EXPORTS=@src/asyncify_exports.json
 
 # https://www.sqlite.org/compile.html
 WASQLITE_DEFINES = \
@@ -157,7 +154,7 @@ clean-debug:
 	rm -rf debug
 
 .PHONY: debug
-debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
+debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs debug/wa-sqlite-jspi.mjs
 
 debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p debug
@@ -174,13 +171,21 @@ debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_R
 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
 	  $(OBJ_FILES_DEBUG) -o $@
 
+debug/wa-sqlite-jspi.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+	mkdir -p debug
+	$(EMCC) $(EMFLAGS_DEBUG) \
+	  $(EMFLAGS_INTERFACES) \
+	  $(EMFLAGS_LIBRARIES) \
+	  $(EMFLAGS_JSPI) \
+	  $(OBJ_FILES_DEBUG) -o $@
+
 ## dist
 .PHONY: clean-dist
 clean-dist:
 	rm -rf dist
 
 .PHONY: dist
-dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs
+dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs dist/wa-sqlite-jspi.mjs
 
 dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p dist
@@ -195,4 +200,12 @@ dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUN
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
+	  $(OBJ_FILES_DIST) -o $@
+
+dist/wa-sqlite-jspi.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+	mkdir -p dist
+	$(EMCC) $(EMFLAGS_DIST) \
+	  $(EMFLAGS_INTERFACES) \
+	  $(EMFLAGS_LIBRARIES) \
+	  $(EMFLAGS_JSPI) \
 	  $(OBJ_FILES_DIST) -o $@
