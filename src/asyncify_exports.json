@@ -1,0 +1,8 @@
+[
+  "sqlite3_close",
+  "sqlite3_finalize",
+  "sqlite3_open_v2",
+  "sqlite3_prepare_v2",
+  "sqlite3_reset",
+  "sqlite3_step"
+]
