@@ -1,11 +1,10 @@
 // Method names for these signatures must be in src/asyncify_imports.json.
 const SIGNATURES = [
-  'ii',
   'ip', // xClose, xSectorSize, xDeviceCharacteristics
   'vp', // xShmBarrier
   'ipI', // xTruncate
   'ipi', // xSync, xLock, xUnlock, xShmUnmap
-  'ipp', // xFileSize, xCheckReservedLock, xCurrentTimeInt64
+  'ipp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
   'ipip', // xFileControl, xGetLastError
   'ippi', // xDelete
   'ippiI', // xRead, xWrite
@@ -31,11 +30,13 @@ const adapters = {
   $adapters_support: function() {
     const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 
-    // @ts-ignore
     // Expose handleAsync to library and application code.
-    let handleAsync = typeof Asyncify === 'object' && Asyncify.State ?
+    const hasAsyncify = typeof Asyncify === 'object';
+
+    // @ts-ignore
+    const handleAsync = hasAsyncify && Asyncify.State ?
       Asyncify.handleAsync.bind(Asyncify) :
-      null;
+      function(f) { return f() };
     Module['handleAsync'] = handleAsync;
 
     // This map contains the objects to which calls will be relayed, e.g.
@@ -52,11 +53,11 @@ const adapters = {
         receiver :
         receiver[UTF8ToString(args.shift())];
       
-      // If legacy Asyncify is being used, wrap async functions
-      // with handleAsync. Otherwise, just call the function.
-      return handleAsync && f instanceof AsyncFunction ?
-        handleAsync(() => f.apply(receiver, args)) :
-        f.apply(receiver, args);
+      if (f instanceof AsyncFunction) {
+        if (handleAsync) return handleAsync(() => f.apply(receiver, args));
+        throw new Error('Synchronous WebAssembly cannot call async function');
+      }
+      return f.apply(receiver, args);
     };
 
     // This list of methods must match exactly with libadapters.c.
@@ -101,21 +102,23 @@ const adapters = {
         }
       });
 
-      // Allocate space for the key.
-      const keyPointer = Module['_malloc'](4);
+      // Allocate space for adapter_vfs_register to write the sqlite3_vfs
+      // pointer. This pointer will be used to look up the JavaScript VFS
+      // object.
+      const vfsPointer = Module['_malloc'](4);
       try {
         const result = ccall(
           'adapter_vfs_register',
           'number',
           ['string', 'number', 'number', 'number', 'number', 'number'],
-          [vfs.name, vfs.mxPathname, methodMask, asyncMask, makeDefault ? 1 : 0, keyPointer]);
+          [vfs.name, vfs.mxPathname, methodMask, asyncMask, makeDefault ? 1 : 0, vfsPointer]);
         if (!result) {
-          const key = getValue(keyPointer, '*');
+          const key = getValue(vfsPointer, '*');
           targets.set(key, vfs);
         }
         return result;
       } finally {
-        Module['_free'](keyPointer);
+        Module['_free'](vfsPointer);
       }
     };
   },
