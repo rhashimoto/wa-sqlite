@@ -1,5 +1,19 @@
 // Method names for these signatures must be in src/asyncify_imports.json.
-const SIGNATURES = ['ii'];
+const SIGNATURES = [
+  'ii',
+  'ip', // xClose, xSectorSize, xDeviceCharacteristics
+  'vp', // xShmBarrier
+  'ipI', // xTruncate
+  'ipi', // xSync, xLock, xUnlock, xShmUnmap
+  'ipp', // xFileSize, xCheckReservedLock, xCurrentTimeInt64
+  'ipip', // xFileControl, xGetLastError
+  'ippi', // xDelete
+  'ippiI', // xRead, xWrite
+  'ipiii', // xShmLock
+  'ippip', // xAccess, xFullPathname
+  'ipppip', // xOpen
+  'ipiiip', // xShmMap
+];
 
 // This list of methods must match exactly with libadapters.c.
 const VFS_METHODS = [
@@ -79,6 +93,34 @@ const adapters = {
     };
 
     Module['registerVFS'] = function(vfs, makeDefault) {
+      // Determine which methods exist and which are asynchronous.
+      let methodMask = 0;
+      let asyncMask = 0;
+      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      VFS_METHODS.forEach((method, i) => {
+        if (vfs[method]) {
+          methodMask |= 1 << i;
+          if (vfs[method] instanceof AsyncFunction) {
+            asyncMask |= 1 << i;
+          }
+        }
+      });
+
+      // Allocate space for the key.
+      const keyPointer = Module['_malloc'](4);
+      try {
+        const result = ccall(
+          'adapter_vfs_register',
+          'number',
+          ['string', 'number', 'number', 'number', 'number', 'number'],
+          [vfs.name, vfs.mxPathname, methodMask, asyncMask, makeDefault ? 1 : 0, keyPointer]);
+        if (!result) {
+          const key = getValue(keyPointer, '*');
+          targets.set(key, vfs);
+        }
+      } finally {
+        Module['_free'](keyPointer);
+      }
     };
   },
   $adapters_support__deps: ['$UTF8ToString'],
@@ -86,10 +128,10 @@ const adapters = {
 };
 
 function injectMethod(signature, isAsync) {
-  const method = `${isAsync ? 'async_' : ''}${signature}`;
+  const method = `${signature}${isAsync ? '_async' : ''}`;
   // @ts-ignore
   adapters[`${method}`] = function(...args) { return adapters_support(...args) };
-  adapters[`${method}__sig`] = `${signature[0]}pp${signature.substring(1)}`;
+  adapters[`${method}__sig`] = `${signature[0]}pp${signature.substring(1).replaceAll('I', 'ii')}`;
   adapters[`${method}__deps`] = ['$adapters_support'];
   adapters[`${method}__async`] = isAsync;
 }
