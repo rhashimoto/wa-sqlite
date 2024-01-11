@@ -29,39 +29,34 @@ const SIGNATURES = [
 // calls the appropriate receiver and method.
 const adapters = {
   $adapters_support: function() {
+    const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
+    // @ts-ignore
     // Expose handleAsync to library and application code.
-    if (typeof Asyncify === 'object' && Asyncify.handleAsync) {
-      Module['handleAsync'] = Asyncify.handleAsync.bind(Asyncify);
-    }
+    let handleAsync = typeof Asyncify === 'object' && Asyncify.State ?
+      Asyncify.handleAsync.bind(Asyncify) :
+      null;
+    Module['handleAsync'] = handleAsync;
 
     // This map contains the objects to which calls will be relayed, e.g.
     // a VFS. The key is typically the corresponding WebAssembly pointer.
     const targets = new Map();
 
-    targets.set(42, {
-      testSync(x) {
-        console.log('testSync', x);
-        return x + 1;
-      },
-
-      testAsync(x) {
-        if (Module['handleAsync']) {
-          return Module['handleAsync'](async () => {
-            console.log('testAsync', x);
-            return x + 1;
-          });
-        }
-        console.log('testAsync', x);
-        return Promise.resolve(x + 1);
-      }
-    });
-
     // @ts-ignore
     // Overwrite this function with the relay service function.
-    adapters_support = function(key, methodName, ...args) {
+    adapters_support = function(key, ...args) {
+      // If the receiver found with the key is a function, just call it.
+      // Otherwise, the next argument is the method to be called.
       const receiver = targets.get(key);
-      const m = UTF8ToString(methodName);
-      return receiver[m](...args);
+      const f = typeof receiver === 'function' ?
+        receiver :
+        receiver[UTF8ToString(args.shift())];
+      
+      // If legacy Asyncify is being used, wrap async functions
+      // with handleAsync. Otherwise, just call the function.
+      return handleAsync && f instanceof AsyncFunction ?
+        handleAsync(() => f.apply(receiver, args)) :
+        f.apply(receiver, args);
     };
 
     // This list of methods must match exactly with libadapters.c.

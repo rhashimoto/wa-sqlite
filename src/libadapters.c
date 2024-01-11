@@ -270,15 +270,5 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
 
 int main() {
   sqlite3_initialize();
-
-  // {
-  //   const int result = ii((void*)42, "testSync", 10);
-  //   printf("result: %d\n", result);
-  // }
-
-  // {
-  //   const int result = ii_async((void*)42, "testAsync", 15);
-  //   printf("result: %d\n", result);
-  // }
   return 0;
 }
