@@ -28,25 +28,15 @@ export class TestVFS {
     return SQLITE_OK;
   }
 
-  xFullPathname(vfs, zName, nOut, zOut) {
+  async xFullPathname(vfs, zName, nOut, zOut) {
     console.log('xFullPathname', vfs, zName, nOut, zOut);
     this.#module.HEAPU8.subarray(zOut, zOut + nOut)
       .set(this.#module.HEAPU8.subarray(zName, zName + nOut));
     return SQLITE_OK;
   }
 
-  xCurrentTime(vfs, pTime) {
-    console.log('xCurrentTime', vfs, pTime);
-    return SQLITE_OK;
-  }
-
   xGetLastError(vfs, nBuf, zBuf) {
     console.log('xGetLastError', vfs, nBuf, zBuf);
-    return SQLITE_OK;
-  }
-
-  xCurrentTimeInt64(vfs, pTime) {
-    console.log('xCurrentTimeInt64', vfs, pTime);
     return SQLITE_OK;
   }
 
