@@ -1,5 +1,6 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 #include <stdio.h>
+#include <string.h>
 #include <strings.h>
 #include <emscripten.h>
 #include <sqlite3.h>
@@ -85,71 +86,88 @@ typedef struct VFSFile {
     SIGNATURE(KEY, #METHOD, __VA_ARGS__))
 
 static int adapter_xClose(sqlite3_file* file) {
+  printf("adapter_xClose\n");
   return VFS_JS(ip, ((VFSFile*)file)->pVfs, xClose, file);
 }
 
 static int adapter_xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset) {
+  printf("adapter_xRead\n");
   return VFS_JS(ippiI, ((VFSFile*)file)->pVfs, xRead, file, pData, iAmt, iOffset);
 }
 
 static int adapter_xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset) {
+  printf("adapter_xWrite\n");
   return VFS_JS(ippiI, ((VFSFile*)file)->pVfs, xWrite, file, pData, iAmt, iOffset);
 }
 
 static int adapter_xTruncate(sqlite3_file* file, sqlite3_int64 size) {
+  printf("adapter_xTruncate\n");
   return VFS_JS(ipI, ((VFSFile*)file)->pVfs, xTruncate, file, size);
 }
 
 static int adapter_xSync(sqlite3_file* file, int flags) {
+  printf("adapter_xSync\n");
   return VFS_JS(ipi, ((VFSFile*)file)->pVfs, xSync, file, flags);
 }
 
 static int adapter_xFileSize(sqlite3_file* file, sqlite3_int64* pSize) {
+  printf("adapter_xFileSize\n");
   return VFS_JS(ipp, ((VFSFile*)file)->pVfs, xFileSize, file, pSize);
 }
 
 static int adapter_xLock(sqlite3_file* file, int flags) {
+  printf("adapter_xLock\n");
   return VFS_JS(ipi, ((VFSFile*)file)->pVfs, xLock, file, flags);
 }
 
 static int adapter_xUnlock(sqlite3_file* file, int flags) {
+  printf("adapter_xUnlock\n");
   return VFS_JS(ipi, ((VFSFile*)file)->pVfs, xUnlock, file, flags);
 }
 
 static int adapter_xCheckReservedLock(sqlite3_file* file, int* pResOut) {
+  printf("adapter_xCheckReservedLock\n");
   return VFS_JS(ipp, ((VFSFile*)file)->pVfs, xCheckReservedLock, file, pResOut);
 }
 
 static int adapter_xFileControl(sqlite3_file* file, int flags, void* pOut) {
+  printf("adapter_xFileControl\n");
   return VFS_JS(ipip, ((VFSFile*)file)->pVfs, xFileControl, file, flags, pOut);
 }
 
 static int adapter_xSectorSize(sqlite3_file* file) {
+  printf("adapter_xSectorSize\n");
   return VFS_JS(ip, ((VFSFile*)file)->pVfs, xSectorSize, file);
 }
 
 static int adapter_xDeviceCharacteristics(sqlite3_file* file) {
+  printf("adapter_xDeviceCharacteristics\n");
   return VFS_JS(ip, ((VFSFile*)file)->pVfs, xDeviceCharacteristics, file);
 }
 
 static int adapter_xShmMap(sqlite3_file* file, int iPg, int pgsz, int unused, void volatile** p) {
+  printf("adapter_xShmMap\n");
   return VFS_JS(ipiiip, ((VFSFile*)file)->pVfs, xShmMap, file, iPg, pgsz, unused, p);
 }
 
 static int adapter_xShmLock(sqlite3_file* file, int offset, int n, int flags) {
+  printf("adapter_xShmLock\n");
   return VFS_JS(ipiii, ((VFSFile*)file)->pVfs, xShmLock, file, offset, n, flags);
 }
 
 static void adapter_xShmBarrier(sqlite3_file* file) {
+  printf("adapter_xShmBarrier\n");
   VFS_JS(vp, ((VFSFile*)file)->pVfs, xShmBarrier, file);
 }
 
 static int adapter_xShmUnmap(sqlite3_file* file, int deleteFlag) {
+  printf("adapter_xShmUnmap\n");
   return VFS_JS(ipi, ((VFSFile*)file)->pVfs, xShmUnmap, file, deleteFlag);
 }
 
 
 static int adapter_xOpen(sqlite3_vfs* vfs, const char* zName, sqlite3_file* file, int flags, int* pOutFlags) {
+  printf("adapter_xOpen: %s\n", zName);
   const int result = VFS_JS(ipppip, vfs, xOpen, vfs, (void*)zName, file, flags, pOutFlags);
 
   VFS* pVfs = (VFS*)vfs;
@@ -179,26 +197,32 @@ static int adapter_xOpen(sqlite3_vfs* vfs, const char* zName, sqlite3_file* file
 }
 
 static int adapter_xDelete(sqlite3_vfs* vfs, const char* zName, int syncDir) {
+  printf("adapter_xDelete: %s\n", zName);
   return VFS_JS(ippi, vfs, xDelete, vfs, zName, syncDir);
 }
 
 static int adapter_xAccess(sqlite3_vfs* vfs, const char* zName, int flags, int* pResOut) {
+  printf("adapter_xAccess: %s\n", zName);
   return VFS_JS(ippip, vfs, xAccess, vfs, zName, flags, pResOut);
 }
 
 static int adapter_xFullPathname(sqlite3_vfs* vfs, const char* zName, int nOut, char* zOut) {
+  printf("adapter_xFullPathname: %s\n", zName);
   return VFS_JS(ippip, vfs, xFullPathname, vfs, zName, nOut, zOut);
 }
 
 static int adapter_xCurrentTime(sqlite3_vfs* vfs, double* pJulianDay) {
+  printf("adapter_xCurrentTime\n");
   return VFS_JS(ipp, vfs, xCurrentTime, vfs, pJulianDay);
 }
 
 static int adapter_xGetLastError(sqlite3_vfs* vfs, int nBuf, char* zBuf) {
+  printf("adapter_xGetLastError\n");
   return VFS_JS(ipip, vfs, xGetLastError, vfs, nBuf, zBuf);
 }
 
 static int adapter_xCurrentTimeInt64(sqlite3_vfs* vfs, sqlite3_int64* pTime) {
+  printf("adapter_xCurrentTimeInt64\n");
   return VFS_JS(ipp, vfs, xCurrentTimeInt64, vfs, pTime);
 }
 
@@ -220,7 +244,7 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
   vfs->base.iVersion = 2;
   vfs->base.szOsFile = sizeof(VFSFile);
   vfs->base.mxPathname = mxPathName;
-  vfs->base.zName = zName;
+  vfs->base.zName = strdup(zName);
 
   // The VFS methods go to the adapter implementations in this file,
   // or to the default VFS if the JavaScript method is not defined.
@@ -239,6 +263,7 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
   vfs->methodMask = methodMask;
   vfs->asyncMask = asyncMask;
 
+  printf("adapter_vfs_register: %s\n", zName);
   *ppVfs = vfs;
   return sqlite3_vfs_register(&vfs->base, makeDefault);
 }
@@ -246,14 +271,14 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
 int main() {
   sqlite3_initialize();
 
-  {
-    const int result = ii((void*)42, "testSync", 10);
-    printf("result: %d\n", result);
-  }
+  // {
+  //   const int result = ii((void*)42, "testSync", 10);
+  //   printf("result: %d\n", result);
+  // }
 
-  {
-    const int result = ii_async((void*)42, "testAsync", 15);
-    printf("result: %d\n", result);
-  }
+  // {
+  //   const int result = ii_async((void*)42, "testAsync", 15);
+  //   printf("result: %d\n", result);
+  // }
   return 0;
 }

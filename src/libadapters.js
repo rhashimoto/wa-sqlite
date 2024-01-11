@@ -15,34 +15,6 @@ const SIGNATURES = [
   'ipiiip', // xShmMap
 ];
 
-// This list of methods must match exactly with libadapters.c.
-const VFS_METHODS = [
-  'xOpen',
-  'xDelete',
-  'xAccess',
-  'xFullPathname',
-  'xCurrentTime',
-  'xGetLastError',
-  'xCurrentTimeInt64',
-
-  'xClose',
-  'xRead',
-  'xWrite',
-  'xTruncate',
-  'xSync',
-  'xFileSize',
-  'xLock',
-  'xUnlock',
-  'xCheckReservedLock',
-  'xFileControl',
-  'xSectorSize',
-  'xDeviceCharacteristics',
-  'xShmMap',
-  'xShmLock',
-  'xShmBarrier',
-  'xShmUnmap'
-];
-
 // @ts-ignore
 // This object will define the methods callable from WebAssembly.
 // See https://emscripten.org/docs/porting/connecting_cpp_and_javascript/Interacting-with-code.html#implement-a-c-api-in-javascript
@@ -92,7 +64,35 @@ const adapters = {
       return receiver[m](...args);
     };
 
-    Module['registerVFS'] = function(vfs, makeDefault) {
+    // This list of methods must match exactly with libadapters.c.
+    const VFS_METHODS = [
+      'xOpen',
+      'xDelete',
+      'xAccess',
+      'xFullPathname',
+      'xCurrentTime',
+      'xGetLastError',
+      'xCurrentTimeInt64',
+
+      'xClose',
+      'xRead',
+      'xWrite',
+      'xTruncate',
+      'xSync',
+      'xFileSize',
+      'xLock',
+      'xUnlock',
+      'xCheckReservedLock',
+      'xFileControl',
+      'xSectorSize',
+      'xDeviceCharacteristics',
+      'xShmMap',
+      'xShmLock',
+      'xShmBarrier',
+      'xShmUnmap'
+    ];
+
+    Module['vfs_register'] = function(vfs, makeDefault) {
       // Determine which methods exist and which are asynchronous.
       let methodMask = 0;
       let asyncMask = 0;
@@ -118,6 +118,7 @@ const adapters = {
           const key = getValue(keyPointer, '*');
           targets.set(key, vfs);
         }
+        return result;
       } finally {
         Module['_free'](keyPointer);
       }
