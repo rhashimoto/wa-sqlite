@@ -13,8 +13,6 @@
 //
 // Relaying is necessary because Emscripten only allows calling a statically
 // defined JavaScript function via a C function pointer.
-extern int ii(const void*, const char*, int);
-extern int ii_async(const void*, const char*, int);
 extern int ip(const void*, const char*, const void*);
 extern int ip_async(const void*, const char*, const void*);
 extern void vp(const void*, const char*, const void*);
