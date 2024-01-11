@@ -45,17 +45,20 @@ export class TestVFS {
     return SQLITE_OK;
   }
 
-  xRead(file, pData, iAmt, iOffset) {
+  xRead(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+    const iOffset = joinInt64(iOffsetLo, iOffsetHi);
     console.log('xRead', file, pData, iAmt, iOffset);
     return SQLITE_OK;
   }
 
-  xWrite(file, pData, iAmt, iOffset) {
+  xWrite(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+    const iOffset = joinInt64(iOffsetLo, iOffsetHi);
     console.log('xWrite', file, pData, iAmt, iOffset);
     return SQLITE_OK;
   }
 
-  xTruncate(file, size) {
+  xTruncate(file, sizeLo, sizeHi) {
+    const size = joinInt64(sizeLo, sizeHi);
     console.log('xTruncate', file, size);
     return SQLITE_OK;
   }
@@ -99,24 +102,17 @@ export class TestVFS {
     console.log('xDeviceCharacteristics', file);
     return 0;
   }
+}
 
-  xShmMap(file, iRegion, szRegion, isWrite, pp) {
-    console.log('xShmMap', file, iRegion, szRegion, isWrite, pp);
-    return SQLITE_OK;
-  }
+// Emscripten passes an int64_t value as two 32-bit *signed* integers
+// (if not using -sWASM_BIGINT). This function reassembles them into a
+// single JavaScript number.
+// https://emscripten.org/docs/getting_started/FAQ.html?highlight=legalize#how-do-i-pass-int64-t-and-uint64-t-values-from-js-into-wasm-functions
+function joinInt64(lo, hi) {
+  // TODO: Handle negative numbers.
+  if (hi < 0) throw new Error('Negative int64 value not supported');
 
-  xShmLock(file, offset, n, flags) {
-    console.log('xShmLock', file, offset, n, flags);
-    return SQLITE_OK;
-  }
-
-  xShmBarrier(file) {
-    console.log('xShmBarrier', file);
-    return SQLITE_OK;
-  }
-
-  xShmUnmap(file, deleteFlag) {
-    console.log('xShmUnmap', file, deleteFlag);
-    return SQLITE_OK;
-  }  
+  if (lo < 0) lo += 2**32;
+  if (hi >= 2 ** 21) throw new Error('int64 value exceeds MAX_SAFE_INTEGER');
+  return lo + (hi * 2**32);
 }
