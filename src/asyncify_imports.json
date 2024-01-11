@@ -1,4 +1,26 @@
 [
   "ii",
-  "async_ii"
+  "ii_async",
+  "ip",
+  "ip_async",
+  "vp",
+  "vp_async",
+  "ipI",
+  "ipI_async",
+  "ipi",
+  "ipi_async",
+  "ipp",
+  "ipp_async",
+  "ipip",
+  "ipip_async",
+  "ippi",
+  "ippi_async",
+  "ippiI",
+  "ippiI_async",
+  "ipiii",
+  "ipiii_async",
+  "ippip",
+  "ippip_async",
+  "ippiip",
+  "ippiip_async"
 ]
