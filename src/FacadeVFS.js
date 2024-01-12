@@ -136,19 +136,19 @@ export class FacadeVFS extends VFS.Base {
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  jLock(file, lock) {
+  jLock(file, lockType) {
     return VFS.SQLITE_OK;
   }
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  jUnlock(file, lock) {
+  jUnlock(file, lockType) {
     return VFS.SQLITE_OK;
   }
 
@@ -331,22 +331,22 @@ export class FacadeVFS extends VFS.Base {
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xLock(file, lock) {
-    if (isLogging) console.debug('xLock', file, lock);
-    return this.jLock(file, lock);
+  xLock(file, lockType) {
+    if (isLogging) console.debug('xLock', file, lockType);
+    return this.jLock(file, lockType);
   }
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xUnlock(file, lock) {
-    if (isLogging) console.debug('xUnlock', file, lock);
-    return this.jUnlock(file, lock);
+  xUnlock(file, lockType) {
+    if (isLogging) console.debug('xUnlock', file, lockType);
+    return this.jUnlock(file, lockType);
   } 
 
   /**

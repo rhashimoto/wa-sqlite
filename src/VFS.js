@@ -148,20 +148,20 @@ export class Base {
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xLock(file, lock) {
-    console.log('xLock', file, lock);
+  xLock(file, lockType) {
+    console.log('xLock', file, lockType);
     return VFS.SQLITE_OK;
   }
 
   /**
    * @param {number} file 
-   * @param {number} lock 
+   * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xUnlock(file, lock) {
+  xUnlock(file, lockType) {
     return VFS.SQLITE_OK;
   } 
 
