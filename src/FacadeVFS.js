@@ -28,12 +28,12 @@ export class FacadeVFS extends VFS.Base {
   
   /**
    * @param {string?} filename 
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @param {DataView} pOutFlags 
    * @returns {number|Promise<number>}
    */
-  jOpen(filename, file, flags, pOutFlags) {
+  jOpen(filename, pFile, flags, pOutFlags) {
     return VFS.SQLITE_CANTOPEN;
   }
 
@@ -79,151 +79,151 @@ export class FacadeVFS extends VFS.Base {
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  jClose(file) {
+  jClose(pFile) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {Uint8Array} pData 
    * @param {number} iOffset 
    * @returns {number|Promise<number>}
    */
-  jRead(file, pData, iOffset) {
+  jRead(pFile, pData, iOffset) {
     pData.fill(0);
     return VFS.SQLITE_IOERR_SHORT_READ;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {Uint8Array} pData 
    * @param {number} iOffset 
    * @returns {number|Promise<number>}
    */
-  jWrite(file, pData, iOffset) {
+  jWrite(pFile, pData, iOffset) {
     return VFS.SQLITE_IOERR_WRITE;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} size 
    * @returns {number|Promise<number>}
    */
-  jTruncate(file, size) {
+  jTruncate(pFile, size) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @returns {number|Promise<number>}
    */
-  jSync(file, flags) {
+  jSync(pFile, flags) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {DataView} pSize
    * @returns {number|Promise<number>}
    */
-  jFileSize(file, pSize) {
+  jFileSize(pFile, pSize) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  jLock(file, lockType) {
+  jLock(pFile, lockType) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  jUnlock(file, lockType) {
+  jUnlock(pFile, lockType) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {DataView} pResOut 
    * @returns {number|Promise<number>}
    */
-  jCheckReservedLock(file, pResOut) {
+  jCheckReservedLock(pFile, pResOut) {
     pResOut.setInt32(0, 0, true);
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file
+   * @param {number} pFile
    * @param {number} op
    * @param {DataView} pArg
    * @returns {number|Promise<number>}
    */
-  jFileControl(file, op, pArg) {
+  jFileControl(pFile, op, pArg) {
     return VFS.SQLITE_NOTFOUND;
   }
 
   /**
-   * @param {number} file
+   * @param {number} pFile
    * @returns {number|Promise<number>}
    */
-  jSectorSize(file) {
-    return super.xSectorSize(file);
+  jSectorSize(pFile) {
+    return super.xSectorSize(pFile);
   }
 
   /**
-   * @param {number} file
+   * @param {number} pFile
    * @returns {number|Promise<number>}
    */
-  jDeviceCharacteristics(file) {
+  jDeviceCharacteristics(pFile) {
     return 0;
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @param {number} pOutFlags 
    * @returns {number|Promise<number>}
    */
-  xOpen(vfs, zName, file, flags, pOutFlags) {
+  xOpen(pVfs, zName, pFile, flags, pOutFlags) {
     // TODO: Restore URI.
     const filename = zName ? this._module.UTF8ToString(zName) : null;
     const pOutFlagsView = this.#makeTypedDataView('Int32', pOutFlags);
-    if (isLogging) console.debug('xOpen', filename, file, flags, pOutFlagsView);
-    return this.jOpen(filename, file, flags, pOutFlagsView);
+    if (isLogging) console.debug('xOpen', filename, pFile, flags, pOutFlagsView);
+    return this.jOpen(filename, pFile, flags, pOutFlagsView);
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} syncDir 
    * @returns {number|Promise<number>}
    */
-  xDelete(vfs, zName, syncDir) {
+  xDelete(pVfs, zName, syncDir) {
     const filename = this._module.UTF8ToString(zName);
     if (isLogging) console.debug('xDelete', filename, syncDir);
     return this.jDelete(filename, syncDir);
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} flags 
    * @param {number} pResOut 
    * @returns {number|Promise<number>}
    */
-  xAccess(vfs, zName, flags, pResOut) {
+  xAccess(pVfs, zName, flags, pResOut) {
     const filename = this._module.UTF8ToString(zName);
     const pResOutView = this.#makeTypedDataView('Int32', pResOut);
     if (isLogging) console.debug('xAccess', filename, flags, pResOutView);
@@ -231,13 +231,13 @@ export class FacadeVFS extends VFS.Base {
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} nOut 
    * @param {number} zOut 
    * @returns {number|Promise<number>}
    */
-  xFullPathname(vfs, zName, nOut, zOut) {
+  xFullPathname(pVfs, zName, nOut, zOut) {
     const filename = this._module.UTF8ToString(zName);
     const zOutArray = this._module.HEAPU8.subarray(zOut, zOut + nOut);
     if (isLogging) console.debug('xFullPathname', filename, nOut, zOutArray);
@@ -245,151 +245,151 @@ export class FacadeVFS extends VFS.Base {
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} nBuf 
    * @param {number} zBuf 
    * @returns {number|Promise<number>}
    */
-  xGetLastError(vfs, nBuf, zBuf) {
+  xGetLastError(pVfs, nBuf, zBuf) {
     const zBufArray = this._module.HEAPU8.subarray(zBuf, zBuf + nBuf);
     if (isLogging) console.debug('xGetLastError', nBuf, zBufArray);
     return this.jGetLastError(zBufArray);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xClose(file) {
-    if (isLogging) console.debug('xClose', file);
-    return this.jClose(file);
+  xClose(pFile) {
+    if (isLogging) console.debug('xClose', pFile);
+    return this.jClose(pFile);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pData 
    * @param {number} iAmt 
    * @param {number} iOffsetLo 
    * @param {number} iOffsetHi 
    * @returns {number|Promise<number>}
    */
-  xRead(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+  xRead(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
     const pDataArray = this._module.HEAPU8.subarray(pData, pData + iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
-    if (isLogging) console.debug('xRead', file, pDataArray, iOffset);
-    return this.jRead(file, pDataArray, iOffset);
+    if (isLogging) console.debug('xRead', pFile, pDataArray, iOffset);
+    return this.jRead(pFile, pDataArray, iOffset);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pData 
    * @param {number} iAmt 
    * @param {number} iOffsetLo 
    * @param {number} iOffsetHi 
    * @returns {number|Promise<number>}
    */
-  xWrite(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+  xWrite(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
     const pDataArray = this._module.HEAPU8.subarray(pData, pData + iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
-    if (isLogging) console.debug('xWrite', file, pDataArray, iOffset);
-    return this.jWrite(file, pDataArray, iOffset);
+    if (isLogging) console.debug('xWrite', pFile, pDataArray, iOffset);
+    return this.jWrite(pFile, pDataArray, iOffset);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} sizeLo 
    * @param {number} sizeHi 
    * @returns {number|Promise<number>}
    */
-  xTruncate(file, sizeLo, sizeHi) {
+  xTruncate(pFile, sizeLo, sizeHi) {
     const size = delegalize(sizeLo, sizeHi);
-    if (isLogging) console.debug('xTruncate', file, size);
-    return this.jTruncate(file, size);
+    if (isLogging) console.debug('xTruncate', pFile, size);
+    return this.jTruncate(pFile, size);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @returns {number|Promise<number>}
    */
-  xSync(file, flags) {
-    if (isLogging) console.debug('xSync', file, flags);
-    return this.jSync(file, flags);
+  xSync(pFile, flags) {
+    if (isLogging) console.debug('xSync', pFile, flags);
+    return this.jSync(pFile, flags);
   }
 
   /**
    * 
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pSize 
    * @returns {number|Promise<number>}
    */
-  xFileSize(file, pSize) {
+  xFileSize(pFile, pSize) {
     const pSizeView = this.#makeTypedDataView('BigInt64', pSize);
-    if (isLogging) console.debug('xFileSize', file, pSizeView);
-    return this.jFileSize(file, pSizeView);
+    if (isLogging) console.debug('xFileSize', pFile, pSizeView);
+    return this.jFileSize(pFile, pSizeView);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xLock(file, lockType) {
-    if (isLogging) console.debug('xLock', file, lockType);
-    return this.jLock(file, lockType);
+  xLock(pFile, lockType) {
+    if (isLogging) console.debug('xLock', pFile, lockType);
+    return this.jLock(pFile, lockType);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xUnlock(file, lockType) {
-    if (isLogging) console.debug('xUnlock', file, lockType);
-    return this.jUnlock(file, lockType);
+  xUnlock(pFile, lockType) {
+    if (isLogging) console.debug('xUnlock', pFile, lockType);
+    return this.jUnlock(pFile, lockType);
   } 
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pResOut 
    * @returns {number|Promise<number>}
    */
-  xCheckReservedLock(file, pResOut) {
+  xCheckReservedLock(pFile, pResOut) {
     const pResOutView = this.#makeTypedDataView('Int32', pResOut);
-    if (isLogging) console.debug('xCheckReservedLock', file, pResOutView);
-    return this.jCheckReservedLock(file, pResOutView);
+    if (isLogging) console.debug('xCheckReservedLock', pFile, pResOutView);
+    return this.jCheckReservedLock(pFile, pResOutView);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} op 
    * @param {number} pArg 
    * @returns {number|Promise<number>}
    */
-  xFileControl(file, op, pArg) {
+  xFileControl(pFile, op, pArg) {
     const pArgView = new DataView(
       this._module.HEAPU8.buffer,
       this._module.HEAPU8.byteOffset + pArg);
-    if (isLogging) console.debug('xFileControl', file, op, pArgView);
-    return this.jFileControl(file, op, pArgView);
+    if (isLogging) console.debug('xFileControl', pFile, op, pArgView);
+    return this.jFileControl(pFile, op, pArgView);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xSectorSize(file) {
-    if (isLogging) console.debug('xSectorSize', file);
-    return this.jSectorSize(file);
+  xSectorSize(pFile) {
+    if (isLogging) console.debug('xSectorSize', pFile);
+    return this.jSectorSize(pFile);
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xDeviceCharacteristics(file) {
-    if (isLogging) console.debug('xDeviceCharacteristics', file);
-    return this.jDeviceCharacteristics(file);
+  xDeviceCharacteristics(pFile) {
+    if (isLogging) console.debug('xDeviceCharacteristics', pFile);
+    return this.jDeviceCharacteristics(pFile);
   }
 
   /**
