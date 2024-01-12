@@ -30,13 +30,11 @@ const adapters = {
   $adapters_support: function() {
     const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 
-    // Expose handleAsync to library and application code.
-    const hasAsyncify = typeof Asyncify === 'object';
-
     // @ts-ignore
-    const handleAsync = hasAsyncify && Asyncify.State ?
+    // Expose handleAsync to library and application code.
+    const handleAsync = typeof Asyncify === 'object' ?
       Asyncify.handleAsync.bind(Asyncify) :
-      function(f) { return f() };
+      null;
     Module['handleAsync'] = handleAsync;
 
     // This map contains the objects to which calls will be relayed, e.g.
@@ -47,17 +45,29 @@ const adapters = {
     // Overwrite this function with the relay service function.
     adapters_support = function(key, ...args) {
       // If the receiver found with the key is a function, just call it.
-      // Otherwise, the next argument is the method to be called.
+      // Otherwise, the next argument is the name of the method to be called.
       const receiver = targets.get(key);
+      let methodName = null;
       const f = typeof receiver === 'function' ?
         receiver :
-        receiver[UTF8ToString(args.shift())];
+        receiver[methodName = UTF8ToString(args.shift())];
       
-      if (f instanceof AsyncFunction) {
-        if (handleAsync) return handleAsync(() => f.apply(receiver, args));
+      if (f instanceof AsyncFunction || receiver.hasAsyncMethod?.(methodName)) {
+        // Call async function via handleAsync. This works for both
+        // Asyncify and JSPI builds.
+        if (handleAsync) {
+          return handleAsync(() => f.apply(receiver, args));
+        }
         throw new Error('Synchronous WebAssembly cannot call async function');
       }
-      return f.apply(receiver, args);
+
+      // The function should not be async so call it directly.
+      const result = f.apply(receiver, args);
+      if (typeof result?.then == 'function') {
+        console.error('unexpected Promise', f);
+        throw new Error(`${methodName} unexpectedly returned a Promise`);
+      }
+      return result;
     };
 
     // This list of methods must match exactly with libadapters.c.
