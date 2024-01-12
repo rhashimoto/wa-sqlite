@@ -113,14 +113,14 @@ static int adapter_xFileSize(sqlite3_file* file, sqlite3_int64* pSize) {
   return VFS_JS(ipppp, ((VFSFile*)file)->pVfs, xFileSize, file, pSize);
 }
 
-static int adapter_xLock(sqlite3_file* file, int flags) {
+static int adapter_xLock(sqlite3_file* file, int lockType) {
   printf("adapter_xLock\n");
-  return VFS_JS(ipppi, ((VFSFile*)file)->pVfs, xLock, file, flags);
+  return VFS_JS(ipppi, ((VFSFile*)file)->pVfs, xLock, file, lockType);
 }
 
-static int adapter_xUnlock(sqlite3_file* file, int flags) {
+static int adapter_xUnlock(sqlite3_file* file, int lockType) {
   printf("adapter_xUnlock\n");
-  return VFS_JS(ipppi, ((VFSFile*)file)->pVfs, xUnlock, file, flags);
+  return VFS_JS(ipppi, ((VFSFile*)file)->pVfs, xUnlock, file, lockType);
 }
 
 static int adapter_xCheckReservedLock(sqlite3_file* file, int* pResOut) {
