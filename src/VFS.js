@@ -29,171 +29,171 @@ export class Base {
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @param {number} pOutFlags 
    * @returns {number|Promise<number>}
    */
-  xOpen(vfs, zName, file, flags, pOutFlags) {
+  xOpen(pVfs, zName, pFile, flags, pOutFlags) {
     return VFS.SQLITE_CANTOPEN;
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} syncDir 
    * @returns {number|Promise<number>}
    */
-  xDelete(vfs, zName, syncDir) {
+  xDelete(pVfs, zName, syncDir) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} flags 
    * @param {number} pResOut 
    * @returns {number|Promise<number>}
    */
-  xAccess(vfs, zName, flags, pResOut) {
+  xAccess(pVfs, zName, flags, pResOut) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} zName 
    * @param {number} nOut 
    * @param {number} zOut 
    * @returns {number|Promise<number>}
    */
-  xFullPathname(vfs, zName, nOut, zOut) {
+  xFullPathname(pVfs, zName, nOut, zOut) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} vfs 
+   * @param {number} pVfs 
    * @param {number} nBuf 
    * @param {number} zBuf 
    * @returns {number|Promise<number>}
    */
-  xGetLastError(vfs, nBuf, zBuf) {
+  xGetLastError(pVfs, nBuf, zBuf) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xClose(file) {
+  xClose(pFile) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pData 
    * @param {number} iAmt 
    * @param {number} iOffsetLo 
    * @param {number} iOffsetHi 
    * @returns {number|Promise<number>}
    */
-  xRead(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+  xRead(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pData 
    * @param {number} iAmt 
    * @param {number} iOffsetLo 
    * @param {number} iOffsetHi 
    * @returns {number|Promise<number>}
    */
-  xWrite(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+  xWrite(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} sizeLo 
    * @param {number} sizeHi 
    * @returns {number|Promise<number>}
    */
-  xTruncate(file, sizeLo, sizeHi) {
+  xTruncate(pFile, sizeLo, sizeHi) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} flags 
    * @returns {number|Promise<number>}
    */
-  xSync(file, flags) {
+  xSync(pFile, flags) {
     return VFS.SQLITE_OK;
   }
 
   /**
    * 
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pSize 
    * @returns {number|Promise<number>}
    */
-  xFileSize(file, pSize) {
+  xFileSize(pFile, pSize) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xLock(file, lockType) {
-    console.log('xLock', file, lockType);
+  xLock(pFile, lockType) {
+    console.log('xLock', pFile, lockType);
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} lockType 
    * @returns {number|Promise<number>}
    */
-  xUnlock(file, lockType) {
+  xUnlock(pFile, lockType) {
     return VFS.SQLITE_OK;
   } 
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} pResOut 
    * @returns {number|Promise<number>}
    */
-  xCheckReservedLock(file, pResOut) {
+  xCheckReservedLock(pFile, pResOut) {
     return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @param {number} op 
    * @param {number} pArg 
    * @returns {number|Promise<number>}
    */
-  xFileControl(file, op, pArg) {
+  xFileControl(pFile, op, pArg) {
     return VFS.SQLITE_NOTFOUND;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xSectorSize(file) {
+  xSectorSize(pFile) {
     return DEFAULT_SECTOR_SIZE;
   }
 
   /**
-   * @param {number} file 
+   * @param {number} pFile 
    * @returns {number|Promise<number>}
    */
-  xDeviceCharacteristics(file) {
+  xDeviceCharacteristics(pFile) {
     return 0;
   }
 }
