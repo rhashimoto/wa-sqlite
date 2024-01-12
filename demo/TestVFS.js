@@ -6,11 +6,18 @@ export class TestVFS {
   name;
   mxPathname = 512;
 
-  #module;
+  _module;
 
   constructor(name, module) {
     this.name = name;
-    this.#module = module;
+    this._module = module;
+  }
+
+  hasAsyncMethod(methodName) {
+    if (methodName === 'xFullPathname') {
+      return true;
+    }
+    return false;
   }
 
   xOpen(vfs, zName, file, flags, pOutFlags) {
@@ -30,8 +37,10 @@ export class TestVFS {
 
   async xFullPathname(vfs, zName, nOut, zOut) {
     console.log('xFullPathname', vfs, zName, nOut, zOut);
-    this.#module.HEAPU8.subarray(zOut, zOut + nOut)
-      .set(this.#module.HEAPU8.subarray(zName, zName + nOut));
+
+    // Just copy to the output buffer.
+    this._module.HEAPU8.subarray(zOut, zOut + nOut)
+      .set(this._module.HEAPU8.subarray(zName, zName + nOut));
     return SQLITE_OK;
   }
 
