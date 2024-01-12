@@ -29,12 +29,13 @@
 
   import * as SQLite from 'wa-sqlite';
   import { MemoryVFS } from '../src/examples/MemoryVFS.js';
+  import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
 
   async function hello() {
     const module = await SQLiteESMFactory();
     const sqlite3 = SQLite.Factory(module);
 
-    sqlite3.vfs_register(new MemoryVFS('test', module), true);
+    sqlite3.vfs_register(new MemoryAsyncVFS('test', module), true);
     const db = await sqlite3.open_v2('test.db');
     await sqlite3.exec(db, `SELECT 'Hello, world!'`, (row, columns) => {
       console.log(row);
@@ -50,15 +51,6 @@
       console.log(row);
     });
     await sqlite3.close(db);
-
-    // const ptr = module._malloc(4);
-    // result = await module.ccall(
-    //   'sqlite3_open_v2',
-    //   'number',
-    //   ['string', 'number', 'number', 'string'],
-    //   ['hello.db', ptr, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 'test'],
-    //   { async: true });
-    // console.log('sqlite3_open_v2', result, module.getValue(ptr, 'i32'));
   }
 
   hello();

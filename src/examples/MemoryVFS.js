@@ -2,8 +2,7 @@
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
 
-// Memory filesystem. Although this is mainly provided as an example
-// for new VFS classes, it seems to be faster than the default filesystem.
+// Sample in-memory filesystem.
 export class MemoryVFS extends FacadeVFS {
   // Map of existing files, keyed by filename.
   mapNameToFile = new Map();
@@ -26,7 +25,7 @@ export class MemoryVFS extends FacadeVFS {
    * @param {number} fileId 
    * @param {number} flags 
    * @param {DataView} pOutFlags 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jOpen(filename, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
@@ -56,7 +55,7 @@ export class MemoryVFS extends FacadeVFS {
 
   /**
    * @param {number} fileId 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
@@ -72,7 +71,7 @@ export class MemoryVFS extends FacadeVFS {
    * @param {number} fileId 
    * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jRead(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
@@ -98,7 +97,7 @@ export class MemoryVFS extends FacadeVFS {
    * @param {number} fileId 
    * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jWrite(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
@@ -119,7 +118,7 @@ export class MemoryVFS extends FacadeVFS {
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jTruncate(fileId, iSize) {
     const file = this.mapIdToFile.get(fileId);
@@ -132,7 +131,7 @@ export class MemoryVFS extends FacadeVFS {
   /**
    * @param {number} fileId 
    * @param {DataView} pSize64 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
@@ -142,10 +141,9 @@ export class MemoryVFS extends FacadeVFS {
   }
 
   /**
-   * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jDelete(name, syncDir) {
     this.mapNameToFile.delete(name);
@@ -156,7 +154,7 @@ export class MemoryVFS extends FacadeVFS {
    * @param {string} name 
    * @param {number} flags 
    * @param {DataView} pResOut 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
   jAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);

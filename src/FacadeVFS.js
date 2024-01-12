@@ -1,7 +1,14 @@
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from './VFS.js';
 
 const isLogging = true;
+const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 
+// Convenience base class for a JavaScript VFS.
+// The raw xOpen, xRead, etc. function signatures receive only C primitives
+// which aren't easy to work with. This class provides corresponding calls
+// like jOpen, jRead, etc., which receive JavaScript-friendlier arguments
+// such as string, Uint8Array, and DataView.
 export class FacadeVFS extends VFS.Base {
   /**
    * @param {string} name 
@@ -11,6 +18,14 @@ export class FacadeVFS extends VFS.Base {
     super(name, module);
   }
 
+  // Override to indicate which methods are asynchronous.
+  hasAsyncMethod(methodName) {
+    // The input argument is a string like "xOpen", so convert to "jOpen".
+    // Then check if the method exists and is async.
+    const jMethodName = `j${methodName.slice(1)}`;
+    return this[jMethodName] instanceof AsyncFunction;
+  }
+  
   /**
    * @param {string?} filename 
    * @param {number} file 
