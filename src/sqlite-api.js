@@ -844,7 +844,7 @@ export function Factory(Module) {
   })();
 
   sqlite3.vfs_register = function(vfs, makeDefault) {
-    const result = Module.registerVFS(vfs, makeDefault);
+    const result = Module.vfs_register(vfs, makeDefault);
     return check('sqlite3_vfs_register', result);
   };
 
