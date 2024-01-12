@@ -16,7 +16,7 @@ export class MemoryVFS extends FacadeVFS {
 
   close() {
     for (const fileId of this.mapIdToFile.keys()) {
-      this.xClose(fileId);
+      this.jClose(fileId);
     }
   }
 
@@ -29,14 +29,14 @@ export class MemoryVFS extends FacadeVFS {
    */
   jOpen(filename, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
-    filename = filename || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
+    filename = filename || Math.random().toString(36).replace('0.', '');
 
     let file = this.mapNameToFile.get(filename);
     if (!file) {
       if (flags & VFS.SQLITE_OPEN_CREATE) {
         // Create a new file object.
         file = {
-          name: filename,
+          filename,
           flags,
           size: 0,
           data: new ArrayBuffer(0)
@@ -62,7 +62,7 @@ export class MemoryVFS extends FacadeVFS {
     this.mapIdToFile.delete(fileId);
 
     if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-      this.mapNameToFile.delete(file.name);
+      this.mapNameToFile.delete(file.filename);
     }
     return VFS.SQLITE_OK;
   }
