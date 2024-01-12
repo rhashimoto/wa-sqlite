@@ -1,17 +1,17 @@
 // Method names for these signatures must be in src/asyncify_imports.json.
 const SIGNATURES = [
-  'ip', // xClose, xSectorSize, xDeviceCharacteristics
-  'vp', // xShmBarrier
-  'ipI', // xTruncate
-  'ipi', // xSync, xLock, xUnlock, xShmUnmap
-  'ipp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
-  'ipip', // xFileControl, xGetLastError
-  'ippi', // xDelete
-  'ippiI', // xRead, xWrite
-  'ipiii', // xShmLock
-  'ippip', // xAccess, xFullPathname
-  'ipppip', // xOpen
-  'ipiiip', // xShmMap
+  'ippp', // xClose, xSectorSize, xDeviceCharacteristics
+  'vppp', // xShmBarrier
+  'ipppI', // xTruncate
+  'ipppi', // xSync, xLock, xUnlock, xShmUnmap
+  'ipppp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
+  'ipppip', // xFileControl, xGetLastError
+  'ippppi', // xDelete
+  'ippppiI', // xRead, xWrite
+  'ipppiii', // xShmLock
+  'ippppip', // xAccess, xFullPathname
+  'ipppppip', // xOpen
+  'ipppiiip', // xShmMap
 ];
 
 // @ts-ignore
@@ -130,7 +130,7 @@ function injectMethod(signature, isAsync) {
   const method = `${signature}${isAsync ? '_async' : ''}`;
   // @ts-ignore
   adapters[`${method}`] = function(...args) { return adapters_support(...args) };
-  adapters[`${method}__sig`] = `${signature[0]}pp${signature.substring(1).replaceAll('I', 'ii')}`;
+  adapters[`${method}__sig`] = `${signature[0]}${signature.substring(1).replaceAll('I', 'ii')}`;
   adapters[`${method}__deps`] = ['$adapters_support'];
   adapters[`${method}__async`] = isAsync;
 }
