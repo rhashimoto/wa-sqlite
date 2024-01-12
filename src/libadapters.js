@@ -2,12 +2,12 @@
 const SIGNATURES = [
   'ippp', // xClose, xSectorSize, xDeviceCharacteristics
   'vppp', // xShmBarrier
-  'ipppI', // xTruncate
+  'ipppj', // xTruncate
   'ipppi', // xSync, xLock, xUnlock, xShmUnmap
   'ipppp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
   'ipppip', // xFileControl, xGetLastError
   'ippppi', // xDelete
-  'ippppiI', // xRead, xWrite
+  'ippppij', // xRead, xWrite
   'ipppiii', // xShmLock
   'ippppip', // xAccess, xFullPathname
   'ipppppip', // xOpen
@@ -140,9 +140,12 @@ function injectMethod(signature, isAsync) {
   const method = `${signature}${isAsync ? '_async' : ''}`;
   // @ts-ignore
   adapters[`${method}`] = function(...args) { return adapters_support(...args) };
-  adapters[`${method}__sig`] = `${signature[0]}${signature.substring(1).replaceAll('I', 'ii')}`;
   adapters[`${method}__deps`] = ['$adapters_support'];
   adapters[`${method}__async`] = isAsync;
+
+  // Emscripten "legalizes" 64-bit integer arguments by passing them as
+  // two 32-bit signed integers.
+  adapters[`${method}__sig`] = `${signature[0]}${signature.substring(1).replaceAll('j', 'ii')}`;
 }
 
 // For each function signature, inject a synchronous and asynchronous

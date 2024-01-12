@@ -15,26 +15,27 @@
 // defined JavaScript function via a C function pointer.
 #define P const void*
 #define I int
+#define J int64_t
 #define DECLARE(TYPE, NAME, ...) \
   extern TYPE NAME(__VA_ARGS__); \
   extern TYPE NAME##_async(__VA_ARGS__);
 
 DECLARE(I, ippp, P, P, P);
 DECLARE(void, vppp, P, P, P);
-DECLARE(I, ipppI, P, P, P, int64_t);
+DECLARE(I, ipppj, P, P, P, J);
 DECLARE(I, ipppi, P, P, P, I);
 DECLARE(I, ipppp, P, P, P, P);
 DECLARE(I, ipppip, P, P, P, I, P);
 DECLARE(I, ippppi, P, P, P, P, I);
 DECLARE(I, ipppiii, P, P, P, I, I, I);
-DECLARE(I, ippppiI, P, P, P, P, I, int64_t);
+DECLARE(I, ippppij, P, P, P, P, I, J);
 DECLARE(I, ippppip, P, P, P, P, I, P);
 DECLARE(I, ipppppip, P, P, P, P, P, I, P);
 DECLARE(I, ipppiiip, P, P, P, I, I, I, P);
 #undef DECLARE
 #undef P
 #undef I
-
+#undef J
 // This list of methods must match exactly with libadapters.js.
 enum {
   xOpen,
@@ -87,17 +88,17 @@ static int adapter_xClose(sqlite3_file* file) {
 
 static int adapter_xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset) {
   printf("adapter_xRead\n");
-  return VFS_JS(ippppiI, ((VFSFile*)file)->pVfs, xRead, file, pData, iAmt, iOffset);
+  return VFS_JS(ippppij, ((VFSFile*)file)->pVfs, xRead, file, pData, iAmt, iOffset);
 }
 
 static int adapter_xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset) {
   printf("adapter_xWrite\n");
-  return VFS_JS(ippppiI, ((VFSFile*)file)->pVfs, xWrite, file, pData, iAmt, iOffset);
+  return VFS_JS(ippppij, ((VFSFile*)file)->pVfs, xWrite, file, pData, iAmt, iOffset);
 }
 
 static int adapter_xTruncate(sqlite3_file* file, sqlite3_int64 size) {
   printf("adapter_xTruncate\n");
-  return VFS_JS(ipppI, ((VFSFile*)file)->pVfs, xTruncate, file, size);
+  return VFS_JS(ipppj, ((VFSFile*)file)->pVfs, xTruncate, file, size);
 }
 
 static int adapter_xSync(sqlite3_file* file, int flags) {
