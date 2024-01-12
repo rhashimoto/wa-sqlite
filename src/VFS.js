@@ -69,9 +69,6 @@ export class Base {
    * @returns {number|Promise<number>}
    */
   xFullPathname(vfs, zName, nOut, zOut) {
-    // Just copy to the output buffer.
-    this._module.HEAPU8.subarray(zOut, zOut + nOut)
-      .set(this._module.HEAPU8.subarray(zName, zName + nOut));
     return VFS.SQLITE_OK;
   }
 
@@ -208,5 +205,6 @@ export const FILE_TYPE_MASK = [
   VFS.SQLITE_OPEN_TEMP_JOURNAL,
   VFS.SQLITE_OPEN_TRANSIENT_DB,
   VFS.SQLITE_OPEN_SUBJOURNAL,
-  VFS.SQLITE_OPEN_SUPER_JOURNAL
+  VFS.SQLITE_OPEN_SUPER_JOURNAL,
+  VFS.SQLITE_OPEN_WAL
 ].reduce((mask, element) => mask | element);
