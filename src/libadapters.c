@@ -42,6 +42,8 @@ enum {
   xDelete,
   xAccess,
   xFullPathname,
+  xRandomness,
+  xSleep,
   xCurrentTime,
   xGetLastError,
   xCurrentTimeInt64,
@@ -207,6 +209,16 @@ static int adapter_xFullPathname(sqlite3_vfs* vfs, const char* zName, int nOut, 
   return VFS_JS(ippppip, vfs, xFullPathname, vfs, zName, nOut, zOut);
 }
 
+static int adapter_xRandomness(sqlite3_vfs* vfs, int nBuf, char* zBuf) {
+  printf("adapter_xRandomness\n");
+  return VFS_JS(ipppip, vfs, xRandomness, vfs, nBuf, zBuf);
+}
+
+static int adapter_xSleep(sqlite3_vfs* vfs, int microseconds) {
+  printf("adapter_xSleep\n");
+  return VFS_JS(ipppi, vfs, xSleep, vfs, microseconds);
+}
+
 static int adapter_xCurrentTime(sqlite3_vfs* vfs, double* pJulianDay) {
   printf("adapter_xCurrentTime\n");
   return VFS_JS(ipppp, vfs, xCurrentTime, vfs, pJulianDay);
@@ -251,6 +263,8 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
   METHOD(xDelete);
   METHOD(xAccess);
   METHOD(xFullPathname);
+  METHOD(xRandomness);
+  METHOD(xSleep);
   METHOD(xCurrentTime);
   METHOD(xGetLastError);
   METHOD(xCurrentTimeInt64);

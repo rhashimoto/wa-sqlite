@@ -3,9 +3,9 @@ const SIGNATURES = [
   'ippp', // xClose, xSectorSize, xDeviceCharacteristics
   'vppp', // xShmBarrier
   'ipppj', // xTruncate
-  'ipppi', // xSync, xLock, xUnlock, xShmUnmap
+  'ipppi', // xSleep, xSync, xLock, xUnlock, xShmUnmap
   'ipppp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
-  'ipppip', // xFileControl, xGetLastError
+  'ipppip', // xFileControl, xRandomness, xGetLastError
   'ippppi', // xDelete
   'ippppij', // xRead, xWrite
   'ipppiii', // xShmLock
@@ -76,6 +76,8 @@ const adapters = {
       'xDelete',
       'xAccess',
       'xFullPathname',
+      'xRandomness',
+      'xSleep',
       'xCurrentTime',
       'xGetLastError',
       'xCurrentTimeInt64',
