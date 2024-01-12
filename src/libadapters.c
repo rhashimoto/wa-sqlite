@@ -13,30 +13,27 @@
 //
 // Relaying is necessary because Emscripten only allows calling a statically
 // defined JavaScript function via a C function pointer.
-extern int ippp(const void*, const void*, const void*);
-extern int ippp_async(const void*, const void*, const void*);
-extern void vppp(const void*, const void*, const void*);
-extern void vppp_async(const void*, const void*, const void*);
-extern int ipppI(const void*, const void*, const void*, int64_t);
-extern int ipppI_async(const void*, const void*, const void*, int64_t);
-extern int ipppi(const void*, const void*, const void*, int);
-extern int ipppi_async(const void*, const void*, const void*, int);
-extern int ipppp(const void*, const void*, const void*, const void*);
-extern int ipppp_async(const void*, const void*, const void*, const void*);
-extern int ipppip(const void*, const void*, const void*, int, const void*);
-extern int ipppip_async(const void*, const void*, const void*, int, const void*);
-extern int ippppi(const void*, const void*, const void*, const void*, int);
-extern int ippppi_async(const void*, const void*, const void*, const void*, int);
-extern int ipppiii(const void*, const void*, const void*, int, int, int);
-extern int ipppiii_async(const void*, const void*, const void*, int, int, int);
-extern int ippppiI(const void*, const void*, const void*, const void*, int, int64_t);
-extern int ippppiI_async(const void*, const void*, const void*, const void*, int, int64_t);
-extern int ippppip(const void*, const void*, const void*, const void*, int, const void*);
-extern int ippppip_async(const void*, const void*, const void*, const void*, int, const void*);
-extern int ipppppip(const void*, const void*, const void*, const void*, const void*, int, const void*);
-extern int ipppppip_async(const void*, const void*, const void*, const void*, const void*, int, const void*);
-extern int ipppiiip(const void*, const void*, const void*, int, int, int, const void*);
-extern int ipppiiip_async(const void*, const void*, const void*, int, int, int, const void*);
+#define P const void*
+#define I int
+#define DECLARE(TYPE, NAME, ...) \
+  extern TYPE NAME(__VA_ARGS__); \
+  extern TYPE NAME##_async(__VA_ARGS__);
+
+DECLARE(I, ippp, P, P, P);
+DECLARE(void, vppp, P, P, P);
+DECLARE(I, ipppI, P, P, P, int64_t);
+DECLARE(I, ipppi, P, P, P, I);
+DECLARE(I, ipppp, P, P, P, P);
+DECLARE(I, ipppip, P, P, P, I, P);
+DECLARE(I, ippppi, P, P, P, P, I);
+DECLARE(I, ipppiii, P, P, P, I, I, I);
+DECLARE(I, ippppiI, P, P, P, P, I, int64_t);
+DECLARE(I, ippppip, P, P, P, P, I, P);
+DECLARE(I, ipppppip, P, P, P, P, P, I, P);
+DECLARE(I, ipppiiip, P, P, P, I, I, I, P);
+#undef DECLARE
+#undef P
+#undef I
 
 // This list of methods must match exactly with libadapters.js.
 enum {
