@@ -2,162 +2,202 @@
 import * as VFS from './sqlite-constants.js';
 export * from './sqlite-constants.js';
 
+const DEFAULT_SECTOR_SIZE = 512;
+
 // Base class for a VFS.
 export class Base {
-  mxPathName = 64;
+  name;
+  mxPathname = 64;
+  _module;
 
   /**
-   * @param {number} fileId 
-   * @returns {number}
+   * @param {string} name 
+   * @param {object} module 
    */
-  xClose(fileId) {
-    return VFS.SQLITE_IOERR;
+  constructor(name, module) {
+    this.name = name;
+    this._module = module;
   }
 
   /**
-   * @param {number} fileId 
-   * @param {Uint8Array} pData 
-   * @param {number} iOffset
-   * @returns {number}
+   * Overload in subclasses to indicate which methods are asynchronous.
+   * @param {string} methodName 
+   * @returns {boolean}
    */
-  xRead(fileId, pData, iOffset) {
-    return VFS.SQLITE_IOERR;
+  hasAsyncMethod(methodName) {
+    return false;
   }
 
   /**
-   * @param {number} fileId 
-   * @param {Uint8Array} pData 
-   * @param {number} iOffset
-   * @returns {number}
-   */
-  xWrite(fileId, pData, iOffset) {
-    return VFS.SQLITE_IOERR;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {number} iSize 
-   * @returns {number}
-   */
-  xTruncate(fileId, iSize) {
-    return VFS.SQLITE_IOERR;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {*} flags 
-   * @returns {number}
-   */
-  xSync(fileId, flags) {
-    return VFS.SQLITE_OK;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {DataView} pSize64 
-   * @returns {number}
-   */
-  xFileSize(fileId, pSize64) {
-    return VFS.SQLITE_IOERR;
-  }
-
-  /**
-   * @param {number} fileId 
+   * @param {number} vfs 
+   * @param {number} zName 
+   * @param {number} file 
    * @param {number} flags 
-   * @returns {number}
+   * @param {number} pOutFlags 
+   * @returns {number|Promise<number>}
    */
-  xLock(fileId, flags) {
-    return VFS.SQLITE_OK;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {number} flags 
-   * @returns {number}
-   */
-  xUnlock(fileId, flags) {
-    return VFS.SQLITE_OK;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {DataView} pResOut 
-   * @returns {number}
-   */
-  xCheckReservedLock(fileId, pResOut) {
-    pResOut.setInt32(0, 0, true);
-    return VFS.SQLITE_OK;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {number} op 
-   * @param {DataView} pArg 
-   * @returns {number}
-   */
-  xFileControl(fileId, op, pArg) {
-    return VFS.SQLITE_NOTFOUND;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @returns {number}
-   */
-  xSectorSize(fileId) {
-    return 512;
-  }
-
-  /**
-   * @param {number} fileId 
-   * @returns {number}
-   */
-  xDeviceCharacteristics(fileId) {
-    return 0;
-  }
-
-  /**
-   * @param {string?} name 
-   * @param {number} fileId 
-   * @param {number} flags 
-   * @param {DataView} pOutFlags 
-   * @returns {number}
-   */
-  xOpen(name, fileId, flags, pOutFlags) {
+  xOpen(vfs, zName, file, flags, pOutFlags) {
     return VFS.SQLITE_CANTOPEN;
   }
 
   /**
-   * @param {string} name 
+   * @param {number} vfs 
+   * @param {number} zName 
    * @param {number} syncDir 
-   * @returns {number}
+   * @returns {number|Promise<number>}
    */
-  xDelete(name, syncDir) {
-    return VFS.SQLITE_IOERR;
+  xDelete(vfs, zName, syncDir) {
+    return VFS.SQLITE_OK;
   }
 
   /**
-   * @param {string} name 
+   * @param {number} vfs 
+   * @param {number} zName 
    * @param {number} flags 
-   * @param {DataView} pResOut 
-   * @returns {number}
+   * @param {number} pResOut 
+   * @returns {number|Promise<number>}
    */
-  xAccess(name, flags, pResOut) {
-    return VFS.SQLITE_IOERR;
+  xAccess(vfs, zName, flags, pResOut) {
+    return VFS.SQLITE_OK;
   }
 
   /**
-   * Handle asynchronous operation. This implementation will be overriden on
-   * registration by an Asyncify build.
-   * @param {function(): Promise<number>} f 
-   * @returns {number}
+   * @param {number} vfs 
+   * @param {number} zName 
+   * @param {number} nOut 
+   * @param {number} zOut 
+   * @returns {number|Promise<number>}
    */
-  handleAsync(f) {
-    // This default implementation deliberately does not match the
-    // declared signature. It will be used in testing VFS classes
-    // separately from SQLite. This will work acceptably for methods
-    // that simply return the handleAsync() result without using it.
-    // @ts-ignore
-    return f();
+  xFullPathname(vfs, zName, nOut, zOut) {
+    // Just copy to the output buffer.
+    this._module.HEAPU8.subarray(zOut, zOut + nOut)
+      .set(this._module.HEAPU8.subarray(zName, zName + nOut));
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} vfs 
+   * @param {number} nBuf 
+   * @param {number} zBuf 
+   * @returns {number|Promise<number>}
+   */
+  xGetLastError(vfs, nBuf, zBuf) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @returns {number|Promise<number>}
+   */
+  xClose(file) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} pData 
+   * @param {number} iAmt 
+   * @param {number} iOffsetLo 
+   * @param {number} iOffsetHi 
+   * @returns {number|Promise<number>}
+   */
+  xRead(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} pData 
+   * @param {number} iAmt 
+   * @param {number} iOffsetLo 
+   * @param {number} iOffsetHi 
+   * @returns {number|Promise<number>}
+   */
+  xWrite(file, pData, iAmt, iOffsetLo, iOffsetHi) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} sizeLo 
+   * @param {number} sizeHi 
+   * @returns {number|Promise<number>}
+   */
+  xTruncate(file, sizeLo, sizeHi) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} flags 
+   * @returns {number|Promise<number>}
+   */
+  xSync(file, flags) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * 
+   * @param {number} file 
+   * @param {number} pSize 
+   * @returns {number|Promise<number>}
+   */
+  xFileSize(file, pSize) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} lock 
+   * @returns {number|Promise<number>}
+   */
+  xLock(file, lock) {
+    console.log('xLock', file, lock);
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} lock 
+   * @returns {number|Promise<number>}
+   */
+  xUnlock(file, lock) {
+    return VFS.SQLITE_OK;
+  } 
+
+  /**
+   * @param {number} file 
+   * @param {number} pResOut 
+   * @returns {number|Promise<number>}
+   */
+  xCheckReservedLock(file, pResOut) {
+    return VFS.SQLITE_OK;
+  }
+
+  /**
+   * @param {number} file 
+   * @param {number} op 
+   * @param {number} pArg 
+   * @returns {number|Promise<number>}
+   */
+  xFileControl(file, op, pArg) {
+    return VFS.SQLITE_NOTFOUND;
+  }
+
+  /**
+   * @param {number} file 
+   * @returns {number|Promise<number>}
+   */
+  xSectorSize(file) {
+    return DEFAULT_SECTOR_SIZE;
+  }
+
+  /**
+   * @param {number} file 
+   * @returns {number|Promise<number>}
+   */
+  xDeviceCharacteristics(file) {
+    return 0;
   }
 }
 

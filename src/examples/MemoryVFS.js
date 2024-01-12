@@ -1,19 +1,18 @@
-// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
+import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
 
 // Memory filesystem. Although this is mainly provided as an example
 // for new VFS classes, it seems to be faster than the default filesystem.
-export class MemoryVFS extends VFS.Base {
-  name = 'memory';
-  
+export class MemoryVFS extends FacadeVFS {
   // Map of existing files, keyed by filename.
   mapNameToFile = new Map();
 
   // Map of open files, keyed by id (sqlite3_file pointer).
   mapIdToFile = new Map();
 
-  constructor() {
-    super();
+  constructor(name, module) {
+    super(name, module);
   }
 
   close() {
@@ -23,27 +22,27 @@ export class MemoryVFS extends VFS.Base {
   }
 
   /**
-   * @param {string?} name 
+   * @param {string?} filename 
    * @param {number} fileId 
    * @param {number} flags 
    * @param {DataView} pOutFlags 
    * @returns {number}
    */
-  xOpen(name, fileId, flags, pOutFlags) {
+  jOpen(filename, fileId, flags, pOutFlags) {
     // Generate a random name if requested.
-    name = name || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
+    filename = filename || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
 
-    let file = this.mapNameToFile.get(name);
+    let file = this.mapNameToFile.get(filename);
     if (!file) {
       if (flags & VFS.SQLITE_OPEN_CREATE) {
         // Create a new file object.
         file = {
-          name,
+          name: filename,
           flags,
           size: 0,
           data: new ArrayBuffer(0)
         };
-        this.mapNameToFile.set(name, file);
+        this.mapNameToFile.set(filename, file);
       } else {
         return VFS.SQLITE_CANTOPEN;
       }
@@ -59,7 +58,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} fileId 
    * @returns {number}
    */
-  xClose(fileId) {
+  jClose(fileId) {
     const file = this.mapIdToFile.get(fileId);
     this.mapIdToFile.delete(fileId);
 
@@ -75,7 +74,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iOffset
    * @returns {number}
    */
-  xRead(fileId, pData, iOffset) {
+  jRead(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
 
     // Clip the requested read to the file boundary.
@@ -101,7 +100,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iOffset
    * @returns {number}
    */
-  xWrite(fileId, pData, iOffset) {
+  jWrite(fileId, pData, iOffset) {
     const file = this.mapIdToFile.get(fileId);
     if (iOffset + pData.byteLength > file.data.byteLength) {
       // Resize the ArrayBuffer to hold more data.
@@ -122,7 +121,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} iSize 
    * @returns {number}
    */
-  xTruncate(fileId, iSize) {
+  jTruncate(fileId, iSize) {
     const file = this.mapIdToFile.get(fileId);
 
     // For simplicity we don't make the ArrayBuffer smaller.
@@ -135,7 +134,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {DataView} pSize64 
    * @returns {number}
    */
-  xFileSize(fileId, pSize64) {
+  jFileSize(fileId, pSize64) {
     const file = this.mapIdToFile.get(fileId);
 
     pSize64.setBigInt64(0, BigInt(file.size), true);
@@ -148,7 +147,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {number} syncDir 
    * @returns {number}
    */
-  xDelete(name, syncDir) {
+  jDelete(name, syncDir) {
     this.mapNameToFile.delete(name);
     return VFS.SQLITE_OK;
   }
@@ -159,7 +158,7 @@ export class MemoryVFS extends VFS.Base {
    * @param {DataView} pResOut 
    * @returns {number}
    */
-  xAccess(name, flags, pResOut) {
+  jAccess(name, flags, pResOut) {
     const file = this.mapNameToFile.get(name);
     pResOut.setInt32(0, file ? 1 : 0, true);
     return VFS.SQLITE_OK;
