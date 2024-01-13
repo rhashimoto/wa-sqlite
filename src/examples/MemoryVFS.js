@@ -28,20 +28,20 @@ export class MemoryVFS extends FacadeVFS {
    * @returns {number|Promise<number>}
    */
   jOpen(filename, fileId, flags, pOutFlags) {
-    // Generate a random name if requested.
-    filename = filename || Math.random().toString(36).replace('0.', '');
+    const url = new URL(filename || Math.random().toString(36).slice(2), 'file://');
+    const pathname = url.pathname;
 
-    let file = this.mapNameToFile.get(filename);
+    let file = this.mapNameToFile.get(pathname);
     if (!file) {
       if (flags & VFS.SQLITE_OPEN_CREATE) {
         // Create a new file object.
         file = {
-          filename,
+          pathname,
           flags,
           size: 0,
           data: new ArrayBuffer(0)
         };
-        this.mapNameToFile.set(filename, file);
+        this.mapNameToFile.set(pathname, file);
       } else {
         return VFS.SQLITE_CANTOPEN;
       }
@@ -62,7 +62,7 @@ export class MemoryVFS extends FacadeVFS {
     this.mapIdToFile.delete(fileId);
 
     if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
-      this.mapNameToFile.delete(file.filename);
+      this.mapNameToFile.delete(file.pathname);
     }
     return VFS.SQLITE_OK;
   }
