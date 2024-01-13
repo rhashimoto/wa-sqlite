@@ -38,73 +38,79 @@ declare interface SQLiteVFS {
   mxPathName?: number;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xClose(fileId: number): number;
+  xClose(fileId: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xRead(
     fileId: number,
-    pData: Uint8Array,
-    iOffset: number
-  ): number;
+    pData: number,
+    iAmt: number,
+    iOffsetLo: number,
+    iOffsetHi: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xWrite(
     fileId: number,
-    pData: Uint8Array,
-    iOffset: number
-  ): number;
+    pData: number,
+    iAmt: number,
+    iOffsetLo: number,
+    iOffsetHi: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xTruncate(fileId: number, iSize: number): number;
+  xTruncate(fileId: number, iSizeLo: number, iSizeHi): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xSync(fileId: number, flags: number): number;
+  xSync(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileSize(
     fileId: number,
-    pSize64: DataView
-  ): number;
+    pSize64: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xLock(fileId: number, flags: number): number;
+  xLock(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xUnlock(fileId: number, flags: number): number;
+  xUnlock(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xCheckReservedLock(
     fileId: number,
-    pResOut: DataView
-  ): number;
+    pResOut: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xFileControl(
     fileId: number,
     flags: number,
-    pOut: DataView
-  ): number;
+    pOut: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xDeviceCharacteristics(fileId: number): number;
+  xDeviceCharacteristics(fileId: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xOpen(
-    name: string|null,
-    fileId: number,
+    pVfs: number,
+    zName: number,
+    pFile: number,
     flags: number,
-    pOutFlags: DataView
-  ): number;
+    pOutFlags: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xDelete(name: string, syncDir: number): number;
+  xDelete(pVfs: number, zName: number, syncDir: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xAccess(
-    name: string,
+    pVfs: number,
+    zName: number,
     flags: number,
-    pResOut: DataView
-  ): number;
+    pResOut: number
+  ): number|Promise<number>;
 }
 
 /**

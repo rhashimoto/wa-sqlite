@@ -1,60 +1,28 @@
 <!DOCTYPE html>
-<!--
-  This is a minimal example of using wa-sqlite. In production, code will
-  likely be bundled, resolving the ES6 module imports. Bundling is not
-  done here to avoid that additional complication, but this means that
-  the bare module specifiers need special handling to work as-is.
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hello wa-sqlite</title>
+</head>
+<body>
+  <h1></h1>
+  <script type="module">
+    new BroadcastChannel('hello').addEventListener('message', (event) => {
+      const div = document.createElement('div');
+      div.textContent = event.data;
+      document.body.appendChild(div);
+    });
 
-  Chrome supports the Import Maps proposal to handle bare module
-  specifiers. For other browsers (which will ignore the import map below)
-  you will need to edit the import paths or use a server (e.g.
-  https://modern-web.dev/docs/dev-server/overview/) that automatically
-  rewrites them.
--->
-<script type="importmap">
-  {
-    "imports": {
-      "wa-sqlite": "../src/sqlite-api.js",
-      "wa-sqlite/debug/wa-sqlite.mjs": "../debug/wa-sqlite.mjs",
-      "wa-sqlite/debug/wa-sqlite-async.mjs": "../debug/wa-sqlite-async.mjs",
-      "wa-sqlite/debug/wa-sqlite-jspi.mjs": "../debug/wa-sqlite-jspi.mjs"
+    // Load script in the Window or in a Worker, depending on whether
+    // the URL contains a "worker" query parameter.
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('worker')) {
+      document.querySelector('h1').textContent = 'Running in a Worker';
+      new Worker('./hello.js', { type: 'module' });
+    } else {
+      document.querySelector('h1').textContent = 'Running in the Window';
+      import('./hello.js')
     }
-  }
-</script>
-
-<script type="module">
-  // import SQLiteESMFactory from 'wa-sqlite/debug/wa-sqlite.mjs';
-  import SQLiteESMFactory from 'wa-sqlite/debug/wa-sqlite-jspi.mjs';
-  // import SQLiteESMFactory from 'wa-sqlite/debug/wa-sqlite-async.mjs';
-
-  import * as SQLite from 'wa-sqlite';
-  import { MemoryVFS } from '../src/examples/MemoryVFS.js';
-  import { MemoryAsyncVFS } from '../src/examples/MemoryAsyncVFS.js';
-
-  async function hello() {
-    const module = await SQLiteESMFactory();
-    const sqlite3 = SQLite.Factory(module);
-
-    sqlite3.vfs_register(new MemoryAsyncVFS('test', module), true);
-    const db = await sqlite3.open_v2(
-      'file://localhost/test.db?foo=bar&baz=quux',
-      SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
-      'test');
-    await sqlite3.exec(db, `SELECT 'Hello, world!'`, (row, columns) => {
-      console.log(row);
-      document.body.textContent = JSON.stringify(row[0]);
-    });
-
-    await sqlite3.exec(db, `
-      PRAGMA cache_size=0;
-      CREATE TABLE IF NOT EXISTS t(x);
-      INSERT INTO t VALUES ('how'), ('now'), ('brown'), ('cow');
-      SELECT * FROM t;
-    `, (row, columns) => {
-      console.log(row);
-    });
-    await sqlite3.close(db);
-  }
-
-  hello();
-</script>
+  </script>
+</body>
+</html>
