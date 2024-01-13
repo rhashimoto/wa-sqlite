@@ -48,9 +48,11 @@ reset().then(async () => {
 
 async function reset() {
   // Delete all OPFS contents.
-  const root = await navigator.storage.getDirectory();
-  // @ts-ignore
-  for await (const name of root.keys()) {
-    await root.removeEntry(name, { recursive: true });
+  const root = await navigator.storage?.getDirectory();
+  if (root) {
+    // @ts-ignore
+    for await (const name of root.keys()) {
+      await root.removeEntry(name, { recursive: true });
+    }
   }
 }
