@@ -197,8 +197,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xOpen(pVfs, zName, pFile, flags, pOutFlags) {
-    // TODO: Restore URI.
-    const filename = zName ? this._module.UTF8ToString(zName) : null;
+    const filename = this.#decodeFilename(zName, flags);
     const pOutFlagsView = this.#makeTypedDataView('Int32', pOutFlags);
     if (isLogging) console.debug('xOpen', filename, pFile, flags, pOutFlagsView);
     return this.jOpen(filename, pFile, flags, pOutFlagsView);
@@ -430,6 +429,40 @@ export class FacadeVFS extends VFS.Base {
     });
   }
 
+  #decodeFilename(zName, flags) {
+    if (flags & VFS.SQLITE_OPEN_URI) {
+      // The first null-terminated string is the URI path. Subsequent
+      // strings are query parameter keys and values.
+      // https://www.sqlite.org/c3ref/open.html#urifilenamesinsqlite3open
+      let pName = zName;
+      let state = 1;
+      const charCodes = [];
+      while (state) {
+        const charCode = this._module.HEAPU8[pName++];
+        if (charCode) {
+          charCodes.push(charCode);
+        } else {
+          if (!this._module.HEAPU8[pName]) state = null;
+          switch (state) {
+            case 1: // path
+              charCodes.push('?'.charCodeAt(0));
+              state = 2;
+              break;
+            case 2: // key
+              charCodes.push('='.charCodeAt(0));
+              state = 3;
+              break;
+            case 3: // value
+              charCodes.push('&'.charCodeAt(0));
+              state = 2;
+              break;
+          }
+        }
+      }
+      return  new TextDecoder().decode(new Uint8Array(charCodes));
+    }
+    return zName ? this._module.UTF8ToString(zName) : null;
+  }
 }
 
 // Emscripten "legalizes" 64-bit integer arguments by passing them as

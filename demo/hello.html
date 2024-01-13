@@ -36,7 +36,10 @@
     const sqlite3 = SQLite.Factory(module);
 
     sqlite3.vfs_register(new MemoryAsyncVFS('test', module), true);
-    const db = await sqlite3.open_v2('test.db');
+    const db = await sqlite3.open_v2(
+      'file://localhost/test.db?foo=bar&baz=quux',
+      SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
+      'test');
     await sqlite3.exec(db, `SELECT 'Hello, world!'`, (row, columns) => {
       console.log(row);
       document.body.textContent = JSON.stringify(row[0]);
