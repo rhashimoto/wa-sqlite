@@ -1,103 +1,130 @@
-// Copyright 2023 Roy T. Hashimoto. All Rights Reserved.
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 
 import * as SQLite from '../src/sqlite-api.js';
-
-import GOOG from '../test/GOOG.js';
-import { createTag } from "../src/examples/tag.js";
-import { ArrayModule } from "../src/examples/ArrayModule.js";
-import { ArrayAsyncModule } from "../src/examples/ArrayAsyncModule.js";
 
 // For a typical application, the Emscripten module would be imported
 // statically, but we want to be able to select between the Asyncify
 // and non-Asyncify builds so dynamic import is done later.
 const WA_SQLITE = '../dist/wa-sqlite.mjs';
 const WA_SQLITE_ASYNC = '../dist/wa-sqlite-async.mjs';
+const WA_SQLITE_JSPI = '../dist/wa-sqlite-jspi.mjs';
+
+const MODULE = Symbol('module');
 
 /**
  * @typedef Config
- * @property {boolean} isAsync use WebAssembly build with/without Asyncify
- * @property {string} [dbName] name of the SQLite database
- * @property {string} [vfsModule] path of the VFS module
+ * @property {string} name
+ * @property {string} build build path
+ * @property {string} vfsModule path of the VFS module
  * @property {string} [vfsClass] name of the VFS class
  * @property {Array<*>} [vfsArgs] VFS constructor arguments
  */
 
-(async function() {
-  const Comlink = await import(location.hostname.endsWith('localhost') ?
-    '/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
-    'https://unpkg.com/comlink/dist/esm/comlink.mjs');
+/** @type {Map<string, Config>} */ const CONFIGS = new Map([
+  {
+    name: 'default',
+    build: WA_SQLITE,
+    vfsModule: null
+  },
+  {
+    name: 'MemoryVFS',
+    build: WA_SQLITE,
+    vfsModule: '../src/examples/MemoryVFS.js',
+  },
+  {
+    name: 'MemoryAsyncVFS-async',
+    build: WA_SQLITE_ASYNC,
+    vfsModule: '../src/examples/MemoryAsyncVFS.js',
+  },
+  {
+    name: 'MemoryAsyncVFS-jspi',
+    build: WA_SQLITE_JSPI,
+    vfsModule: '../src/examples/MemoryAsyncVFS.js',
+  },
+  {
+    name: 'OriginPrivateVFS-async',
+    build: WA_SQLITE_ASYNC,
+    vfsModule: '../src/examples/OriginPrivateVFS.js',
+  },
+  {
+    name: 'OriginPrivateVFS-jspi',
+    build: WA_SQLITE_JSPI,
+    vfsModule: '../src/examples/OriginPrivateVFS.js',
+  },
+].map(config => [config.name, config]));
 
-  /**
-   * @param {Config} config
-   * @returns {Promise<Function>}
-   */
-  async function open(config) {
-    // Instantiate the SQLite API, choosing between Asyncify and non-Asyncify.
-    const { default: moduleFactory } = await import(config.isAsync ? WA_SQLITE_ASYNC : WA_SQLITE);
-    const module = await moduleFactory();
-    const sqlite3 = SQLite.Factory(module);
+const searchParams = new URLSearchParams(location.search);
 
-    if (config.vfsModule) {
-      // Create the VFS and register it as the default file system.
-      const namespace = await import(config.vfsModule);
-      const vfs = new namespace[config.vfsClass](...config.vfsArgs ?? []);
-      await vfs.isReady;
-      sqlite3.vfs_register(vfs, true);
-    }
+maybeReset().then(async () => {
+  const configName = searchParams.get('config') || CONFIGS.keys().next().value;
+  const config = CONFIGS.get(configName);
 
-    // Open the database;
-    const db = await sqlite3.open_v2(config.dbName ?? 'demo');
+  // Instantiate SQLite.
+  const { default: moduleFactory } = await import(config.build);
+  const module = await moduleFactory();
+  const sqlite3 = SQLite.Factory(module);
 
-    // Add an example module with an array back-end.
-    // @ts-ignore
-    sqlite3.create_module(db, 'array', new ArrayModule(sqlite3, db, GOOG.rows, GOOG.columns));
-    if (config.isAsync) {
-      // @ts-ignore
-      sqlite3.create_module(
-        db,
-        'arrayasync',
-        // @ts-ignore
-        new ArrayAsyncModule(sqlite3, db, GOOG.rows, GOOG.columns));
-    }
-
-    // Add example functions regex and regex_replace.
-    sqlite3.create_function(
-      db,
-      'regexp', 2,
-      SQLite.SQLITE_UTF8 | SQLite.SQLITE_DETERMINISTIC, 0,
-      function(context, values) {
-        const pattern = new RegExp(sqlite3.value_text(values[0]))
-        const s = sqlite3.value_text(values[1]);
-        sqlite3.result(context, pattern.test(s) ? 1 : 0);
-      },
-      null, null);
-
-    sqlite3.create_function(
-      db,
-      'regexp_replace', -1,
-      SQLite.SQLITE_UTF8 | SQLite.SQLITE_DETERMINISTIC, 0,
-      function(context, values) {
-        // Arguments are
-        // (pattern, s, replacement) or
-        // (pattern, s, replacement, flags).
-        if (values.length < 3) {
-          sqlite3.result(context, '');
-          return;  
-        }
-        const pattern = sqlite3.value_text(values[0]);
-        const s = sqlite3.value_text(values[1]);
-        const replacement = sqlite3.value_text(values[2]);
-        const flags = values.length > 3 ? sqlite3.value_text(values[3]) : '';
-        sqlite3.result(context, s.replace(new RegExp(pattern, flags), replacement));
-      },
-      null, null);
-
-    // Create the query interface.
-    const tag = createTag(sqlite3, db);
-    return Comlink.proxy(tag);
+  if (config.vfsModule) {
+    // Create the VFS and register it as the default file system.
+    const namespace = await import(config.vfsModule);
+    const className = config.vfsClass ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
+    const vfsArgs = (config.vfsArgs ?? ['demo', MODULE])
+      .map(arg => arg === MODULE ? module : arg);
+    const vfs = new namespace[className](...vfsArgs);
+    await vfs.isReady();
+    sqlite3.vfs_register(vfs, true);
   }
 
-  postMessage(null);
-  Comlink.expose(open);
-})();
+  // Open the database.
+  const db = await sqlite3.open_v2(searchParams.get('db') ?? 'demo');
 
+  // Handle SQL queries.
+  addEventListener('message', async (event) => {
+    try {
+      const query = event.data;
+
+      const start = performance.now();
+      const results = [];
+      for await (const stmt of sqlite3.statements(db, query)) {
+        const rows = [];
+        while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+          const row = sqlite3.row(stmt);
+          rows.push(row);
+        }
+  
+        const columns = sqlite3.column_names(stmt)
+        if (columns.length) {
+          results.push({ columns, rows });
+        }
+      }
+      const end = performance.now();
+
+      postMessage({
+        results,
+        elapsed: (end - start) / 1000
+      })
+    } catch (e) {
+      console.error(e);
+      postMessage({ error: e.toString() });
+    }
+  });
+
+  // Signal that we're ready.
+  postMessage(null);
+}).catch(e => {
+  console.error(e);
+  postMessage(e.toString());
+});
+
+async function maybeReset() {
+  if (searchParams.has('reset')) {
+    const root = await navigator.storage?.getDirectory();
+    if (root) {
+      console.log('clearing OPFS');
+      // @ts-ignore
+      for await (const name of root.keys()) {
+        await root.removeEntry(name, { recursive: true });
+      }
+    }
+  }
+}

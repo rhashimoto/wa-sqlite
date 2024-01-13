@@ -1,4 +1,4 @@
-// Copyright 2023 Roy T. Hashimoto. All Rights Reserved.
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 
 // This is the path to the Monaco editor distribution. For development
 // this loads from the local server (uses Yarn 2 path).
@@ -6,84 +6,16 @@ const MONACO_VS = location.hostname.endsWith('localhost') ?
   '/.yarn/unplugged/monaco-editor-npm-0.34.1-03d887d213/node_modules/monaco-editor/dev/vs' :
   'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs';
 
+const SQL_KEY = 'wa-sqlite demo sql';
 const DEFAULT_SQL = `
 -- Optionally select statements to execute.
 
--- Example virtual table with some stock prices.
-CREATE VIRTUAL TABLE IF NOT EXISTS goog USING array;
-
--- Copy virtual table into a native table (on the current VFS):
-CREATE TABLE IF NOT EXISTS copied AS SELECT * FROM goog;
-SELECT * FROM copied LIMIT 5;`.trim();
-
-// Define the selectable configurations.
-const DATABASE_CONFIGS = new Map([
-  {
-    label: 'unix / standard',
-    isAsync: false,
-  },
-  {
-    label: 'Memory / standard',
-    isAsync: false,
-    vfsModule: '../src/examples/MemoryVFS.js',
-    vfsClass: 'MemoryVFS',
-    vfsArgs: []
-  },
-  {
-    label: 'MemoryAsync / asyncify',
-    isAsync: true,
-    vfsModule: '../src/examples/MemoryAsyncVFS.js',
-    vfsClass: 'MemoryAsyncVFS',
-    vfsArgs: []
-  },
-  {
-    label: 'IDBMinimal / asyncify',
-    isAsync: true,
-    vfsModule: '../src/examples/IDBMinimalVFS.js',
-    vfsClass: 'IDBMinimalVFS',
-    vfsArgs: ['demo-IDBMinimalVFS']
-  },
-  {
-    label: 'IDBBatchAtomic / asyncify',
-    isAsync: true,
-    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
-    vfsClass: 'IDBBatchAtomicVFS',
-    vfsArgs: ['demo-IDBBatchAtomicVFS']
-  },
-  {
-    label: 'OriginPrivateFileSystem / asyncify',
-    isAsync: true,
-    vfsModule: '../src/examples/OriginPrivateFileSystemVFS.js',
-    vfsClass: 'OriginPrivateFileSystemVFS',
-    vfsArgs: []
-  },
-  {
-    label: 'AccessHandlePool / standard',
-    isAsync: false,
-    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
-    vfsClass: 'AccessHandlePoolVFS',
-    vfsArgs: ['/demo-AccessHandlePoolVFS']
-  }
-].map(obj => [obj.label, obj]));
-
-const CONFIG_KEY = 'wa-sqlite demo config';
-const SQL_KEY = 'wa-sqlite demo sql';
+CREATE TABLE IF NOT EXISTS t(x PRIMARY KEY, y);
+INSERT OR REPLACE INTO t VALUES ('good', 'bad'), ('hot', 'cold'), ('up', 'down');
+SELECT * FROM t;
+`.trim();
 
 window.addEventListener('DOMContentLoaded', async function() {
-  const Comlink = await import(location.hostname.endsWith('localhost') ?
-    '/.yarn/unplugged/comlink-npm-4.4.1-b05bb2527d/node_modules/comlink/dist/esm/comlink.min.js' :
-    'https://unpkg.com/comlink/dist/esm/comlink.mjs');
-
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('clear')) {
-    localStorage.clear();
-    const worker = new Worker('./clean-worker.js', { type: 'module' });
-    await new Promise(resolve => {
-      worker.addEventListener('message', resolve);
-    });
-    worker.terminate();
-  }
-
   // Load the Monaco editor
   const button = /** @type {HTMLButtonElement} */(document.getElementById('execute'));
   const editorReady = createMonacoEditor().then(editor => {
@@ -107,44 +39,20 @@ window.addEventListener('DOMContentLoaded', async function() {
     return editor;
   });
 
-  // Populate the database configuration selector.
-  const select = /** @type {HTMLSelectElement} */(document.getElementById('vfs'));
-  for (const [key, config] of DATABASE_CONFIGS) {
-    const option = document.createElement('option');
-    option.value = key;
-    option.textContent = config.label;
-    select.appendChild(option);
-
-    // Restore the last used config.
-    const savedConfig = localStorage.getItem(CONFIG_KEY);
-    if (savedConfig === key) {
-      option.selected = true;
+  // Start the Worker.
+  // Propagate the main page search parameters to the Worker URL.
+  const workerURL = new URL('./demo-worker.js', import.meta.url);
+  workerURL.search = location.search;
+  const worker = new Worker(workerURL, { type: 'module' });
+  worker.addEventListener('message', function(event) {
+    // The Worker will response with null on successful start, or with
+    // an error message on failure.
+      if (event.data) {
+      document.getElementById('output').innerHTML = `<pre>${event.data}</pre>`;
+    } else {
+      button.disabled = false;
     }
-  }
-
-  // Handle new VFS selection.
-  let worker;
-  select.addEventListener('change', async (event) => {
-    button.disabled = true;
-
-    // Restart the worker.
-    worker?.terminate();
-    worker = new Worker('./demo-worker.js', { type: 'module' });
-    await new Promise(resolve => {
-      worker.addEventListener('message', resolve, { once: true });
-    });
-    
-    // Configure the worker database.
-    const config = DATABASE_CONFIGS.get(select.value);
-    const workerProxy = Comlink.wrap(worker);
-    window['sql'] = await workerProxy(config);
-
-    // Remember the config for next page load.
-    localStorage.setItem(CONFIG_KEY, select.value);
-
-    button.disabled = false;
-  });
-  select.dispatchEvent(new CustomEvent('change'));
+  }, { once: true });
 
   // Execute SQL on button click.
   button.addEventListener('click', async function() {
@@ -164,20 +72,20 @@ window.addEventListener('DOMContentLoaded', async function() {
     const timestamp = document.getElementById('timestamp');
     timestamp.textContent = new Date().toLocaleTimeString();
 
-    let time = Date.now();
-    try {
-      // Execute the SQL using the template tag proxy from the Worker.
-      const sql = window['sql'];
-      const results = await sql`${queries}`;
-      results.map(formatTable).forEach(table => output.append(table));
-    } catch (e) {
-      // Adjust for browser differences in Error.stack().
-      const report = (window['chrome'] ? '' : `${e.message}\n`) + e.stack;
-      output.innerHTML = `<pre>${report}</pre>`;
-    } finally {
-      timestamp.textContent += ` ${(Date.now() - time) / 1000} seconds`;
+    let time = performance.now();
+    worker.postMessage(queries);
+    worker.addEventListener('message', async function(event) {
+      if (event.data.results) {
+        // Format the results as tables.
+        event.data.results
+          .map(formatTable)
+          .forEach(table => output.append(table));        
+      } else {
+        output.innerHTML = `<pre>${event.data.error}</pre>`;
+      }
+      timestamp.textContent += ` ${Math.trunc(performance.now() - time) / 1000} seconds`;
       button.disabled = false;
-    }
+    }, { once: true });
   });
 });
 

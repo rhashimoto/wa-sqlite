@@ -19,6 +19,9 @@ export class Base {
     this._module = module;
   }
 
+  async isReady() {
+  }
+
   /**
    * Overload in subclasses to indicate which methods are asynchronous.
    * @param {string} methodName 
