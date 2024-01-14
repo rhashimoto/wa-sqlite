@@ -19,7 +19,6 @@ async function getPathComponents(pathname, create) {
   return [directoryHandle, filename];
 };
 
-
 class File {
   /** @type {string} */ pathname;
   /** @type {number} */ flags;

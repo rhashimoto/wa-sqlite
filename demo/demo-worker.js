@@ -86,11 +86,11 @@ maybeReset().then(async () => {
 
       postMessage({
         results,
-        elapsed: (end - start) / 1000
+        elapsed: Math.trunc(end - start) / 1000
       })
     } catch (e) {
       console.error(e);
-      postMessage({ error: e.toString() });
+      postMessage({ error: cvtErrorToCloneable(e) });
     }
   });
 
@@ -98,7 +98,7 @@ maybeReset().then(async () => {
   postMessage(null);
 }).catch(e => {
   console.error(e);
-  postMessage(e.toString());
+  postMessage({ error: cvtErrorToCloneable(e) });
 });
 
 async function maybeReset() {
@@ -112,4 +112,24 @@ async function maybeReset() {
       }
     }
   }
+}
+
+function cvtErrorToCloneable(e) {
+  if (e instanceof Error) {
+    const props = new Set([
+      ...['name', 'message', 'stack'].filter(k => e[k] !== undefined),
+      ...Object.getOwnPropertyNames(e)
+    ]);
+    return Object.fromEntries(Array.from(props, k =>  [k, e[k]])
+      .filter(([_, v]) => {
+        // Skip any non-cloneable properties.
+        try {
+          structuredClone(v);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }));
+  }
+  return e;
 }
