@@ -18,7 +18,11 @@ export class FacadeVFS extends VFS.Base {
     super(name, module);
   }
 
-  // Override to indicate which methods are asynchronous.
+  /**
+   * Override to indicate which methods are asynchronous.
+   * @param {string} methodName 
+   * @returns {boolean}
+   */
   hasAsyncMethod(methodName) {
     // The input argument is a string like "xOpen", so convert to "jOpen".
     // Then check if the method exists and is async.
@@ -26,6 +30,15 @@ export class FacadeVFS extends VFS.Base {
     return this[jMethodName] instanceof AsyncFunction;
   }
   
+  /**
+   * Return the lock name for a file to be used by locking mixins.
+   * @param {number} pFile 
+   * @returns {string}
+   */
+  getLockName(pFile) {
+    throw new Error('unimplemented');
+  }
+
   /**
    * @param {string?} filename 
    * @param {number} pFile 
