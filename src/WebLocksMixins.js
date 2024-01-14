@@ -1,5 +1,27 @@
 import * as VFS from './VFS.js';
 
+const singleContextFinalizationRegistry = new FinalizationRegistry(releaser => releaser());
+
+export const WebLocksSingleContext = superclass => class extends superclass {
+  constructor(...args) {
+    super(...args);
+  }
+
+  async isReady() {
+    await super.isReady();
+
+    // Throw if any other instance is using the same name.
+    const name = this.getLockName(0);
+    const releaser = await acquireLock(name, { ifAvailable: true });
+    if (!releaser) {
+      throw new Error(`WebLocksSingleContext: '${name}' already in use`);
+    }
+
+    // Release the lock when garbage collected.
+    singleContextFinalizationRegistry.register(this, releaser);
+  }
+}
+
 export const WebLocksExclusive = superclass => class extends superclass {
   #mapIdToReleaser = new Map();
 
