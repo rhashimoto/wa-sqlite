@@ -2,53 +2,37 @@
 
 import * as SQLite from '../src/sqlite-api.js';
 
-// For a typical application, the Emscripten module would be imported
-// statically, but we want to be able to select between the Asyncify
-// and non-Asyncify builds so dynamic import is done later.
-const WA_SQLITE = '../dist/wa-sqlite.mjs';
-const WA_SQLITE_ASYNC = '../dist/wa-sqlite-async.mjs';
-const WA_SQLITE_JSPI = '../dist/wa-sqlite-jspi.mjs';
+const BUILDS = new Map([
+  ['default', '../dist/wa-sqlite.mjs'],
+  ['async', '../dist/wa-sqlite-async.mjs'],
+  ['jspi', '../dist/wa-sqlite-jspi.mjs'],
+]);
 
 const MODULE = Symbol('module');
 
 /**
  * @typedef Config
  * @property {string} name
- * @property {string} build build path
  * @property {string} vfsModule path of the VFS module
  * @property {string} [vfsClass] name of the VFS class
  * @property {Array<*>} [vfsArgs] VFS constructor arguments
  */
 
-/** @type {Map<string, Config>} */ const CONFIGS = new Map([
+/** @type {Map<string, Config>} */ const VFS_CONFIGS = new Map([
   {
     name: 'default',
-    build: WA_SQLITE,
     vfsModule: null
   },
   {
     name: 'MemoryVFS',
-    build: WA_SQLITE,
     vfsModule: '../src/examples/MemoryVFS.js',
   },
   {
-    name: 'MemoryAsyncVFS-async',
-    build: WA_SQLITE_ASYNC,
+    name: 'MemoryAsyncVFS',
     vfsModule: '../src/examples/MemoryAsyncVFS.js',
   },
   {
-    name: 'MemoryAsyncVFS-jspi',
-    build: WA_SQLITE_JSPI,
-    vfsModule: '../src/examples/MemoryAsyncVFS.js',
-  },
-  {
-    name: 'OriginPrivateVFS-async',
-    build: WA_SQLITE_ASYNC,
-    vfsModule: '../src/examples/OriginPrivateVFS.js',
-  },
-  {
-    name: 'OriginPrivateVFS-jspi',
-    build: WA_SQLITE_JSPI,
+    name: 'OriginPrivateVFS',
     vfsModule: '../src/examples/OriginPrivateVFS.js',
   },
 ].map(config => [config.name, config]));
@@ -56,11 +40,12 @@ const MODULE = Symbol('module');
 const searchParams = new URLSearchParams(location.search);
 
 maybeReset().then(async () => {
-  const configName = searchParams.get('config') || CONFIGS.keys().next().value;
-  const config = CONFIGS.get(configName);
+  const buildName = searchParams.get('build') || BUILDS.keys().next().value;
+  const configName = searchParams.get('config') || VFS_CONFIGS.keys().next().value;
+  const config = VFS_CONFIGS.get(configName);
 
   // Instantiate SQLite.
-  const { default: moduleFactory } = await import(config.build);
+  const { default: moduleFactory } = await import(BUILDS.get(buildName));
   const module = await moduleFactory();
   const sqlite3 = SQLite.Factory(module);
 
