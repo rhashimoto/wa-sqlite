@@ -43,7 +43,7 @@ const adapters = {
 
     // @ts-ignore
     // Overwrite this function with the relay service function.
-    adapters_support = function(key, ...args) {
+    adapters_support = function(isAsync, key, ...args) {
       // If the receiver found with the key is a function, just call it.
       // Otherwise, the next argument is the name of the method to be called.
       const receiver = targets.get(key);
@@ -52,7 +52,7 @@ const adapters = {
         receiver :
         receiver[methodName = UTF8ToString(args.shift())];
       
-      if (f instanceof AsyncFunction || receiver.hasAsyncMethod?.(methodName)) {
+      if (isAsync) {
         // Call async function via handleAsync. This works for both
         // Asyncify and JSPI builds.
         if (handleAsync) {
@@ -108,7 +108,7 @@ const adapters = {
       VFS_METHODS.forEach((method, i) => {
         if (vfs[method]) {
           methodMask |= 1 << i;
-          if (vfs[method] instanceof AsyncFunction) {
+          if (vfs['hasAsyncMethod'](method)) {
             asyncMask |= 1 << i;
           }
         }
@@ -140,8 +140,11 @@ const adapters = {
 
 function injectMethod(signature, isAsync) {
   const method = `${signature}${isAsync ? '_async' : ''}`;
-  // @ts-ignore
-  adapters[`${method}`] = function(...args) { return adapters_support(...args) };
+  adapters[`${method}`] = isAsync ?
+    // @ts-ignore
+    function(...args) { return adapters_support(true, ...args) } :
+    // @ts-ignore
+    function(...args) { return adapters_support(false, ...args) };
   adapters[`${method}__deps`] = ['$adapters_support'];
   adapters[`${method}__async`] = isAsync;
 
