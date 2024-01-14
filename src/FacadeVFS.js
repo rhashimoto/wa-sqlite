@@ -1,7 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from './VFS.js';
 
-const isLogging = true;
+const isLogging = false;
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 
 // Convenience base class for a JavaScript VFS.
