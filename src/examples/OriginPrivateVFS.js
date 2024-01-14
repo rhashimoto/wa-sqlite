@@ -1,7 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksExclusive } from '../WebLocksMixins.js';
+import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
 /**
  * @param {string} pathname 
  * @param {boolean} create 
@@ -43,7 +43,7 @@ class File {
   }
 }
 
-export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
+export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
