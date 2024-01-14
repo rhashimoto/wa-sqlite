@@ -23,8 +23,9 @@ reset().then(async () => {
   const module = await SQLiteESMFactory();
   const sqlite3 = SQLite.Factory(module);
 
+  const vfs = await MyVFS.create('test', module);
   // @ts-ignore
-  sqlite3.vfs_register(new MyVFS('test', module), true);
+  sqlite3.vfs_register(vfs, true);
   const db = await sqlite3.open_v2(
     'file://localhost/test.db?foo=bar&baz=quux',
     SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,

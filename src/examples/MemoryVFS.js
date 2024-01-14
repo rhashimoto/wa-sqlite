@@ -10,6 +10,12 @@ export class MemoryVFS extends FacadeVFS {
   // Map of open files, keyed by id (sqlite3_file pointer).
   mapIdToFile = new Map();
 
+  static async create(name, module) {
+    const vfs = new MemoryVFS(name, module);
+    await vfs.isReady();
+    return vfs;
+  }
+
   constructor(name, module) {
     super(name, module);
   }
