@@ -4,6 +4,13 @@ import { MemoryVFS } from './MemoryVFS.js';
 // Sample asynchronous in-memory filesystem. This filesystem requires an
 // asynchronous WebAssembly build (Asyncify or JSPI).
 export class MemoryAsyncVFS extends MemoryVFS {
+
+  static async create(name, module) {
+    const vfs = new MemoryVFS(name, module);
+    await vfs.isReady();
+    return vfs;
+  }
+
   constructor(name, module) {
     super(name, module);
   }

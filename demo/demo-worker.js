@@ -55,8 +55,7 @@ maybeReset().then(async () => {
     const className = config.vfsClass ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
     const vfsArgs = (config.vfsArgs ?? ['demo', MODULE])
       .map(arg => arg === MODULE ? module : arg);
-    const vfs = new namespace[className](...vfsArgs);
-    await vfs.isReady();
+    const vfs = await namespace[className].create(...vfsArgs);
     sqlite3.vfs_register(vfs, true);
   }
 

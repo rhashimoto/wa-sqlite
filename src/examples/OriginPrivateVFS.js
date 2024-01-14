@@ -46,6 +46,12 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
+  static async create(name, module) {
+    const vfs = new OriginPrivateVFS(name, module);
+    await vfs.isReady();
+    return vfs;
+  }
+
   constructor(name, module) {
     super(name, module);
   }
