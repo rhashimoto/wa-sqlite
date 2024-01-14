@@ -50,6 +50,8 @@ window.addEventListener('DOMContentLoaded', async function() {
       if (event.data) {
       document.getElementById('output').innerHTML = `<pre>${event.data}</pre>`;
     } else {
+      document.getElementById('output').innerHTML =
+        JSON.stringify([...new URLSearchParams(location.search).entries()]);
       button.disabled = false;
     }
   }, { once: true });
