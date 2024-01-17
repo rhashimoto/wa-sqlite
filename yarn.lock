@@ -4461,23 +4461,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^4.2.4":
-  version: 4.6.3
-  resolution: "typescript@npm:4.6.3"
+"typescript@npm:^5.3.3":
+  version: 5.3.3
+  resolution: "typescript@npm:5.3.3"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 6932ec95f0420a05fd97aa93b2c2c0540da37be4373b5451ec377202d6577dfbf3ee0f2d8c1b5463b7881e091dee957d5f45e07e4a4cde004bb7c0d6a2a547ea
+  checksum: 6e4e6a14a50c222b3d14d4ea2f729e79f972fa536ac1522b91202a9a65af3605c2928c4a790a4a50aa13694d461c479ba92cedaeb1e7b190aadaa4e4b96b8e18
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^4.2.4#optional!builtin<compat/typescript>":
-  version: 4.6.3
-  resolution: "typescript@patch:typescript@npm%3A4.6.3#optional!builtin<compat/typescript>::version=4.6.3&hash=5d3a66"
+"typescript@patch:typescript@npm%3A^5.3.3#optional!builtin<compat/typescript>":
+  version: 5.3.3
+  resolution: "typescript@patch:typescript@npm%3A5.3.3#optional!builtin<compat/typescript>::version=5.3.3&hash=e012d7"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 55d092009e2fd0586d86fba9f64e70799bd25fdad81eb252d1270d60dc1f1db1dfa43cf536fe86b4fad2540032ae649d3520b448bed92edf2f4624ca7104b892
+  checksum: c93786fcc9a70718ba1e3819bab56064ead5817004d1b8186f8ca66165f3a2d0100fee91fa64c840dcd45f994ca5d615d8e1f566d39a7470fc1e014dbb4cf15d
   languageName: node
   linkType: hard
 
@@ -4596,7 +4596,7 @@ __metadata:
     monaco-editor: "npm:^0.34.1"
     sinon: "npm:^15.0.1"
     typedoc: "npm:^0.22.11"
-    typescript: "npm:^4.2.4"
+    typescript: "npm:^5.3.3"
     web-test-runner-jasmine: "npm:^0.0.5"
   dependenciesMeta:
     comlink@4.4.1:

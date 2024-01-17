@@ -3,8 +3,8 @@
   "compilerOptions": {
     "checkJs": true,
     "target":"ESNext",
-    "module": "esnext",
-    "moduleResolution": "nodenext",
+    "module": "ESNext",
+    "moduleResolution": "Node",
     "lib": ["DOM", "ESNext", "WebWorker"]
   },
   "typeAcquisition": {
