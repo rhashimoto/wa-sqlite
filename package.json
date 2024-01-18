@@ -1,6 +1,6 @@
 {
   "name": "wa-sqlite",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "type": "module",
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
