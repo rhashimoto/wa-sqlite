@@ -4606,11 +4606,11 @@ __metadata:
     typescript: "npm:^5.3.3"
     web-test-runner-jasmine: "npm:^0.0.5"
   dependenciesMeta:
-    comlink@4.4.1:
-      unplugged: true
     monaco-editor@0.34.1:
       unplugged: true
     sinon@15.0.1:
+      unplugged: true
+    web-test-runner-jasmine@0.0.5:
       unplugged: true
   languageName: unknown
   linkType: soft
