@@ -126,7 +126,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         });
 
         // @ts-ignore
-        if (pOutFlags.buffer.detached) {
+        if (pOutFlags.buffer.detached || !pOutFlags.buffer.byteLength) {
           pOutFlags = new DataView(new ArrayBuffer(4));
           this.#growthHandler = (pOutFlagsNew) => {
             pOutFlagsNew.setInt32(0, pOutFlags.getInt32(0, true), true);
@@ -190,7 +190,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         // write boundaries so we have to allow for that.
         const result = await this.#idb.run('readonly', async ({blocks}) => {
           // @ts-ignore
-          if (pData.buffer.detached) {
+          if (pData.buffer.detached || !pData.buffer.byteLength) {
             // WebAssembly memory has grown, invalidating our buffer. Use
             // a temporary buffer and copy after this asynchronous call
             // completes.
@@ -477,7 +477,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
       };
 
       // @ts-ignore
-      if (pResOut.buffer.detached) {
+      if (pResOut.buffer.detached || !pResOut.buffer.byteLength) {
         pResOut = new DataView(new ArrayBuffer(4));
         this.#growthHandler = (pResOutNew) => {
           pResOutNew.setInt32(0, pResOut.getInt32(0, true), true);
@@ -668,7 +668,7 @@ export class IDBBatchAtomicVFS extends VFS.Base {
         });
 
         // @ts-ignore
-        if (pResOut.buffer.detached) {
+        if (pResOut.buffer.detached || !pResOut.buffer.byteLength) {
           pResOut = new DataView(new ArrayBuffer(4));
           this.#growthHandler = (pResOutNew) => {
             pResOutNew.setInt32(0, pResOut.getInt32(0, true), true);
