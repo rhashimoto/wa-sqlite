@@ -1251,6 +1251,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ansi-sequence-parser@npm:^1.1.0":
+  version: 1.1.1
+  resolution: "ansi-sequence-parser@npm:1.1.1"
+  checksum: 9ce30f257badc2ef62cac8028a7e26c368d22bf26650427192e8ffd102da42e377e3affe90fae58062eecc963b0b055f510dde3b677c7e0c433c67069b5a8ee5
+  languageName: node
+  linkType: hard
+
 "ansi-styles@npm:^3.2.1":
   version: 3.2.1
   resolution: "ansi-styles@npm:3.2.1"
@@ -2894,10 +2901,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsonc-parser@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "jsonc-parser@npm:3.0.0"
-  checksum: 30747660fe34a1abc9b749b7381f5750c0283bedaf8b806f8d0984111e67729476cd4d31529b86b5d85a148d30bb62b8f65dc43e681750b38020fbe5b6c0ea1a
+"jsonc-parser@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "jsonc-parser@npm:3.2.0"
+  checksum: bd68b902e5f9394f01da97921f49c5084b2dc03a0c5b4fdb2a429f8d6f292686c1bf87badaeb0a8148d024192a88f5ad2e57b2918ba43fe25cf15f3371db64d4
   languageName: node
   linkType: hard
 
@@ -3127,12 +3134,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"marked@npm:^4.0.12":
-  version: 4.0.12
-  resolution: "marked@npm:4.0.12"
+"marked@npm:^4.3.0":
+  version: 4.3.0
+  resolution: "marked@npm:4.3.0"
   bin:
     marked: bin/marked.js
-  checksum: 151da6d88581f6e843ebd7e9982abf020aaad55ed6fb2dcb9593a3e922633a1906e25da3dfc954e94724277f4fff1945fd061db4682b2069bd8353601366bdbf
+  checksum: c830bb4cb3705b754ca342b656e8a582d7428706b2678c898b856f6030c134ce2d1e19136efa3e6a1841f7330efbd24963d6bdeddc57d2938e906250f99895d0
   languageName: node
   linkType: hard
 
@@ -3199,12 +3206,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimatch@npm:^5.0.1":
-  version: 5.0.1
-  resolution: "minimatch@npm:5.0.1"
+"minimatch@npm:^9.0.3":
+  version: 9.0.3
+  resolution: "minimatch@npm:9.0.3"
   dependencies:
     brace-expansion: "npm:^2.0.1"
-  checksum: 2656580f18d9f38ada186196fcc72dc9076d70f7227adc664e72614d464e075dc4ae3936e6742519e09e336996ef33c6035e606888b12f65ca7fda792ddd2085
+  checksum: c81b47d28153e77521877649f4bab48348d10938df9e8147a58111fe00ef89559a2938de9f6632910c4f7bf7bb5cd81191a546167e58d357f0cfb1e18cecc1c5
   languageName: node
   linkType: hard
 
@@ -4059,14 +4066,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shiki@npm:^0.10.1":
-  version: 0.10.1
-  resolution: "shiki@npm:0.10.1"
+"shiki@npm:^0.14.7":
+  version: 0.14.7
+  resolution: "shiki@npm:0.14.7"
   dependencies:
-    jsonc-parser: "npm:^3.0.0"
-    vscode-oniguruma: "npm:^1.6.1"
-    vscode-textmate: "npm:5.2.0"
-  checksum: eeed2eb2090202ef0917f8a4accd12a204ebbc533b2b78c32cfa2119ea05470ab2aef2f53d84ff90c3c17d05f0b1456813d6234906cc4917ff038f9c32f15cb7
+    ansi-sequence-parser: "npm:^1.1.0"
+    jsonc-parser: "npm:^3.2.0"
+    vscode-oniguruma: "npm:^1.7.0"
+    vscode-textmate: "npm:^8.0.0"
+  checksum: be3f2444c65bd0c57802026f171cb42ad571d361ee885be0c292b60785f68c70f19b69310f5ffe7f7a93db4c5ef50211e0a0248794bc6bb48d242bc43fe72a62
   languageName: node
   linkType: hard
 
@@ -4444,20 +4452,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc@npm:^0.22.11":
-  version: 0.22.13
-  resolution: "typedoc@npm:0.22.13"
+"typedoc@npm:^0.25.7":
+  version: 0.25.7
+  resolution: "typedoc@npm:0.25.7"
   dependencies:
-    glob: "npm:^7.2.0"
     lunr: "npm:^2.3.9"
-    marked: "npm:^4.0.12"
-    minimatch: "npm:^5.0.1"
-    shiki: "npm:^0.10.1"
+    marked: "npm:^4.3.0"
+    minimatch: "npm:^9.0.3"
+    shiki: "npm:^0.14.7"
   peerDependencies:
-    typescript: 4.0.x || 4.1.x || 4.2.x || 4.3.x || 4.4.x || 4.5.x || 4.6.x
+    typescript: 4.6.x || 4.7.x || 4.8.x || 4.9.x || 5.0.x || 5.1.x || 5.2.x || 5.3.x
   bin:
     typedoc: bin/typedoc
-  checksum: bfbac9b61c3062073004eb91e543cd01d3005bc01e7652b9e331c9e851fec5aaab04b80f97f530cb3783dcd26a84fe5ffa7a398ca7d2c8f350299703e1c9c50e
+  checksum: fa88c808e9912ef248cc45b4defea49522e93b97b4bb67423670257a4507ccabdc25c1518a39f6058a728d08675ee0947de55944419fa4bb9f870d84ba4db764
   languageName: node
   linkType: hard
 
@@ -4569,17 +4576,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vscode-oniguruma@npm:^1.6.1":
-  version: 1.6.2
-  resolution: "vscode-oniguruma@npm:1.6.2"
-  checksum: 2b9404ffe6e4ff4079844a3dc1cc6be459d74e475007355cfc09af8bdee09a8c8ac26787d372e08b6c2563f68b31f9b4ec1eb9ae0cc6991bdea2bfd3d38ade45
+"vscode-oniguruma@npm:^1.7.0":
+  version: 1.7.0
+  resolution: "vscode-oniguruma@npm:1.7.0"
+  checksum: 7da9d21459f9788544b258a5fd1b9752df6edd8b406a19eea0209c6bf76507d5717277016799301c4da0d536095f9ca8c06afd1ab8f4001189090c804ca4814e
   languageName: node
   linkType: hard
 
-"vscode-textmate@npm:5.2.0":
-  version: 5.2.0
-  resolution: "vscode-textmate@npm:5.2.0"
-  checksum: bb7e377ebee67ae1c62a6f5be3923d80e192572003f51c4243193bb057c727588d2300ad6aeb824da46c94d531d37310802bfbedc75f2758503ff795ad14b333
+"vscode-textmate@npm:^8.0.0":
+  version: 8.0.0
+  resolution: "vscode-textmate@npm:8.0.0"
+  checksum: 9fa7d66d6042cb090d116c2d8820d34c8870cfcbaed6e404da89f66b899970ed0ac47b59a2e30fc40a25af5414822bb3ea27974f714e9b91910d69c894be95f7
   languageName: node
   linkType: hard
 
@@ -4595,7 +4602,7 @@ __metadata:
     jasmine-core: "npm:^4.5.0"
     monaco-editor: "npm:^0.34.1"
     sinon: "npm:^15.0.1"
-    typedoc: "npm:^0.22.11"
+    typedoc: "npm:^0.25.7"
     typescript: "npm:^5.3.3"
     web-test-runner-jasmine: "npm:^0.0.5"
   dependenciesMeta:
