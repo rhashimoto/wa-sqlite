@@ -420,7 +420,7 @@ declare interface SQLiteAPI {
    * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
-   * @param value 
+   * @param i binding index
    * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_null(stmt: number, i: number): number;
@@ -1291,11 +1291,11 @@ declare module 'wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_LIMIT_WORKER_THREADS: 11;  
 }
 
-/** @ignore */
 declare module 'wa-sqlite' {
   export * from 'wa-sqlite/src/sqlite-constants.js';
 
   /**
+   * @ignore
    * Builds a Javascript API from the Emscripten module. This API is still
    * low-level and closely corresponds to the C API exported by the module,
    * but differs in some specifics like throwing exceptions on errors.
@@ -1615,6 +1615,7 @@ declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
 /** @ignore */
 declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
   import * as VFS from "wa-sqlite/src/VFS.js";
+  /** @ignore */
   export class MemoryVFS extends VFS.Base {
     name: string;
     mapNameToFile: Map<any, any>;
@@ -1632,6 +1633,7 @@ declare module 'wa-sqlite/src/examples/MemoryAsyncVFS.js' {
 /** @ignore */
 declare module 'wa-sqlite/src/examples/tag.js' {
   /**
+   * @ignore
    * Template tag builder. This function creates a tag with an API and
    * database from the same module, then the tag can be used like this:
    * ```
