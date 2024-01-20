@@ -16,7 +16,6 @@ apiSpecs('default', 'MemoryVFS');
 apiSpecs('asyncify', 'MemoryAsyncVFS');
 apiSpecs('asyncify', 'OriginPrivateVFS');
 
-// @ts-ignore
-if (WebAssembly?.Function?.prototype.type) {
-apiSpecs('jspi', 'MemoryAsyncVFS');
+if (await TestContext.supportsJSPI()) {
+  apiSpecs('jspi', 'MemoryAsyncVFS');
 }
