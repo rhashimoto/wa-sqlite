@@ -1,27 +1,9 @@
-import { startWorker } from "./startWorker.js";
+import { TestContext } from "./TestContext.js";
 import { api_exec } from "./api_exec.js";
 import { api_statements } from "./api_statements.js";
 
-class Context {
-  #proxy; // Finalization will terminate the worker.
-
-  constructor(build, config) {
-    this.build = build;
-    this.config = config;
-  }
-
-  async setup() {
-    this.#proxy = await startWorker(this.build, this.config);
-    return this.#proxy;
-  }
-
-  cleanup() {
-    this.#proxy = null;
-  }
-}
-
 function apiSpecs(build, config) {
-  const context = new Context(build, config);
+  const context = new TestContext(build, config);
 
   describe(`SQLite ${build} ${config}`, function() {
     api_exec(context);

@@ -5,13 +5,13 @@ export function api_exec(context) {
   describe('exec', function() {
     let sqlite3, db;
     beforeEach(async function() {
-      ({ sqlite3 } = await context.setup());
+      ({ sqlite3 } = await context.create());
       db = await sqlite3.open_v2('demo');
     });
 
     afterEach(async function() {
       await sqlite3.close(db);
-      await context.cleanup();
+      await context.destroy();
     });
 
     it('should execute a query', async function() {
