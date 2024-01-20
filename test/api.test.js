@@ -20,4 +20,5 @@ apiSpecs('asyncify', 'OriginPrivateVFS');
 
 if (await TestContext.supportsJSPI()) {
   apiSpecs('jspi', 'MemoryAsyncVFS');
+  apiSpecs('jspi', 'OriginPrivateVFS');
 }
