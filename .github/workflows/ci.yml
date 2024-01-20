@@ -20,7 +20,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [16.x]
+        node-version: [18.x]
 
     steps:
     - uses: actions/checkout@v3
@@ -29,7 +29,10 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    
+    - uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: 120
+      
     # Install yarn dependencies.
     - name: Get yarn cache directory path
       id: yarn-cache-dir-path
