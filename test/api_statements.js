@@ -253,6 +253,9 @@ export function api_statements(context) {
         expect(await sqlite3.column_name(stmt, 3)).toEqual('column4');
         expect(await sqlite3.column_name(stmt, 4)).toEqual('column5');
 
+        expect(await sqlite3.column_names(stmt))
+          .toEqual(['column1', 'column2', 'column3', 'column4', 'column5']);
+          
         rc = await sqlite3.bind_collection(stmt, [
           cBlob,
           cDouble,
