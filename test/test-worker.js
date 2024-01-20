@@ -3,8 +3,6 @@
 import * as Comlink from 'comlink';
 import * as SQLite from '../src/sqlite-api.js';
 
-console.log('worker started');
-
 const BUILDS = new Map([
   ['default', '../dist/wa-sqlite.mjs'],
   ['asyncify', '../dist/wa-sqlite-async.mjs'],
@@ -59,6 +57,10 @@ reset().then(async () => {
 
   const sqlite3Proxy = new Proxy(sqlite3, {
     get(target, p, receiver) {
+      // Comlink intercepts some function property names, e.g. "bind",
+      // so allow aliases to avoid the problem.
+      if (typeof p === 'string') p = p.replaceAll('$', '');
+
       const value = Reflect.get(target, p, receiver);
       if (typeof value === 'function') {
         return async (...args) => {

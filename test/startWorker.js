@@ -1,10 +1,12 @@
 import * as Comlink from 'comlink';
 
 const TEST_WORKER_URL = './test-worker.js';
+const TEST_WORKER_TERMINATE = true;
 
 const workerFinalization = new FinalizationRegistry(worker => {
-  console.log('terminating worker');
-  worker.terminate();
+  if (TEST_WORKER_TERMINATE) {
+    worker.terminate();
+  }
 });
 
 export async function startWorker(build, config) {
