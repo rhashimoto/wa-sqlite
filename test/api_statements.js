@@ -255,7 +255,7 @@ export function api_statements(context) {
 
         expect(await sqlite3.column_names(stmt))
           .toEqual(['column1', 'column2', 'column3', 'column4', 'column5']);
-          
+
         rc = await sqlite3.bind_collection(stmt, [
           cBlob,
           cDouble,
@@ -267,8 +267,9 @@ export function api_statements(context) {
 
         while ((rc = await sqlite3.step(stmt)) !== SQLite.SQLITE_DONE) {
           expect(rc).toEqual(SQLite.SQLITE_ROW);
-
+          expect(await sqlite3.data_count(stmt)).toEqual(5)
           expect(await sqlite3.column_count(stmt)).toEqual(5);
+
           const row = await sqlite3.row(stmt);
           expect(row.length).toEqual(5);
 

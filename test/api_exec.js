@@ -51,5 +51,38 @@ export function api_exec(context) {
       expect(rc).toEqual(SQLite.SQLITE_OK);
       expect(results).toEqual({ columns: ['x'], rows: [[1], [2], [3]] });
     });
+
+    it('should allow a transaction to span multiple calls', async function() {
+      let rc;
+      rc = await sqlite3.get_autocommit(db);
+      expect(rc).not.toEqual(0);
+
+      rc = await sqlite3.exec(db, 'BEGIN TRANSACTION');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.get_autocommit(db);
+      expect(rc).toEqual(0);
+
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t AS
+        WITH RECURSIVE cnt(x) AS (
+          SELECT 1
+          UNION ALL
+          SELECT x+1 FROM cnt
+            LIMIT 100
+        )
+        SELECT x FROM cnt;
+    `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.get_autocommit(db);
+      expect(rc).toEqual(0);
+
+      rc = await sqlite3.exec(db, 'COMMIT');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.get_autocommit(db);
+      expect(rc).not.toEqual(0);
+    });
   });
 }
