@@ -10,6 +10,7 @@ export default /** @type {import("@web/test-runner").TestRunnerConfig} */ ({
   },
   nodeResolve: true,
   files: ['./test/*.test.js'],
+  concurrency: 1,
   browsers: [
     chromeLauncher({
       launchOptions: {
