@@ -152,7 +152,10 @@ export class MemoryVFS extends FacadeVFS {
    * @returns {number|Promise<number>}
    */
   jDelete(name, syncDir) {
-    this.mapNameToFile.delete(name);
+    const url = new URL(name, 'file://');
+    const pathname = url.pathname;
+
+    this.mapNameToFile.delete(pathname);
     return VFS.SQLITE_OK;
   }
 
@@ -163,7 +166,10 @@ export class MemoryVFS extends FacadeVFS {
    * @returns {number|Promise<number>}
    */
   jAccess(name, flags, pResOut) {
-    const file = this.mapNameToFile.get(name);
+    const url = new URL(name, 'file://');
+    const pathname = url.pathname;
+
+    const file = this.mapNameToFile.get(pathname);
     pResOut.setInt32(0, file ? 1 : 0, true);
     return VFS.SQLITE_OK;
   }

@@ -54,7 +54,7 @@ reset().then(async () => {
       sqlite3.vfs_register(vfs, true);
       return vfs;
     }
-    return null;
+    return {};
   })();
 
   const sqlite3Proxy = new Proxy(sqlite3, {
@@ -76,11 +76,32 @@ reset().then(async () => {
     }
   });
 
+  const vfsProxy = new Proxy(vfs, {
+    get(target, p, receiver) {
+      const value = Reflect.get(target, p, receiver);
+      if (typeof value === 'function') {
+        return async (...args) => {
+          if (p === 'jRead') {
+            // The read buffer Uint8Array will be passed by proxy so all
+            // access is asynchronous. Pass a local buffer to the VFS
+            // and copy the local buffer to the proxy on completion.
+            const proxyBuffer = args[1];
+            args[1] = new Uint8Array(await proxyBuffer.length);
+            const result = await value.apply(target, args);
+            await proxyBuffer.set(args[1]);
+            return result;
+          }
+          return value.apply(target, args);
+        };
+      }
+    }
+  });
+
   const { port1, port2 } = new MessageChannel();
   Comlink.expose({
     module,
     sqlite3: sqlite3Proxy,
-    vfs
+    vfs: vfsProxy,
   }, port1);
   postMessage(null, [port2]);
 }).catch(e => {
