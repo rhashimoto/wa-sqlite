@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink';
 
 const TEST_WORKER_URL = './test-worker.js';
-const TEST_WORKER_TERMINATE = false;
+const TEST_WORKER_TERMINATE = true;
 
 const mapProxyToReleaser = new WeakMap();
 const workerFinalization = new FinalizationRegistry(release => release());
