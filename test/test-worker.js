@@ -29,6 +29,8 @@ const VFS_CONFIGS = new Map([
   },
 ].map(config => [config.name, config]));
 
+const INDEXEDDB_DBNAMES = ['demo'];
+
 const searchParams = new URLSearchParams(location.search);
 
 reset().then(async () => {
@@ -113,6 +115,18 @@ async function reset() {
       }
     }
   }
+
+  // Clear IndexedDB.
+  const dbNames = indexedDB.databases ?
+    await indexedDB.databases() :
+    INDEXEDDB_DBNAMES;
+  await Promise.all(dbNames.map(name => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = resolve;
+      request.onerror = reject;
+    });
+  }));
 }
 
 function cvtErrorToCloneable(e) {
