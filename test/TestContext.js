@@ -3,11 +3,8 @@ import * as Comlink from 'comlink';
 const TEST_WORKER_URL = './test-worker.js';
 const TEST_WORKER_TERMINATE = true;
 
-const workerFinalization = new FinalizationRegistry(worker => {
-  if (TEST_WORKER_TERMINATE) {
-    worker.terminate();
-  }
-});
+const mapProxyToReleaser = new WeakMap();
+const workerFinalization = new FinalizationRegistry(release => release());
 
 export class TestContext {
   #proxy;
@@ -24,19 +21,32 @@ export class TestContext {
 
     const worker = new Worker(url, { type: 'module' });
     const port = await new Promise(resolve => {
-      worker.addEventListener('message', ({ data }) => {
-        resolve(data);
+      worker.addEventListener('message', (event) => {
+        if (event.ports[0]) {
+          return resolve(event.ports[0]);
+        }
+        const e = new Error(event.data.message);
+        throw Object.assign(e, event.data);
       }, { once: true });
     });
 
     const proxy = Comlink.wrap(port);
-    workerFinalization.register(proxy, worker);
+    if (TEST_WORKER_TERMINATE) {
+      function releaser() {
+        worker.terminate();
+      }
+      mapProxyToReleaser.set(proxy, releaser);
+      workerFinalization.register(proxy, releaser);
+    }
+
     this.#proxy = proxy;
     return proxy;
   }
 
   async destroy() {
     this.#proxy[Comlink.releaseProxy]();
+    mapProxyToReleaser.get(this.#proxy)?.();
+
     this.#proxy = null;
   }
 

@@ -80,20 +80,35 @@ reset().then(async () => {
     sqlite3: sqlite3Proxy,
     vfs
   }, port1);
-  postMessage(port2, [port2]);
+  postMessage(null, [port2]);
 }).catch(e => {
   console.error(e);
-  postMessage(null);
+  postMessage(cvtErrorToCloneable(e));
 });
 
 async function reset() {
   // Clear OPFS.
   const root = await navigator.storage?.getDirectory();
   if (root) {
-    // @ts-ignore
-    for await (const name of root.keys()) {
-      await root.removeEntry(name, { recursive: true });
+    const start = performance.now();
+    while (performance.now() - start < 10_000) {
+      try {
+        // @ts-ignore
+        for await (const name of root.keys()) {
+          await root.removeEntry(name, { recursive: true });
+        }
+        return;
+      } catch (e) {
+        // A NoModificationAllowedError is thrown if an entry can't be
+        // deleted because it isn't closed. Just try again.
+        if (e.name === 'NoModificationAllowedError') {
+          await new Promise(resolve => setTimeout(resolve));
+          continue;
+        }
+        throw e;
+      }
     }
+    throw new Error('reset timed out');
   }
 }
 
