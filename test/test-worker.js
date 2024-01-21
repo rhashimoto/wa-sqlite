@@ -87,11 +87,26 @@ reset().then(async () => {
 });
 
 async function reset() {
+  // Limit the amount of time in this function.
+  const abortController = new AbortController();
+  setTimeout(() => abortController.abort(), 10_000);
+
+  // Use a lock to ensure this context is the only one using OPFS.
+  await new Promise((resolve, reject) => {
+    navigator.locks.request('test-worker', { signal: abortController.signal }, lock => {
+      if (lock) {
+        resolve();
+        return new Promise(() => {});
+      }
+      reject(abortController.signal.reason);
+    });
+  });
+
   // Clear OPFS.
   const root = await navigator.storage?.getDirectory();
   if (root) {
-    const start = performance.now();
-    while (performance.now() - start < 10_000) {
+    while (true) {
+      abortController.signal.throwIfAborted();
       try {
         // @ts-ignore
         for await (const name of root.keys()) {
@@ -108,7 +123,6 @@ async function reset() {
         throw e;
       }
     }
-    throw new Error('reset timed out');
   }
 }
 

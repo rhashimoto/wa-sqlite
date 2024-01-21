@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink';
 
 export function sql_0002(context) {
-  fdescribe('sql_0002', function() {
+  describe('sql_0002', function() {
     let sqlite3, db;
     beforeEach(async function() {
       ({ sqlite3 } = await context.create());
