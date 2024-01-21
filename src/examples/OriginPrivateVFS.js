@@ -1,7 +1,8 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
+import { WebLocksExclusive as WebLocksMixin } from '../WebLocksMixins.js';
+
 /**
  * @param {string} pathname 
  * @param {boolean} create 
@@ -76,9 +77,9 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
-  async jDelete(filename, syncDir) {
+  async jDelete(zName, syncDir) {
     try {
-      const url = new URL(filename || Math.random().toString(36).slice(2), 'file://');
+      const url = new URL(zName, 'file://');
       const pathname = url.pathname;
    
       const [directoryHandle, name] = await getPathComponents(pathname, false);
@@ -92,9 +93,9 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
-  async jAccess(filename, flags, pResOut) {
+  async jAccess(zName, flags, pResOut) {
     try {
-      const url = new URL(filename || Math.random().toString(36).slice(2), 'file://');
+      const url = new URL(zName, 'file://');
       const pathname = url.pathname;
 
       const [directoryHandle, dbName] = await getPathComponents(pathname, false);
@@ -130,7 +131,11 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
   jRead(fileId, pData, iOffset) {
     try {
       const file = this.mapIdToFile.get(fileId);
-      const bytesRead = file.accessHandle.read(pData, { at: iOffset });
+
+      // On Chrome (at least), passing pData to accessHandle.read() is
+      // an error because pData is a Proxy of a Uint8Array. Calling
+      // subarray() produces a real Uint8Array and that works.
+      const bytesRead = file.accessHandle.read(pData.subarray(), { at: iOffset });
       if (bytesRead < pData.byteLength) {
         pData.fill(0, bytesRead);
         return VFS.SQLITE_IOERR_SHORT_READ;
@@ -145,7 +150,11 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
   jWrite(fileId, pData, iOffset) {
     try {
       const file = this.mapIdToFile.get(fileId);
-      file.accessHandle.write(pData, { at: iOffset });
+
+      // On Chrome (at least), passing pData to accessHandle.write() is
+      // an error because pData is a Proxy of a Uint8Array. Calling
+      // subarray() produces a real Uint8Array and that works.
+      file.accessHandle.write(pData.subarray(), { at: iOffset });
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;

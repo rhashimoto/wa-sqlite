@@ -16,12 +16,20 @@ const VFS_CONFIGS = new Map([
     vfsModule: null
   },
   {
+    name: 'FLOOR',
+    vfsModule: '../src/examples/FLOOR.js',
+  },
+  {
     name: 'MemoryVFS',
     vfsModule: '../src/examples/MemoryVFS.js',
   },
   {
     name: 'MemoryAsyncVFS',
     vfsModule: '../src/examples/MemoryAsyncVFS.js',
+  },
+  {
+    name: 'IDBBatchAtomicVFS',
+    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
   },
   {
     name: 'OriginPrivateVFS',
@@ -117,14 +125,15 @@ async function reset() {
   // Clear OPFS.
   const root = await navigator.storage?.getDirectory();
   if (root) {
-    while (true) {
+    let opfsDeleted = false;
+    while (!opfsDeleted) {
       abortController.signal.throwIfAborted();
       try {
         // @ts-ignore
         for await (const name of root.keys()) {
           await root.removeEntry(name, { recursive: true });
         }
-        return;
+        opfsDeleted = true;
       } catch (e) {
         // A NoModificationAllowedError is thrown if an entry can't be
         // deleted because it isn't closed. Just try again.
@@ -138,10 +147,10 @@ async function reset() {
   }
 
   // Clear IndexedDB.
-  const dbNames = indexedDB.databases ?
+  const dbList = indexedDB.databases ?
     await indexedDB.databases() :
-    INDEXEDDB_DBNAMES;
-  await Promise.all(dbNames.map(name => {
+    INDEXEDDB_DBNAMES.map(name => ({ name }));
+  await Promise.all(dbList.map(({name}) => {
     return new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase(name);
       request.onsuccess = resolve;

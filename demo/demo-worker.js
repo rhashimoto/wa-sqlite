@@ -32,8 +32,16 @@ const MODULE = Symbol('module');
     vfsModule: '../src/examples/MemoryAsyncVFS.js',
   },
   {
+    name: 'IDBBatchAtomicVFS',
+    vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
+  },
+  {
     name: 'OriginPrivateVFS',
     vfsModule: '../src/examples/OriginPrivateVFS.js',
+  },
+  {
+    name: 'FLOOR',
+    vfsModule: '../src/examples/FLOOR.js',
   },
 ].map(config => [config.name, config]));
 
@@ -110,6 +118,19 @@ async function maybeReset() {
         await root.removeEntry(name, { recursive: true });
       }
     }
+
+    // Clear IndexedDB.
+    const dbList = indexedDB.databases ?
+      await indexedDB.databases() :
+      ['demo', 'demo-floor'].map(name => ({ name }));
+    await Promise.all(dbList.map(({name}) => {
+      return new Promise((resolve, reject) => {
+        console.log(`deleting IndexedDB ${name}`);
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = resolve;
+        request.onerror = reject;
+      });
+    }));
   }
 }
 

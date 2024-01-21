@@ -83,7 +83,7 @@ window.addEventListener('DOMContentLoaded', async function() {
           .map(formatTable)
           .forEach(table => output.append(table));        
       } else {
-        output.innerHTML = `<pre>${event.data.error}</pre>`;
+        output.innerHTML = `<pre>${event.data.error.message}</pre>`;
       }
       timestamp.textContent += ` ${Math.trunc(performance.now() - time) / 1000} seconds`;
       button.disabled = false;

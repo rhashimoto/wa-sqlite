@@ -1,7 +1,6 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import * as VFS from './VFS.js';
 
-const isLogging = false;
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 
 // Convenience base class for a JavaScript VFS.
@@ -212,7 +211,7 @@ export class FacadeVFS extends VFS.Base {
   xOpen(pVfs, zName, pFile, flags, pOutFlags) {
     const filename = this.#decodeFilename(zName, flags);
     const pOutFlagsView = this.#makeTypedDataView('Int32', pOutFlags);
-    if (isLogging) console.debug('xOpen', filename, pFile, flags, pOutFlagsView);
+    this['log']?.('jOpen', filename, pFile, '0x' + flags.toString(16));
     return this.jOpen(filename, pFile, flags, pOutFlagsView);
   }
 
@@ -224,7 +223,7 @@ export class FacadeVFS extends VFS.Base {
    */
   xDelete(pVfs, zName, syncDir) {
     const filename = this._module.UTF8ToString(zName);
-    if (isLogging) console.debug('xDelete', filename, syncDir);
+    this['log']?.('jDelete', filename, syncDir);
     return this.jDelete(filename, syncDir);
   }
 
@@ -238,7 +237,7 @@ export class FacadeVFS extends VFS.Base {
   xAccess(pVfs, zName, flags, pResOut) {
     const filename = this._module.UTF8ToString(zName);
     const pResOutView = this.#makeTypedDataView('Int32', pResOut);
-    if (isLogging) console.debug('xAccess', filename, flags, pResOutView);
+    this['log']?.('jAccess', filename, flags);
     return this.jAccess(filename, flags, pResOutView);
   }
 
@@ -252,7 +251,7 @@ export class FacadeVFS extends VFS.Base {
   xFullPathname(pVfs, zName, nOut, zOut) {
     const filename = this._module.UTF8ToString(zName);
     const zOutArray = this._module.HEAPU8.subarray(zOut, zOut + nOut);
-    if (isLogging) console.debug('xFullPathname', filename, nOut, zOutArray);
+    this['log']?.('jFullPathname', filename, nOut);
     return this.jFullPathname(filename, zOutArray);
   }
 
@@ -264,7 +263,7 @@ export class FacadeVFS extends VFS.Base {
    */
   xGetLastError(pVfs, nBuf, zBuf) {
     const zBufArray = this._module.HEAPU8.subarray(zBuf, zBuf + nBuf);
-    if (isLogging) console.debug('xGetLastError', nBuf, zBufArray);
+    this['log']?.('jGetLastError', nBuf);
     return this.jGetLastError(zBufArray);
   }
 
@@ -273,7 +272,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xClose(pFile) {
-    if (isLogging) console.debug('xClose', pFile);
+    this['log']?.('jClose', pFile);
     return this.jClose(pFile);
   }
 
@@ -286,9 +285,9 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xRead(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
-    const pDataArray = this._module.HEAPU8.subarray(pData, pData + iAmt);
+    const pDataArray = this.#makeDataArray(pData, iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
-    if (isLogging) console.debug('xRead', pFile, pDataArray, iOffset);
+    this['log']?.('jRead', pFile, iAmt, iOffset);
     return this.jRead(pFile, pDataArray, iOffset);
   }
 
@@ -301,9 +300,9 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xWrite(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
-    const pDataArray = this._module.HEAPU8.subarray(pData, pData + iAmt);
+    const pDataArray = this.#makeDataArray(pData, iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
-    if (isLogging) console.debug('xWrite', pFile, pDataArray, iOffset);
+    this['log']?.('jWrite', pFile, pDataArray, iOffset);
     return this.jWrite(pFile, pDataArray, iOffset);
   }
 
@@ -315,7 +314,7 @@ export class FacadeVFS extends VFS.Base {
    */
   xTruncate(pFile, sizeLo, sizeHi) {
     const size = delegalize(sizeLo, sizeHi);
-    if (isLogging) console.debug('xTruncate', pFile, size);
+    this['log']?.('jTruncate', pFile, size);
     return this.jTruncate(pFile, size);
   }
 
@@ -325,7 +324,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xSync(pFile, flags) {
-    if (isLogging) console.debug('xSync', pFile, flags);
+    this['log']?.('jSync', pFile, flags);
     return this.jSync(pFile, flags);
   }
 
@@ -337,7 +336,7 @@ export class FacadeVFS extends VFS.Base {
    */
   xFileSize(pFile, pSize) {
     const pSizeView = this.#makeTypedDataView('BigInt64', pSize);
-    if (isLogging) console.debug('xFileSize', pFile, pSizeView);
+    this['log']?.('jFileSize', pFile);
     return this.jFileSize(pFile, pSizeView);
   }
 
@@ -347,7 +346,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xLock(pFile, lockType) {
-    if (isLogging) console.debug('xLock', pFile, lockType);
+    this['log']?.('jLock', pFile, lockType);
     return this.jLock(pFile, lockType);
   }
 
@@ -357,7 +356,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xUnlock(pFile, lockType) {
-    if (isLogging) console.debug('xUnlock', pFile, lockType);
+    this['log']?.('jUnlock', pFile, lockType);
     return this.jUnlock(pFile, lockType);
   } 
 
@@ -368,7 +367,7 @@ export class FacadeVFS extends VFS.Base {
    */
   xCheckReservedLock(pFile, pResOut) {
     const pResOutView = this.#makeTypedDataView('Int32', pResOut);
-    if (isLogging) console.debug('xCheckReservedLock', pFile, pResOutView);
+    this['log']?.('jCheckReservedLock', pFile);
     return this.jCheckReservedLock(pFile, pResOutView);
   }
 
@@ -382,7 +381,7 @@ export class FacadeVFS extends VFS.Base {
     const pArgView = new DataView(
       this._module.HEAPU8.buffer,
       this._module.HEAPU8.byteOffset + pArg);
-    if (isLogging) console.debug('xFileControl', pFile, op, pArgView);
+    this['log']?.('jFileControl', pFile, op, pArgView);
     return this.jFileControl(pFile, op, pArgView);
   }
 
@@ -391,7 +390,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xSectorSize(pFile) {
-    if (isLogging) console.debug('xSectorSize', pFile);
+    this['log']?.('jSectorSize', pFile);
     return this.jSectorSize(pFile);
   }
 
@@ -400,7 +399,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xDeviceCharacteristics(pFile) {
-    if (isLogging) console.debug('xDeviceCharacteristics', pFile);
+    this['log']?.('jDeviceCharacteristics', pFile);
     return this.jDeviceCharacteristics(pFile);
   }
 
@@ -416,28 +415,52 @@ export class FacadeVFS extends VFS.Base {
     const byteLength = type === 'Int32' ? 4 : 8;
     const getter = `get${type}`;
     const setter = `set${type}`;
-    const dataView = new DataView(
+    const makeDataView = () => new DataView(
       this._module.HEAPU8.buffer,
       this._module.HEAPU8.byteOffset + byteOffset,
       byteLength);
+    let dataView = makeDataView();
     return new Proxy(dataView, {
-      get(target, prop) {
+      get(_, prop) {
+        if (dataView.buffer.byteLength === 0) {
+          // WebAssembly memory resize detached the buffer.
+          dataView = makeDataView();
+        }
         if (prop === getter) {
           return function(byteOffset, littleEndian) {
             if (!littleEndian) throw new Error('must be little endian');
-            return target[prop](byteOffset, littleEndian);
+            return dataView[prop](byteOffset, littleEndian);
           }
         }
         if (prop === setter) {
           return function(byteOffset, value, littleEndian) {
             if (!littleEndian) throw new Error('must be little endian');
-            return target[prop](byteOffset, value, littleEndian);
+            return dataView[prop](byteOffset, value, littleEndian);
           }
         }
         if (typeof prop === 'string' && (prop.match(/^(get)|(set)/))) {
           throw new Error('invalid type');
         }
-        return target[prop];
+        const result = dataView[prop];
+        return typeof result === 'function' ? result.bind(dataView) : result;
+      }
+    });
+  }
+
+  /**
+   * @param {number} byteOffset 
+   * @param {number} byteLength 
+   */
+  #makeDataArray(byteOffset, byteLength) {
+    let target = this._module.HEAPU8.subarray(byteOffset, byteOffset + byteLength);
+    return new Proxy(target, {
+      get: (_, prop, receiver) => {
+        if (target.buffer.byteLength === 0) {
+          // WebAssembly memory resize detached the buffer.
+          target = this._module.HEAPU8.subarray(byteOffset, byteOffset + byteLength);
+        }
+        const result = target[prop];
+        return typeof result === 'function' ? result.bind(target) : result;
       }
     });
   }

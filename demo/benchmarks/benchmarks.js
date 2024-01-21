@@ -74,7 +74,7 @@ document.getElementById('start').addEventListener('click', async event => {
           tr = tr.nextElementSibling;
         }
       } finally {
-        // worker.terminate();
+        worker.terminate();
       }
     }
   } catch (e) {

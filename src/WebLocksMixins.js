@@ -49,7 +49,7 @@ export const WebLocksExclusive = superclass => class extends superclass {
   async jCheckReservedLock(pFile, pResOut) {
     // xCheckReservedLock is called only with an acquired SHARED lock.
     // There can be no other connection with a lock of any level.
-    pResOut.setInt32(0, 0);
+    pResOut.setInt32(0, 0, true);
     return VFS.SQLITE_OK;
   } 
 }
@@ -192,7 +192,7 @@ export const WebLocksShared = superclass => class extends superclass {
 
   async jCheckReservedLock(fileId, pResOut) {
     const name = this.getLockName(fileId);
-    pResOut.setInt32(0, await isSomewhereReserved(name) ? 1 : 0); 
+    pResOut.setInt32(0, await isSomewhereReserved(name) ? 1 : 0, true); 
     return VFS.SQLITE_OK;
   }
 }

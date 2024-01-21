@@ -18,9 +18,13 @@ function apiSpecs(build, config) {
 apiSpecs('default', '');
 apiSpecs('default', 'MemoryVFS');
 apiSpecs('asyncify', 'MemoryAsyncVFS');
+apiSpecs('asyncify', 'IDBBatchAtomicVFS');
 apiSpecs('asyncify', 'OriginPrivateVFS');
+apiSpecs('asyncify', 'FLOOR');
 
 if (await TestContext.supportsJSPI()) {
   apiSpecs('jspi', 'MemoryAsyncVFS');
+  apiSpecs('jspi', 'IDBBatchAtomicVFS');
   apiSpecs('jspi', 'OriginPrivateVFS');
+  apiSpecs('jspi', 'FLOOR');
 }
