@@ -1,0 +1,97 @@
+# This is a utility workflow that can be triggered by other workflows
+# It does the following things:
+#  1. Creates a release notes file (NOTES) that contain the release notes of the rhashimoto/wa-sqlite
+#     repository of the passed version and finds the corresponding tag name
+#  2. Creates a branch with the name `release/[tag name]`
+#  3. Builds wa-sqlite with environments web, worker and node (this is the reason we do this)
+#  4. Commits the build output in the dist folder in that branch
+#  5. Creates a release on this repository using this last commit
+
+name: Release wa-sqlite workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      mendix_wa_sqlite_version:
+        description: 'The version of @mendix/wa-sqlite to release'
+        required: true
+        type: string
+      original_wa_sqlite_version:
+        description: 'The version of the original wa-sqlite on which this release is based on'
+        required: true
+        type: string
+      em_version:
+        description: 'EMSDK version'
+        default: 'latest'
+        required: false
+        type: string
+
+env:
+  EM_CACHE_FOLDER: 'emsdk-cache'
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    # Check out wa-sqlite
+    - uses: actions/checkout@v4
+      with:
+        path: wa-sqlite
+
+    - name: Find latest wa-sqlite release
+      shell: bash
+      id: prepare
+      run: |
+        gh release view -R rhashimoto/wa-sqlite --json tagName,body ${{inputs.original_wa_sqlite_version}} > latest.json
+
+        export TAGNAME=`jq -r .tagName latest.json`
+
+        export SQLITE_VERSION=`grep "^SQLITE_VERSION = .*" wa-sqlite/Makefile | cut -d = -f 2 | xargs`
+
+        echo "Node enabled async wa-sqlite build" >> NOTES
+        echo "## Dependency information" >> NOTES
+        echo "* SQLite version: $SQLITE_VERSION" >> NOTES
+        echo "* rhashimoto/wa-sqlite: $TAGNAME" >> NOTES
+        jq -r .body latest.json >> NOTES
+
+        cd wa-sqlite
+        git checkout -B release/${{inputs.mendix_wa_sqlite_version}}
+
+    # Install EMSDK
+    - name: Setup Emscripten
+      id: cache-system-libraries
+      uses: actions/cache@v3
+      with:
+        path: ${{env.EM_CACHE_FOLDER}}
+        key: ${{inputs.em_version}}-${{runner.os}}
+    - uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: ${{inputs.em_version}}
+        actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
+    - run: emcc -v
+      shell: bash
+
+    # Build
+    - name: Build wa-sqlite
+      working-directory: ./wa-sqlite
+      shell: bash
+      run: |
+        make clean dist/wa-sqlite-async.mjs clean-deps clean-tmp clean-cache "EMFLAGS_EXTRA=-s ENVIRONMENT=web,worker,node"
+
+    # Commit dist
+    - name: Commit dist
+      working-directory: ./wa-sqlite
+      shell: bash
+      run: |
+        git config --global user.name "Release Action"
+        git config --global user.email "no-email@mendix.com"
+        git add *
+        git commit -m "Updated build output"
+        git push -f -u origin "release/${{inputs.mendix_wa_sqlite_version}}"
+
+    # Package
+    - name: Create release
+      working-directory: ./wa-sqlite
+      shell: bash
+      run: gh release create -R $GITHUB_REPOSITORY "${{inputs.mendix_wa_sqlite_version}}" -t "${{inputs.mendix_wa_sqlite_version}}" --target "release/${{inputs.mendix_wa_sqlite_version}}" --notes-file ../NOTES
