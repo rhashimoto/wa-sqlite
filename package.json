@@ -8,7 +8,9 @@
     "src/sqlite-constants.js",
     "src/sqlite-api.js",
     "src/types/*",
+    "src/FacadeVFS.js",
     "src/VFS.js",
+    "src/WebLocksMixins.js",
     "src/examples/*",
     "dist/*",
     "test/*"
