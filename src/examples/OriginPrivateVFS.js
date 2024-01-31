@@ -343,6 +343,38 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     return VFS.SQLITE_OK;
   }
 
+  /**
+   * @param {number} fileId
+   * @param {number} op
+   * @param {DataView} pArg
+   * @returns {number|Promise<number>}
+   */
+  jFileControl(fileId, op, pArg) {
+    try {
+      const file = this.mapIdToFile.get(fileId);
+      switch (op) {
+        case VFS.SQLITE_FCNTL_PRAGMA:
+          const key = extractString(pArg, 4);
+          const value = extractString(pArg, 8);
+          log('xFileControl', file.pathname, 'PRAGMA', key, value);
+          switch (key.toLowerCase()) {
+            case 'journal_mode':
+              if (value &&
+                  !hasUnsafeAccessHandle && 
+                  !['off', 'memory', 'delete'].includes(value.toLowerCase())) {
+                throw new Error('journal_mode must be "off", "memory", or "delete"');
+              }
+              break;
+          }
+          break;
+      }
+    } catch (e) {
+      this.lastError = e;
+      return VFS.SQLITE_IOERR;
+    }
+    return VFS.SQLITE_NOTFOUND;
+  }
+
   jGetLastError(zBuf) {
     if (this.lastError) {
       console.error(this.lastError);
@@ -352,4 +384,13 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
     return VFS.SQLITE_OK
   }
+}
+
+function extractString(dataView, offset) {
+  const p = dataView.getUint32(offset, true);
+  if (p) {
+    const chars = new Uint8Array(dataView.buffer, p);
+    return new TextDecoder().decode(chars.subarray(0, chars.indexOf(0)));
+  }
+  return null;
 }
