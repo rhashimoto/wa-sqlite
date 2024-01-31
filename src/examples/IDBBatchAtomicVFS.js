@@ -98,7 +98,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       }
       
       if (!meta) {
-        throw new Error('File not found');
+        throw new Error(`File ${path} not found`);
       }
 
       const file = new File(path, meta);
