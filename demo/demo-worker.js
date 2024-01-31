@@ -110,27 +110,54 @@ maybeReset().then(async () => {
 
 async function maybeReset() {
   if (searchParams.has('reset')) {
-    const root = await navigator.storage?.getDirectory();
-    if (root) {
-      console.log('clearing OPFS');
-      // @ts-ignore
-      for await (const name of root.keys()) {
-        await root.removeEntry(name, { recursive: true });
-      }
-    }
-
-    // Clear IndexedDB.
-    const dbList = indexedDB.databases ?
-      await indexedDB.databases() :
-      ['demo', 'demo-floor'].map(name => ({ name }));
-    await Promise.all(dbList.map(({name}) => {
-      return new Promise((resolve, reject) => {
-        console.log(`deleting IndexedDB ${name}`);
-        const request = indexedDB.deleteDatabase(name);
-        request.onsuccess = resolve;
-        request.onerror = reject;
+    const outerLockReleaser = await new Promise(resolve => {
+      navigator.locks.request('demo-worker-outer', lock => {
+        return new Promise(release => {
+          resolve(release);
+        });
       });
-    }));
+    });
+
+    await navigator.locks.request('demo-worker-inner', { ifAvailable: true }, async lock => {
+      if (lock) {
+        console.log('clearing OPFS and IndexedDB');
+        const root = await navigator.storage?.getDirectory();
+        if (root) {
+          // @ts-ignore
+          for await (const name of root.keys()) {
+            await root.removeEntry(name, { recursive: true });
+          }
+        }
+    
+        // Clear IndexedDB.
+        const dbList = indexedDB.databases ?
+          await indexedDB.databases() :
+          ['demo', 'demo-floor'].map(name => ({ name }));
+        await Promise.all(dbList.map(({name}) => {
+          return new Promise((resolve, reject) => {
+            const request = indexedDB.deleteDatabase(name);
+            request.onsuccess = resolve;
+            request.onerror = reject;
+          });
+        }));
+      } else {
+        console.warn('reset skipped because another instance already holds the lock');
+      }
+    });
+    
+    await new Promise((resolve, reject) => {
+      const mode = searchParams.has('exclusive') ? 'exclusive' : 'shared';
+      navigator.locks.request('demo-worker-inner', { mode, ifAvailable: true }, lock => {
+        if (lock) {
+          resolve();
+          return new Promise(() => {});
+        } else {
+          reject(new Error('failed to acquire inner lock'));
+        }
+      });
+    });
+
+    outerLockReleaser();
   }
 }
 

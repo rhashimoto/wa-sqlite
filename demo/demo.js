@@ -47,8 +47,8 @@ window.addEventListener('DOMContentLoaded', async function() {
   worker.addEventListener('message', function(event) {
     // The Worker will response with null on successful start, or with
     // an error message on failure.
-      if (event.data) {
-      document.getElementById('output').innerHTML = `<pre>${event.data}</pre>`;
+    if (event.data) {
+      document.getElementById('output').innerHTML = `<pre>${event.data.error.stack}</pre>`;
     } else {
       document.getElementById('output').innerHTML =
         JSON.stringify([...new URLSearchParams(location.search).entries()]);
