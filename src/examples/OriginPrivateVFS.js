@@ -152,6 +152,11 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {string} zName 
+   * @param {number} syncDir 
+   * @returns {Promise<number>}
+   */
   async jDelete(zName, syncDir) {
     try {
       const url = new URL(zName, 'file://');
@@ -168,6 +173,12 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {string} zName 
+   * @param {number} flags 
+   * @param {DataView} pResOut 
+   * @returns {Promise<number>}
+   */
   async jAccess(zName, flags, pResOut) {
     try {
       const url = new URL(zName, 'file://');
@@ -187,6 +198,10 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @returns {Promise<number>}
+   */
   async jClose(fileId) {
     try {
       const file = this.mapIdToFile.get(fileId);
@@ -203,6 +218,12 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   jRead(fileId, pData, iOffset) {
     try {
       const file = this.mapIdToFile.get(fileId);
@@ -231,6 +252,12 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
   jWrite(fileId, pData, iOffset) {
     try {
       const file = this.mapIdToFile.get(fileId);
@@ -246,10 +273,15 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
-  jTruncate(fileId, size) {
+  /**
+   * @param {number} fileId 
+   * @param {number} iSize 
+   * @returns {number}
+   */
+  jTruncate(fileId, iSize) {
     try {
       const file = this.mapIdToFile.get(fileId);
-      file.accessHandle.truncate(size);
+      file.accessHandle.truncate(iSize);
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
@@ -257,6 +289,11 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
   jSync(fileId, flags) {
     try {
       const file = this.mapIdToFile.get(fileId);
@@ -268,11 +305,16 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
     }
   }
 
-  jFileSize(fileId, pSize) {
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pSize64 
+   * @returns {number}
+   */
+  jFileSize(fileId, pSize64) {
     try {
       const file = this.mapIdToFile.get(fileId);
       const size = file.accessHandle.getSize();
-      pSize.setBigInt64(0, BigInt(size), true);
+      pSize64.setBigInt64(0, BigInt(size), true);
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;

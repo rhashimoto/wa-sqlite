@@ -132,7 +132,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       }
       return VFS.SQLITE_OK;
     } catch (e) {
-      console.error(e);
       this.lastError = e;
       return VFS.SQLITE_IOERR_DELETE;
     }
@@ -180,7 +179,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       await this.#idb.sync(file.synchronous === 'full');
       return VFS.SQLITE_OK;
     } catch (e) {
-      console.error(e);
       this.lastError = e;
       return VFS.SQLITE_IOERR_CLOSE;
     }
@@ -533,7 +531,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           return VFS.SQLITE_OK;
       }
     } catch (e) {
-      console.error(e);
       this.lastError = e;
       return VFS.SQLITE_IOERR;
     }
