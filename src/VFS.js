@@ -152,7 +152,6 @@ export class Base {
    * @returns {number|Promise<number>}
    */
   xLock(pFile, lockType) {
-    console.log('xLock', pFile, lockType);
     return VFS.SQLITE_OK;
   }
 
