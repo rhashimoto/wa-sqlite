@@ -31,7 +31,7 @@ jobs:
         cache: 'npm'
     - uses: browser-actions/setup-chrome@v1
       with:
-        chrome-version: 120
+        chrome-version: 121
       
     # Install yarn dependencies.
     - name: Get yarn cache directory path
