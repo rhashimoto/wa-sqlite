@@ -28,7 +28,6 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   /** @type {Map<string, FileSystemSyncAccessHandle>} */ boundHandles = new Map();
   /** @type {Set<FileSystemSyncAccessHandle>} */ unboundHandles = new Set();
   /** @type {Set<string>} */ accessiblePaths = new Set();
-
   releaser = null;
 
   static async create(rootDirectoryPath, module) {

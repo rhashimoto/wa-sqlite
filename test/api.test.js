@@ -17,6 +17,7 @@ function apiSpecs(build, config) {
 
 apiSpecs('default', '');
 apiSpecs('default', 'MemoryVFS');
+apiSpecs('default', 'AccessHandlePoolVFS');
 apiSpecs('asyncify', 'MemoryAsyncVFS');
 apiSpecs('asyncify', 'IDBBatchAtomicVFS');
 apiSpecs('asyncify', 'OriginPrivateVFS');
