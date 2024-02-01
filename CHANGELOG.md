@@ -1,5 +1,12 @@
 # @journeyapps/wa-sqlite
 
+## 0.1.1
+
+### Patch Changes
+
+- fabeb50: Updated from upstream changes
+- fabeb50: Updated powersync-sqlite-core to v0.1.6
+
 ## 0.1.0
 
 ### Minor Changes
