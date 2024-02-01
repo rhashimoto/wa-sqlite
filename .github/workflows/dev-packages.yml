@@ -2,7 +2,7 @@
 # Packages are versioned as `0.0.0-{tag}-DATETIMESTAMP`
 name: Packages Deploy
 
-on: push
+on: workflow_dispatch
 
 jobs:
   publish:
@@ -14,7 +14,7 @@ jobs:
       - name: Setup NodeJS
         uses: actions/setup-node@v2
         with:
-          node-version: 18
+          node-version: 16
 
       - name: Setup Yarn
         run: |

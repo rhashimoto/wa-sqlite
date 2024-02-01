@@ -3,10 +3,13 @@ const vfs_methods = {
   $vfs_method_support__postset: 'vfs_method_support();',
   $vfs_method_support: function() {
     const hasAsyncify = typeof Asyncify === 'object';
+    if (hasAsyncify) {
+      Module['handleAsync'] = Asyncify.handleAsync;
+    }
 
     const mapIdToVFS = new Map();
     const mapFileToVFS = new Map();
-
+    
     Module['registerVFS'] = function(vfs, makeDefault) {
       const vfsAlreadyRegistered = ccall('sqlite3_vfs_find', 'number', ['string'],
         [vfs.name]);
@@ -65,11 +68,10 @@ const vfs_methods = {
       });
     }
 
-    // Convert 64-bit unsigned int in WASM memory to Number. The unsigned
-    // int is assumed to be <= Number.MAX_SAFE_INTEGER;
-    function u64(ptr) {
-      const index = ptr >> 2;
-      return HEAPU32[index] + (HEAPU32[index + 1] * (2**32));
+    // Emscripten "legalizes" 64-bit integer arguments by passing them as
+    // two 32-bit signed integers.
+    function delegalize(lo32, hi32) {
+      return (hi32 * 0x100000000) + lo32 + (lo32 < 0 ? 2**32 : 0);
     }
 
     const closedFiles = hasAsyncify ? new Set() : null;
@@ -92,23 +94,23 @@ const vfs_methods = {
     }
     
     // int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset);
-    _vfsRead = function(file, pData, iAmt, iOffset) {
+    _vfsRead = function(file, pData, iAmt, iOffsetLo, iOffsetHi) {
       const vfs = mapFileToVFS.get(file);
       const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
-      return vfs['xRead'](file, pDataArray, u64(iOffset));
+      return vfs['xRead'](file, pDataArray, delegalize(iOffsetLo, iOffsetHi));
     }
 
     // int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
-    _vfsWrite = function(file, pData, iAmt, iOffset) {
+    _vfsWrite = function(file, pData, iAmt, iOffsetLo, iOffsetHi) {
       const vfs = mapFileToVFS.get(file);
       const pDataArray = HEAPU8.subarray(pData, pData + iAmt);
-      return vfs['xWrite'](file, pDataArray, u64(iOffset));
+      return vfs['xWrite'](file, pDataArray, delegalize(iOffsetLo, iOffsetHi));
     }
 
     // int xTruncate(sqlite3_file* file, sqlite3_int64 size);
-    _vfsTruncate = function(file, iSize) {
+    _vfsTruncate = function(file, iSizeLo, iSizeHi) {
       const vfs = mapFileToVFS.get(file);
-      return vfs['xTruncate'](file, u64(iSize));
+      return vfs['xTruncate'](file, delegalize(iSizeLo, iSizeHi));
     }
 
     // int xSync(sqlite3_file* file, int flags);

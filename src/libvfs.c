@@ -7,9 +7,9 @@
 // sqlite3_io_methods javascript handlers
 // 64-bit integer parameters are passed by pointer.
 extern int vfsClose(sqlite3_file* file);
-extern int vfsRead(sqlite3_file* file, void* pData, int iAmt, const sqlite3_int64* iOffset);
-extern int vfsWrite(sqlite3_file* file, const void* pData, int iAmt, const sqlite3_int64* iOffset);
-extern int vfsTruncate(sqlite3_file* file, const sqlite3_int64* size);
+extern int vfsRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset);
+extern int vfsWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset);
+extern int vfsTruncate(sqlite3_file* file, sqlite3_int64 size);
 extern int vfsSync(sqlite3_file* file, int flags);
 extern int vfsFileSize(sqlite3_file* file, sqlite3_int64* pSize);
 extern int vfsLock(sqlite3_file* file, int flags);
@@ -28,24 +28,13 @@ extern int __rust_no_alloc_shim_is_unstable = 0;
 extern int sqlite3_powersync_init(sqlite3 *db, char **pzErrMsg,
                            const sqlite3_api_routines *pApi);
 
-// Glue functions to pass 64-bit integers by pointer.
-static int xRead(sqlite3_file* file, void* pData, int iAmt, sqlite3_int64 iOffset) {
-  return vfsRead(file, pData, iAmt, &iOffset);
-}
-static int xWrite(sqlite3_file* file, const void* pData, int iAmt, sqlite3_int64 iOffset) {
-  return vfsWrite(file, pData, iAmt, &iOffset);
-}
-static int xTruncate(sqlite3_file* file, sqlite3_int64 size) {
-  return vfsTruncate(file, &size);
-}
-
 static int xOpen(sqlite3_vfs* vfs, const char* zName, sqlite3_file* file, int flags, int* pOutFlags) {
   static sqlite3_io_methods io_methods = {
     1,
     vfsClose,
-    xRead,
-    xWrite,
-    xTruncate,
+    vfsRead,
+    vfsWrite,
+    vfsTruncate,
     vfsSync,
     vfsFileSize,
     vfsLock,
