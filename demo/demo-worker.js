@@ -8,14 +8,12 @@ const BUILDS = new Map([
   ['jspi', '../dist/wa-sqlite-jspi.mjs'],
 ]);
 
-const MODULE = Symbol('module');
-
 /**
  * @typedef Config
  * @property {string} name
  * @property {string} vfsModule path of the VFS module
- * @property {string} [vfsClass] name of the VFS class
- * @property {Array<*>} [vfsArgs] VFS constructor arguments
+ * @property {string} [vfsClassName] name of the VFS class
+ * @property {object} [vfsOptions] VFS constructor arguments
  */
 
 /** @type {Map<string, Config>} */ const VFS_CONFIGS = new Map([
@@ -55,14 +53,16 @@ maybeReset().then(async () => {
   const buildName = searchParams.get('build') || BUILDS.keys().next().value;
   const configName = searchParams.get('config') || VFS_CONFIGS.keys().next().value;
   const config = VFS_CONFIGS.get(configName);
-  const dbName = searchParams.get('db') ?? 'hello';
 
-  if (config.name === 'AccessHandlePoolVFS') {
+  const dbName = searchParams.get('dbName') ?? 'hello';
+  const vfsName = searchParams.get('vfsName') ?? 'demo';
+
+  if (config.vfsModule.includes('AccessHandlePoolVFS')) {
     // Special setup for AccessHandlePoolVFS. The database and journal
     // files must be created before instantiating the VFS if they are
     // to be persistent.
     const root = await navigator.storage.getDirectory();
-    const dir = await root.getDirectoryHandle('demo', { create: true });
+    const dir = await root.getDirectoryHandle(vfsName, { create: true });
     await dir.getFileHandle(dbName, { create: true });
     await dir.getFileHandle(`${dbName}-journal`, { create: true });
   }
@@ -75,10 +75,8 @@ maybeReset().then(async () => {
   if (config.vfsModule) {
     // Create the VFS and register it as the default file system.
     const namespace = await import(config.vfsModule);
-    const className = config.vfsClass ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
-    const vfsArgs = (config.vfsArgs ?? ['demo', MODULE])
-      .map(arg => arg === MODULE ? module : arg);
-    const vfs = await namespace[className].create(...vfsArgs);
+    const className = config.vfsClassName ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
+    const vfs = await namespace[className].create(vfsName, module, config.vfsOptions);
     sqlite3.vfs_register(vfs, true);
   }
 
