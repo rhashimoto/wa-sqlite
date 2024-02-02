@@ -55,6 +55,17 @@ maybeReset().then(async () => {
   const buildName = searchParams.get('build') || BUILDS.keys().next().value;
   const configName = searchParams.get('config') || VFS_CONFIGS.keys().next().value;
   const config = VFS_CONFIGS.get(configName);
+  const dbName = searchParams.get('db') ?? 'hello';
+
+  if (config.name === 'AccessHandlePoolVFS') {
+    // Special setup for AccessHandlePoolVFS. The database and journal
+    // files must be created before instantiating the VFS if they are
+    // to be persistent.
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle('demo', { create: true });
+    await dir.getFileHandle(dbName, { create: true });
+    await dir.getFileHandle(`${dbName}-journal`, { create: true });
+  }
 
   // Instantiate SQLite.
   const { default: moduleFactory } = await import(BUILDS.get(buildName));
@@ -72,7 +83,7 @@ maybeReset().then(async () => {
   }
 
   // Open the database.
-  const db = await sqlite3.open_v2(searchParams.get('db') ?? 'demo');
+  const db = await sqlite3.open_v2(dbName);
 
   // Handle SQL queries.
   addEventListener('message', async (event) => {
