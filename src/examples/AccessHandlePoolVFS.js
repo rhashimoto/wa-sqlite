@@ -191,6 +191,10 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     try {
       const url = new URL(zName, 'file://');
       const path = url.pathname;
+      const accessHandle =
+        this.persistentHandles.get(path) ??
+        this.boundHandles.get(path);
+      accessHandle?.truncate(0);
       this.accessiblePaths.delete(path);
       return VFS.SQLITE_OK;
     } catch (e) {
