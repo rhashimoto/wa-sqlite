@@ -133,6 +133,38 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   }
 
   /**
+   * This method can be used to create a persistent database file
+   * directly under the VFS root directory. Empty journal and write-ahead
+   * log files are also created.
+   * @param {string} filename 
+   */
+  async createPersistentDatabaseFile(filename) {
+    if (this.boundHandles.has(filename)) {
+      throw new Error(`File ${filename} already exists`);
+    }
+
+    const filesToCreate = [
+      filename,
+      `${filename}-journal`,
+      `${filename}-wal`,
+      `${filename}-floor`,
+    ];
+    for (const filename of filesToCreate) {
+      if (!this.persistentHandles.has(filename)) {
+        const fileHandle = await this.rootDirectory.getFileHandle(filename, { create: true });
+        // @ts-ignore
+        const accessHandle = await fileHandle.createSyncAccessHandle({ mode: 'readwrite-unsafe' });
+        const relativePath = await this.rootDirectory.resolve(fileHandle);
+        const path = `/${relativePath.join('/')}`;
+        this.persistentHandles.set(path, accessHandle);
+        if (accessHandle.getSize()) {
+          this.accessiblePaths.add(path);
+        }
+      }
+    }
+  }
+
+  /**
    * @param {string?} zName 
    * @param {number} fileId 
    * @param {number} flags 
