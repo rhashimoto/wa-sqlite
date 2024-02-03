@@ -146,8 +146,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     const filesToCreate = [
       filename,
       `${filename}-journal`,
-      `${filename}-wal`,
-      `${filename}-floor`,
+      `${filename}-wal`
     ];
     for (const filename of filesToCreate) {
       if (!this.persistentHandles.has(filename)) {
