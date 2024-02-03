@@ -579,12 +579,54 @@ export class IDBContext {
     const database = await new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 6);
       request.onupgradeneeded = async event => {
-        if (event.newVersion === 5) {
-          // TODO - migrate
-        } else {
-          const db = request.result;
-          db.createObjectStore('metadata', { keyPath: 'name' });
-          db.createObjectStore('blocks', { keyPath: ['path', 'offset', 'version']});
+        const db = request.result;
+        if (event.oldVersion) {
+          console.log(`Upgrading IndexedDB from version ${event.oldVersion}`);
+        }
+        switch (event.oldVersion) {
+          case 0:
+            // Start with the original schema.
+            db.createObjectStore('blocks', { keyPath: ['path', 'offset', 'version']})
+              .createIndex('version', ['path', 'version']);
+            // fall through intentionally
+          case 5:
+            const tx = request.transaction;
+            const blocks = tx.objectStore('blocks');
+            blocks.deleteIndex('version');
+            const metadata = db.createObjectStore('metadata', { keyPath: 'name' });
+
+            await new Promise((resolve, reject) => {
+              // Iterate over all the blocks.
+              let lastBlock = {};
+              const request = tx.objectStore('blocks').openCursor();
+              request.onsuccess = () => {
+                const cursor = request.result;
+                if (cursor) {
+                  const block = cursor.value;
+                  if (typeof block.offset !== 'number' ||
+                      (block.path === lastBlock.path && block.offset === lastBlock.offset)) {
+                    // Remove superceded block (or the "purge" info).
+                    cursor.delete();
+                  } else if (block.offset === 0) {
+                    // Move metadata to its own store.
+                    metadata.put({
+                      name: block.path,
+                      fileSize: block.fileSize,
+                      version: block.version
+                    });
+
+                    delete block.fileSize;
+                    cursor.update(block);
+                  }
+                  lastBlock = block;
+                  cursor.continue();
+                } else {
+                  resolve();
+                }
+              };
+              request.onerror = () => reject(request.error);
+            });
+            break;
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -726,24 +768,13 @@ export class IDBContext {
               }, { once: true });              
 
               // Return a Promise.
-              return this.wrap(maybeRequest);
+              return wrap(maybeRequest);
             }
             return maybeRequest;
           }
         }
         return result;
       }
-    });
-  }
-
-  /**
-   * @param {IDBRequest} request 
-   * @returns {Promise}
-   */
-  wrap(request) {
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
     });
   }
 
@@ -768,3 +799,15 @@ export class IDBContext {
     this.#request = null;
   }
 }
+
+/**
+ * @param {IDBRequest} request 
+ * @returns {Promise}
+ */
+function wrap(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
