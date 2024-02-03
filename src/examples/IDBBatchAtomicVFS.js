@@ -13,7 +13,6 @@ log.debug = function(...args) {
 /**
  * @typedef Metadata
  * @property {string} name
- * @property {number} flags
  * @property {number} fileSize
  * @property {number} version
  * @property {number} [pendingVersion]
@@ -21,6 +20,7 @@ log.debug = function(...args) {
 
 class File {
   /** @type {string} */ path;
+  /** @type {number} */ flags;
 
   /** @type {Metadata} */ metadata;
   /** @type {number} */ fileSize = 0;
@@ -32,8 +32,9 @@ class File {
   /** @type {string} */ synchronous = 'full';
   /** @type {IDBTransactionOptions} */ txOptions = { durability: 'strict' };
 
-  constructor(path, metadata) {
+  constructor(path, flags, metadata) {
     this.path = path;
+    this.flags = flags;
     this.metadata = metadata;
   }
 }
@@ -90,7 +91,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       if (!meta && (flags & VFS.SQLITE_OPEN_CREATE)) {
         meta = {
           name: path,
-          flags,
           fileSize: 0,
           version: 0
         };
@@ -101,7 +101,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         throw new Error(`File ${path} not found`);
       }
 
-      const file = new File(path, meta);
+      const file = new File(path, flags, meta);
       this.mapIdToFile.set(fileId, file);
       pOutFlags.setInt32(0, flags, true);
       return VFS.SQLITE_OK;
@@ -166,7 +166,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
 
-      if (file.metadata.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+      if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         await this.#idb.q(({ metadata, blocks }) => {
           metadata.delete(file.path);
           blocks.delete(IDBKeyRange.bound([file.path, 0], [file.path, Infinity]));
@@ -233,7 +233,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   jWrite(fileId, pData, iOffset) {
     try {
       const file = this.mapIdToFile.get(fileId);
-      if (file.metadata.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+      if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         if (!file.rollback) {
           // Begin a new write transaction.
           // Add pendingVersion to the metadata in IndexedDB. If we crash
@@ -249,7 +249,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         }
       }
 
-      if (file.metadata.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+      if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         file.changedPages.add(iOffset);
       }
 
@@ -257,8 +257,8 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       const version = file.metadata.version;
       const isOverwrite = iOffset < file.metadata.fileSize;
       if (!isOverwrite ||
-          file.metadata.flags & VFS.SQLITE_OPEN_MAIN_DB ||
-          file.metadata.flags & VFS.SQLITE_OPEN_TEMP_DB) {
+          file.flags & VFS.SQLITE_OPEN_MAIN_DB ||
+          file.flags & VFS.SQLITE_OPEN_TEMP_DB) {
         const block = {
           path: file.path,
           offset: -iOffset,
@@ -336,7 +336,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         file.needsMetadataSync = false;
       }
 
-      if (file.metadata.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+      if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         // Sync is only needed here for durability. Visibility for other
         // connections is ensured in jUnlock().
         if (file.synchronous === 'full') {
@@ -451,7 +451,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           };
           switch (key.toLowerCase()) {
             case 'page_size':
-              if (file.metadata.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+              if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
                 // Don't allow changing the page size.
                 if (value && file.metadata.fileSize) {
                   return VFS.SQLITE_ERROR;
@@ -577,11 +577,15 @@ export class IDBContext {
   
   static async create(name) {
     const database = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(name);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        db.createObjectStore('metadata', { keyPath: 'name' });
-        db.createObjectStore('blocks', { keyPath: ['path', 'offset', 'version']});
+      const request = indexedDB.open(name, 6);
+      request.onupgradeneeded = async event => {
+        if (event.newVersion === 5) {
+          // TODO - migrate
+        } else {
+          const db = request.result;
+          db.createObjectStore('metadata', { keyPath: 'name' });
+          db.createObjectStore('blocks', { keyPath: ['path', 'offset', 'version']});
+        }
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
