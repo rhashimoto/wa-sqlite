@@ -95,7 +95,6 @@ maybeReset().then(async () => {
     },
     null, null);
 
-
   sqlite3.create_function(
     db,
     'regexp_replace', -1,

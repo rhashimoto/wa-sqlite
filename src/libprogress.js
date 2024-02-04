@@ -21,7 +21,7 @@
       ['number', 'number', 'number', 'number'],
       [db, nOps, xProgress ? 1 : 0, pAsyncFlags]);
     if (xProgress) {
-      Module['setCallback'](pAsyncFlags, pApp => xProgress(null));
+      Module['setCallback'](pAsyncFlags, _ => xProgress(pApp));
     }
   };
 })();
