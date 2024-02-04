@@ -541,7 +541,7 @@ export function Factory(Module) {
 
   sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
     verifyDatabase(db);
-    Module.progressHandler(db, nProgressOps, handler, userData);
+    Module.progress_handler(db, nProgressOps, handler, userData);
   };;
 
   sqlite3.reset = (function() {

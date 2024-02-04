@@ -770,6 +770,11 @@ declare interface SQLiteAPI {
 
   /**
    * Specify callback to be invoked between long-running queries
+   * 
+   * The application data passed is ignored. Use closures instead.
+   * 
+   * If any callback function returns a Promise, that function must
+   * be declared `async`, i.e. it must allow use of `await`.
    * @param db database pointer
    * @param nProgressOps target number of database operations between handler invocations
    * @param handler 

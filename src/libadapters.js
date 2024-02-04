@@ -1,5 +1,6 @@
 // Method names for these signatures must be in src/asyncify_imports.json.
 const SIGNATURES = [
+  'ipp', // xProgress
   'ippp', // xClose, xSectorSize, xDeviceCharacteristics
   'vppp', // xShmBarrier, xFinal
   'ipppj', // xTruncate

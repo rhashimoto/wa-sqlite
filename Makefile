@@ -12,6 +12,7 @@ CFILES = \
 	extension-functions.c \
 	main.c \
 	libfunction.c \
+	libprogress.c \
 	libvfs.c \
 	$(CFILES_EXTRA)
 
@@ -63,6 +64,7 @@ EMFLAGS_INTERFACES = \
 EMFLAGS_LIBRARIES = \
 	--js-library src/libadapters.js \
 	--post-js src/libfunction.js \
+	--post-js src/libprogress.js \
 	--post-js src/libvfs.js
 
 EMFLAGS_ASYNCIFY_COMMON = \

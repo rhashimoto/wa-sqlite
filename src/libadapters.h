@@ -16,6 +16,7 @@
   extern TYPE NAME(__VA_ARGS__); \
   extern TYPE NAME##_async(__VA_ARGS__);
 
+DECLARE(I, ipp, P, P);
 DECLARE(I, ippp, P, P, P);
 DECLARE(void, vppp, P, P, P);
 DECLARE(I, ipppj, P, P, P, J);
