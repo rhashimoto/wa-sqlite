@@ -586,12 +586,17 @@ declare interface SQLiteAPI {
 
   /**
    * Create or redefine SQL functions
+   * 
+   * The application data passed is ignored. Use closures instead.
+   * 
+   * If any callback function returns a Promise, that function must
+   * be declared `async`, i.e. it must allow use of `await`.
    * @see https://sqlite.org/c3ref/create_function.html
    * @param db database pointer
    * @param zFunctionName 
    * @param nArg number of function arguments
    * @param eTextRep text encoding (and other flags)
-   * @param pApp application data
+   * @param pApp application data (ignored)
    * @param xFunc 
    * @param xStep 
    * @param xFinal 
@@ -603,9 +608,9 @@ declare interface SQLiteAPI {
     nArg: number,
     eTextRep: number,
     pApp: number,
-    xFunc?: (context: number, values: Uint32Array) => void,
-    xStep?: (context: number, values: Uint32Array) => void,
-    xFinal?: (context: number) => void): number;
+    xFunc?: (context: number, values: Uint32Array) => void|Promise<void>,
+    xStep?: (context: number, values: Uint32Array) => void|Promise<void>,
+    xFinal?: (context: number) => void|Promise<void>): number;
 
   /**
    * Create a SQLite module for virtual tables
