@@ -966,14 +966,6 @@ declare interface SQLiteAPI {
   str_finish(str: number): void;
 
   /**
-   * Get application data in custom function implementation
-   * @see https://sqlite.org/c3ref/user_data.html
-   * @param context context pointer
-   * @returns application data
-   */
-  user_data(context: number): any;
-
-  /**
    * Extract a value from `sqlite3_value`
    * 
    * This is a convenience function that calls the appropriate `value_*`

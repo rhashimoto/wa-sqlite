@@ -6,6 +6,8 @@ export * from './sqlite-constants.js';
 const MAX_INT64 = 0x7fffffffffffffffn;
 const MIN_INT64 = -0x8000000000000000n;
 
+const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
 export class SQLiteError extends Error {
   constructor(message, code) {
     super(message);
@@ -389,17 +391,24 @@ export function Factory(Module) {
 
   sqlite3.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
     verifyDatabase(db);
-    if (xFunc && !xStep && !xFinal) {
-      const result = Module.createFunction(db, zFunctionName, nArg, eTextRep, pApp, xFunc);
-      return check('sqlite3_create_function', result, db);
+    
+    // Convert SQLite callback arguments to JavaScript-friendly arguments.
+    function adapt(f) {
+      return f instanceof AsyncFunction ?
+        (async (ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n))) :
+        ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
     }
 
-    if (!xFunc && xStep && xFinal) {
-      const result = Module.createAggregate(db, zFunctionName, nArg, eTextRep, pApp, xStep, xFinal);
-      return check('sqlite3_create_function', result, db);
-    }
-
-    throw new SQLiteError('invalid function combination', SQLite.SQLITE_MISUSE);
+    const result = Module.create_function(
+      db,
+      zFunctionName,
+      nArg,
+      eTextRep,
+      pApp,
+      xFunc && adapt(xFunc),
+      xStep && adapt(xStep),
+      xFinal);
+    return check('sqlite3_create_function', result, db);
   };
 
   sqlite3.create_module = function(db, zName, module, appData) {
@@ -743,10 +752,6 @@ export function Factory(Module) {
       throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
     }
     return strings.get(str).offset;
-  };
-
-  sqlite3.user_data = function(context) {
-    return Module.getFunctionUserData(context);
   };
 
   sqlite3.value = function(pValue) {

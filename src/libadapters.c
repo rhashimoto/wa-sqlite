@@ -26,6 +26,7 @@ DECLARE(I, ipppj, P, P, P, J);
 DECLARE(I, ipppi, P, P, P, I);
 DECLARE(I, ipppp, P, P, P, P);
 DECLARE(I, ipppip, P, P, P, I, P);
+DECLARE(void, vpppip, P, P, P, I, P);
 DECLARE(I, ippppi, P, P, P, P, I);
 DECLARE(I, ipppiii, P, P, P, I, I, I);
 DECLARE(I, ippppij, P, P, P, P, I, J);
@@ -251,6 +252,56 @@ int EMSCRIPTEN_KEEPALIVE adapter_vfs_register(
 
   *ppVfs = vfs;
   return sqlite3_vfs_register(&vfs->base, makeDefault);
+}
+
+enum {
+  xFunc,
+  xStep,
+  xFinal
+};
+
+#define FUNC_JS(SIGNATURE, KEY, METHOD, ...) \
+  (asyncFlags & (1 << METHOD) ? \
+    SIGNATURE##_async(KEY, #METHOD, __VA_ARGS__) : \
+    SIGNATURE(KEY, #METHOD, __VA_ARGS__))
+
+static void adapter_xFunc(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
+  const void* pApp = sqlite3_user_data(ctx);
+  const int asyncFlags = pApp ? *(int *)pApp : 0;
+  FUNC_JS(vpppip, pApp, xFunc, ctx, argc, argv);
+}
+
+static void adapter_xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
+  const void* pApp = sqlite3_user_data(ctx);
+  const int asyncFlags = pApp ? *(int *)pApp : 0;
+  FUNC_JS(vpppip, pApp, xStep, ctx, argc, argv);
+}
+
+static void adapter_xFinal(sqlite3_context* ctx) {
+  const void* pApp = sqlite3_user_data(ctx);
+  const int asyncFlags = pApp ? *(int *)pApp : 0;
+  FUNC_JS(vppp, pApp, xFinal, ctx);
+}
+
+int EMSCRIPTEN_KEEPALIVE adapter_create_function(
+  sqlite3* db,
+  const char* zFunctionName,
+  int nArg,
+  int eTextRep,
+  void* pApp,
+  void* xFunc,
+  void* xStep,
+  void* xFinal) {
+  return sqlite3_create_function_v2(
+    db,
+    zFunctionName,
+    nArg,
+    eTextRep,
+    pApp,
+    xFunc ? &adapter_xFunc : NULL,
+    xStep ? &adapter_xStep : NULL,
+    xFinal ? &adapter_xFinal : NULL,
+    &sqlite3_free);
 }
 
 // Some SQLite API functions take a pointer to a function that frees
