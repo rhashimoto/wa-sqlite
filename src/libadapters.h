@@ -28,6 +28,7 @@ DECLARE(I, ippppi, P, P, P, P, I);
 DECLARE(I, ipppiii, P, P, P, I, I, I);
 DECLARE(I, ippppij, P, P, P, P, I, J);
 DECLARE(I, ippppip, P, P, P, P, I, P);
+DECLARE(I, ippipppp, P, P, I, P, P, P, P);
 DECLARE(I, ipppppip, P, P, P, P, P, I, P);
 DECLARE(I, ipppiiip, P, P, P, I, I, I, P);
 #undef DECLARE

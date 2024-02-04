@@ -11,6 +11,7 @@ CFILES = \
 	sqlite3.c \
 	extension-functions.c \
 	main.c \
+	libauthorizer.c \
 	libfunction.c \
 	libprogress.c \
 	libvfs.c \
@@ -63,6 +64,7 @@ EMFLAGS_INTERFACES = \
 
 EMFLAGS_LIBRARIES = \
 	--js-library src/libadapters.js \
+	--post-js src/libauthorizer.js \
 	--post-js src/libfunction.js \
 	--post-js src/libprogress.js \
 	--post-js src/libvfs.js

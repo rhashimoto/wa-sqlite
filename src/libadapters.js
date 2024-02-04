@@ -12,6 +12,7 @@ const SIGNATURES = [
   'ippppij', // xRead, xWrite
   'ipppiii', // xShmLock
   'ippppip', // xAccess, xFullPathname
+  'ippipppp', // xAuthorize
   'ipppppip', // xOpen
   'ipppiiip', // xShmMap
 ];

@@ -653,9 +653,20 @@ export function Factory(Module) {
     return row;
   };
 
-  sqlite3.set_authorizer = function(db, authFunction, userData) {
+  sqlite3.set_authorizer = function(db, xAuth, pApp) {
     verifyDatabase(db);
-    const result = Module.setAuthorizer(db, authFunction, userData);
+    const result = Module.set_authorizer(
+      db,
+      (_, iAction, p3, p4, p5, p6) => {
+        return xAuth(
+          pApp,
+          iAction,
+          Module.UTF8ToString(p3),
+          Module.UTF8ToString(p4),
+          Module.UTF8ToString(p5),
+          Module.UTF8ToString(p6));
+      },
+      pApp);
     return check('sqlite3_set_authorizer', result, db);
   };;
   
