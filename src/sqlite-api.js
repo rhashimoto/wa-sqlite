@@ -521,21 +521,21 @@ export function Factory(Module) {
     };
   })();
 
-  sqlite3.prepare_v2 = (function() {
-    const fname = 'sqlite3_prepare_v2';
-    const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
-    return async function(db, sql) {
-      const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
-      check(fname, result, db);
+  // sqlite3.prepare_v2 = (function() {
+  //   const fname = 'sqlite3_prepare_v2';
+  //   const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
+  //   return async function(db, sql) {
+  //     const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
+  //     check(fname, result, db);
 
-      const stmt = Module.getValue(tmpPtr[0], '*');
-      if (stmt) {
-        mapStmtToDB.set(stmt, db);
-        return { stmt, sql: Module.getValue(tmpPtr[1], '*') };
-      }
-      return null;
-    };
-  })();
+  //     const stmt = Module.getValue(tmpPtr[0], '*');
+  //     if (stmt) {
+  //       mapStmtToDB.set(stmt, db);
+  //       return { stmt, sql: Module.getValue(tmpPtr[1], '*') };
+  //     }
+  //     return null;
+  //   };
+  // })();
 
   sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
     verifyDatabase(db);
@@ -768,60 +768,6 @@ export function Factory(Module) {
       return check(fname, result, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
     };
   })();
-
-  // Duplicate some of the SQLite dynamic string API but without
-  // calling SQLite (except for memory allocation). We need some way
-  // to transfer Javascript strings and might as well use an API
-  // that mimics the SQLite API.
-  let stringId = 0;
-  const strings = new Map();
-
-  sqlite3.str_new = function(db, s = '') {
-    const sBytes = Module.lengthBytesUTF8(s);
-    const str = stringId++ & 0xffffffff;
-    const data = {
-      offset: Module._sqlite3_malloc(sBytes + 1),
-      bytes: sBytes
-    };
-    strings.set(str, data);
-    Module.stringToUTF8(s, data.offset, data.bytes + 1);
-    return str;
-  };
-
-  sqlite3.str_appendall = function(str, s) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    const data = strings.get(str);
-
-    const sBytes = Module.lengthBytesUTF8(s);
-    const newBytes = data.bytes + sBytes;
-    const newOffset = Module._sqlite3_malloc(newBytes + 1);
-    const newArray = Module.HEAPU8.subarray(newOffset, newOffset + newBytes + 1);
-    newArray.set(Module.HEAPU8.subarray(data.offset, data.offset + data.bytes));
-    Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1);
-
-    Module._sqlite3_free(data.offset);
-    data.offset = newOffset;
-    data.bytes = newBytes;
-    strings.set(str, data);
-  };
-
-  sqlite3.str_finish = function(str) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    const data = strings.get(str);
-    strings.delete(str);
-    Module._sqlite3_free(data.offset);
-  };
-
-  sqlite3.str_value = function(str) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    return strings.get(str).offset;
-  };
 
   sqlite3.value = function(pValue) {
     const type = sqlite3.value_type(pValue);

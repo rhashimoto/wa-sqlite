@@ -724,51 +724,6 @@ declare interface SQLiteAPI {
   ): Promise<number>;
 
   /**
-   * Compile an SQL statement
-   * 
-   * SQL is provided as a pointer in WASM memory, so the utility functions
-   * {@link str_new} and {@link str_value} should be used. The returned
-   * Promise-wrapped object provides both the prepared statement and a
-   * pointer to the still uncompiled SQL that can be used with the next
-   * call to this function. A Promise containing `null` is returned
-   * when no statement remains.
-   * 
-   * Each prepared statement should be destroyed with {@link finalize}
-   * after its usage is complete.
-   * 
-   * Code using {@link prepare_v2} generally looks like this:
-   * ```javascript
-   * const str = sqlite3.str_new(db, sql);
-   * try {
-   *   // Traverse and prepare the SQL, statement by statement.
-   *   let prepared = { stmt: null, sql: sqlite3.str_value(str) };
-   *   while ((prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
-   *     try {
-   *       // Step through the rows produced by the statement.
-   *       while (await sqlite3.step(prepared.stmt) === SQLite.SQLITE_ROW) {
-   *         // Do something with the row data...
-   *       }
-   *     } finally {
-   *       sqlite3.finalize(prepared.stmt);
-   *     }
-   *   }
-   * } finally {
-   *   sqlite3.str_finish(str);
-   * }
-   * ```
-   * 
-   * The {@link statements} convenience function can be used to
-   * avoid the boilerplate of calling {@link prepare_v2} directly.
-   * @see https://www.sqlite.org/c3ref/prepare.html
-   * @param db database pointer
-   * @param sql SQL pointer
-   * @returns Promise-wrapped object containing the prepared statement
-   * pointer and next SQL pointer, or a Promise containing `null` when
-   * no statement remains
-   */
-  prepare_v2(db: number, sql: number): Promise<{ stmt: number, sql: number}|null>;
-
-  /**
    * Specify callback to be invoked between long-running queries
    * 
    * The application data passed is ignored. Use closures instead.
@@ -922,58 +877,6 @@ declare interface SQLiteAPI {
    * (rejects on error)
    */
   step(stmt: number): Promise<number>;
-
-  /**
-   * Create a new `sqlite3_str` dynamic string instance
-   * 
-   * The purpose for `sqlite3_str` is to transfer a SQL string in
-   * Javascript to WebAssembly memory for use with {@link prepare_v2}.
-   * 
-   * An optional initialization argument has been added for convenience
-   * which is functionally equivalent to (but slightly more efficient):
-   *  ```javascript
-   *  const str = sqlite3.str_new(db);
-   *  sqlite3.str_appendall(str, s);
-   *  ```
-   * 
-   * A `sqlite3_str` instance should always be destroyed with
-   * {@link str_finish} after use to avoid a resource leak.
-   * 
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param db database pointer
-   * @param s optional initialization string
-   * @returns `sqlite3_str` pointer
-   */
-  str_new(db: number, s?:string): number;
-
-  /**
-   * Add content to a `sqlite3_str` dynamic string
-   * 
-   * Not recommended for building strings incrementally; prefer using
-   * Javascript and {@link str_new} with initialization.
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str `sqlite3_str` pointer
-   * @param s string to append
-   */
-  str_appendall(str: number, s: string): void;
-
-  /**
-   * Get pointer to `sqlite3_str` dynamic string data
-   * 
-   * The returned pointer points to the UTF-8 encoded string in
-   * WebAssembly memory. Use as input with {@link prepare_v2}.
-   * @see https://www.sqlite.org/c3ref/str_errcode.html
-   * @param str `sqlite3_str` pointer
-   * @returns pointer to string data
-   */
-  str_value(str: number): number;
-
-  /**
-   * Finalize a `sqlite3_str` dynamic string created with {@link str_new}
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str `sqlite3_str` pointer
-   */
-  str_finish(str: number): void;
 
   /**
    * Extract a value from `sqlite3_value`
