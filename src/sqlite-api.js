@@ -679,11 +679,11 @@ export function Factory(Module) {
     };
   })();
 
-  sqlite3.statements = function(db, sql) {
+  sqlite3.statements = function(db, sql, options = {}) {
     const prepare = Module.cwrap(
-      'sqlite3_prepare16_v2',
+      'sqlite3_prepare16_v3',
       'number',
-      ['number', 'number', 'number', 'number', 'number'],
+      ['number', 'number', 'number', 'number', 'number', 'number'],
       { async: true });
 
     return (async function*() {
@@ -719,12 +719,11 @@ export function Factory(Module) {
         // Ensure that statement handles are not leaked.
         let pStmtValue;
         function finalize() {
-          if (pStmtValue) {
+          if (pStmtValue && !options.unscoped) {
             sqlite3.finalize(pStmtValue);
-            mapStmtToDB.delete(pStmtValue);
-            pStmtValue = 0;
           }
-        }
+          pStmtValue = 0;
+      }
         onFinally.push(finalize);
         
         // Loop over statements.
@@ -739,10 +738,11 @@ export function Factory(Module) {
             db,
             zSQL,
             pString.byteOffset + pString.byteLength - zSQL,
+            options.flags || 0,
             pStmt.byteOffset,
             pzTail.byteOffset);
           if (status !== SQLite.SQLITE_OK) {
-            check('sqlite3_prepare16_v2', status, db);
+            check('sqlite3_prepare16_v3', status, db);
           }
           
           pStmtValue = pStmt.getUint32(0, true);

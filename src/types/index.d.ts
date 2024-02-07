@@ -268,6 +268,25 @@ declare interface SQLiteModule {
 }
 
 /**
+ * Options object argument for {@link SQLiteAPI.statements}
+ */
+declare interface SQLitePrepareOptions {
+  /**
+   * Statement handles prepared and yielded by {@link SQLiteAPI.statements}
+   * are normally valid only within the scope of an iteration.
+   * Set `unscoped` to `true` to give iterated statements an arbitrary
+   * lifetime.
+   */
+  unscoped?: boolean;
+
+  /**
+   * SQLITE_PREPARE_* flags
+   * @see https://www.sqlite.org/c3ref/c_prepare_normalize.html#sqlitepreparepersistent
+   */
+  flags?: number;
+}
+
+/**
  * Javascript wrappers for the SQLite C API (plus a few convenience functions)
  * 
  * Function signatures have been slightly modified to be more
@@ -834,10 +853,10 @@ declare interface SQLiteAPI {
   /**
    * SQL statement iterator
    * 
-   * This is a convenience function that manages statement compilation,
-   * replacing boilerplate code associated with calling {@link prepare_v2}
-   * directly. It is typically used with a `for await` loop (in an
-   * async function), like this:
+   * This function manages statement compilation by creating an async
+   * iterator that yields a prepared statement handle on each iteration.
+   * It is typically used with a `for await` loop (in an async function),
+   * like this:
    * ```javascript
    * // Compile one statement on each iteration of this loop.
    * for await (const stmt of sqlite3.statements(db, sql)) {
@@ -852,22 +871,24 @@ declare interface SQLiteAPI {
    * }
    * ```
    * 
-   * {@link finalize} should *not* be called on a statement provided
-   * by the iterator; the statement resources will be released
-   * automatically at the end of each iteration. This also means
-   * that the statement is only valid within the scope of the loop -
-   * use {@link prepare_v2} directly to compile a statement with an
-   * application-specified lifetime.
+   * By default, the lifetime of a yielded prepared statement is managed
+   * automatically by the iterator, ending at the end of each iteration.
+   * {@link finalize} should *not* be called on a statement provided by
+   * the iterator unless the `unscoped` option is set to `true` (that
+   * option is provided for applications that wish to manage statement
+   * lifetimes manually).
    * 
    * If using the iterator manually, i.e. by calling its `next`
    * method, be sure to call the `return` method if iteration
    * is abandoned before completion (`for await` and other implicit
    * traversals provided by Javascript do this automatically)
    * to ensure that all allocated resources are released.
+   * @see https://www.sqlite.org/c3ref/prepare.html
    * @param db database pointer
    * @param sql 
+   * @param options
    */
-  statements(db: number, sql: string): AsyncIterable<number>;
+  statements(db: number, sql: string, options?: SQLitePrepareOptions): AsyncIterable<number>;
 
   /**
    * Evaluate an SQL statement
@@ -1193,7 +1214,10 @@ declare module 'wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_LIMIT_LIKE_PATTERN_LENGTH: 8;
   export const SQLITE_LIMIT_VARIABLE_NUMBER: 9;
   export const SQLITE_LIMIT_TRIGGER_DEPTH: 10;
-  export const SQLITE_LIMIT_WORKER_THREADS: 11;  
+  export const SQLITE_LIMIT_WORKER_THREADS: 11;
+  export const SQLITE_PREPARE_PERSISTENT: 0x01;
+  export const SQLITE_PREPARE_NORMALIZED: 0x02;
+  export const SQLITE_PREPARE_NO_VTAB: 0x04;
 }
 
 declare module 'wa-sqlite' {
