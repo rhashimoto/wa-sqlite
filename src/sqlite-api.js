@@ -37,9 +37,10 @@ export function Factory(Module) {
   // memory (use sqlite3_free to deallocate).
   function createUTF8(s) {
     if (typeof s !== 'string') return 0;
-    const n = Module.lengthBytesUTF8(s);
-    const zts = Module._sqlite3_malloc(n + 1);
-    Module.stringToUTF8(s, zts, n + 1);
+    const utf8 = new TextEncoder().encode(s);
+    const zts = Module._sqlite3_malloc(utf8.byteLength + 1);
+    Module.HEAPU8.set(utf8, zts);
+    Module.HEAPU8[zts + utf8.byteLength] = 0;
     return zts;
   }
 
