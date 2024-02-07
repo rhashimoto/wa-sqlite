@@ -521,22 +521,6 @@ export function Factory(Module) {
     };
   })();
 
-  // sqlite3.prepare_v2 = (function() {
-  //   const fname = 'sqlite3_prepare_v2';
-  //   const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
-  //   return async function(db, sql) {
-  //     const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
-  //     check(fname, result, db);
-
-  //     const stmt = Module.getValue(tmpPtr[0], '*');
-  //     if (stmt) {
-  //       mapStmtToDB.set(stmt, db);
-  //       return { stmt, sql: Module.getValue(tmpPtr[1], '*') };
-  //     }
-  //     return null;
-  //   };
-  // })();
-
   sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
     verifyDatabase(db);
     Module.progress_handler(db, nProgressOps, handler, userData);
@@ -681,7 +665,7 @@ export function Factory(Module) {
 
   sqlite3.statements = function(db, sql, options = {}) {
     const prepare = Module.cwrap(
-      'sqlite3_prepare16_v3',
+      'sqlite3_prepare_v3',
       'number',
       ['number', 'number', 'number', 'number', 'number', 'number'],
       { async: true });
@@ -689,26 +673,22 @@ export function Factory(Module) {
     return (async function*() {
       const onFinally = [];
       try {
-        // Allocate string in WebAssembly memory. Use UTF-16 so we don't
-        // need to encode the string to find out how much memory to allocate.
-        // The SQLite docs say zero-termintation is a minor optimization so
-        // add room for that.
-        const pzHead = Module._sqlite3_malloc((sql.length + 1) * 2);
-        const pzEnd = pzHead + (sql.length + 1) * 2;
-        onFinally.push(() => Module._sqlite3_free(pzHead));
+        // Encode SQL string to UTF-8.
+        const utf8 = new TextEncoder().encode(sql);
 
-        // Copy input SQL as UTF-16 LE.
-        const sqlView = new DataView(Module.HEAPU8.buffer, pzHead, pzEnd - pzHead);
-        for (let i = 0; i < sql.length; ++i) {
-          sqlView.setUint16(i * 2, sql.charCodeAt(i), true);
-        }
-        sqlView.setUint16(sql.length * 2, 0, true);
+        // Copy encoded string to WebAssembly memory. The SQLite docs say
+        // zero-termination is a minor optimization so add room for that.
+        // Also add space for the statement handle and SQL tail pointer.
+        const allocSize = utf8.byteLength - (utf8.byteLength % 4) + 12;
+        const pzHead = Module._sqlite3_malloc(allocSize);
+        const pzEnd = pzHead + utf8.byteLength + 1;
+        onFinally.push(() => Module._sqlite3_free(pzHead));
+        Module.HEAPU8.set(utf8, pzHead);
+        Module.HEAPU8[pzEnd - 1] = 0;
   
-        // Allocate space for the statement handle and SQL tail pointer.
-        /** @type {number} */ const pStmt = Module._sqlite3_malloc(4);
-        onFinally.push(() => Module._sqlite3_free(pStmt));
-        /** @type {number} */ const pzTail = Module._sqlite3_malloc(4);
-        onFinally.push(() => Module._sqlite3_free(pzTail));
+        // Use extra space for the statement handle and SQL tail pointer.
+        const pStmt = pzHead + allocSize - 8;
+        const pzTail = pzHead + allocSize - 4;
 
         // Ensure that statement handles are not leaked.
         let stmt;
@@ -726,7 +706,7 @@ export function Factory(Module) {
           // Reclaim resources for the previous iteration.
           maybeFinalize();
 
-          // Call sqlite3_prepare16_v3() for the next statement.
+          // Call sqlite3_prepare_v3() for the next statement.
           const status = await prepare(
             db,
             Module.getValue(pzTail, '*'),
@@ -735,7 +715,7 @@ export function Factory(Module) {
             pStmt,
             pzTail);
           if (status !== SQLite.SQLITE_OK) {
-            check('sqlite3_prepare16_v3', status, db);
+            check('sqlite3_prepare_v3', status, db);
           }
           
           stmt = Module.getValue(pStmt, '*');
