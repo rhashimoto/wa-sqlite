@@ -511,15 +511,18 @@ export function Factory(Module) {
     return async function(zFilename, flags, zVfs) {
       flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
       zVfs = createUTF8(zVfs);
-      const result = await f(zFilename, tmpPtr[0], flags, zVfs);
+      try {
+        const result = await f(zFilename, tmpPtr[0], flags, zVfs);
 
-      const db = Module.getValue(tmpPtr[0], '*');
-      databases.add(db);
-      Module._sqlite3_free(zVfs);
+        const db = Module.getValue(tmpPtr[0], '*');
+        databases.add(db);
 
-      Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-      check(fname, result);
-      return db;
+        Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
+        check(fname, result);
+        return db;
+      } finally {
+        Module._sqlite3_free(zVfs);
+      }
     };
   })();
 
