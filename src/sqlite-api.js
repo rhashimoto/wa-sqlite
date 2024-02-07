@@ -689,68 +689,61 @@ export function Factory(Module) {
     return (async function*() {
       const onFinally = [];
       try {
-        // Allocate UTF-16 string in WebAssembly memory.
-        const pString = new DataView(
-          Module.HEAPU8.buffer,
-          Module._sqlite3_malloc((sql.length + 1) * 2),
-          (sql.length + 1) * 2);
-        onFinally.push(() => Module._sqlite3_free(pString.byteOffset));
+        // Allocate string in WebAssembly memory. Use UTF-16 so we don't
+        // need to encode the string to find out how much memory to allocate.
+        // The SQLite docs say zero-termintation is a minor optimization so
+        // add room for that.
+        const pzHead = Module._sqlite3_malloc((sql.length + 1) * 2);
+        const pzEnd = pzHead + (sql.length + 1) * 2;
+        onFinally.push(() => Module._sqlite3_free(pzHead));
 
-        // Copy input SQL as UTF-16 LE. Zero-termination is said to be
-        // a minor optimization.
+        // Copy input SQL as UTF-16 LE.
+        const sqlView = new DataView(Module.HEAPU8.buffer, pzHead, pzEnd - pzHead);
         for (let i = 0; i < sql.length; ++i) {
-          pString.setUint16(i * 2, sql.charCodeAt(i), true);
+          sqlView.setUint16(i * 2, sql.charCodeAt(i), true);
         }
-        pString.setUint16(sql.length * 2, 0, true);
+        sqlView.setUint16(sql.length * 2, 0, true);
   
-        // Allocate space for the statement handle and SQL tail.
-        const pStmt = new DataView(
-          Module.HEAPU8.buffer,
-          Module._sqlite3_malloc(4),
-          4);
-        onFinally.push(() => Module._sqlite3_free(pStmt.byteOffset));
-
-        const pzTail = new DataView(
-          Module.HEAPU8.buffer,
-          Module._sqlite3_malloc(4),
-          4);
-        onFinally.push(() => Module._sqlite3_free(pzTail.byteOffset));
+        // Allocate space for the statement handle and SQL tail pointer.
+        /** @type {number} */ const pStmt = Module._sqlite3_malloc(4);
+        onFinally.push(() => Module._sqlite3_free(pStmt));
+        /** @type {number} */ const pzTail = Module._sqlite3_malloc(4);
+        onFinally.push(() => Module._sqlite3_free(pzTail));
 
         // Ensure that statement handles are not leaked.
-        let pStmtValue;
-        function finalize() {
-          if (pStmtValue && !options.unscoped) {
-            sqlite3.finalize(pStmtValue);
+        let stmt;
+        function maybeFinalize() {
+          if (stmt && !options.unscoped) {
+            sqlite3.finalize(stmt);
           }
-          pStmtValue = 0;
-      }
-        onFinally.push(finalize);
+          stmt = 0;
+        }
+        onFinally.push(maybeFinalize);
         
         // Loop over statements.
-        pzTail.setUint32(0, pString.byteOffset, true);
+        Module.setValue(pzTail, pzHead, '*');
         do {
           // Reclaim resources for the previous iteration.
-          finalize();
+          maybeFinalize();
 
-          // Call prepare.
-          const zSQL = pzTail.getUint32(0, true);
+          // Call sqlite3_prepare16_v3() for the next statement.
           const status = await prepare(
             db,
-            zSQL,
-            pString.byteOffset + pString.byteLength - zSQL,
+            Module.getValue(pzTail, '*'),
+            pzEnd - pzTail,
             options.flags || 0,
-            pStmt.byteOffset,
-            pzTail.byteOffset);
+            pStmt,
+            pzTail);
           if (status !== SQLite.SQLITE_OK) {
             check('sqlite3_prepare16_v3', status, db);
           }
           
-          pStmtValue = pStmt.getUint32(0, true);
-          if (pStmtValue) {
-            mapStmtToDB.set(pStmtValue, db);
-            yield pStmtValue;
+          stmt = Module.getValue(pStmt, '*');
+          if (stmt) {
+            mapStmtToDB.set(stmt, db);
+            yield stmt;
           }
-        } while (pStmtValue);
+        } while (stmt);
       } finally {
         while (onFinally.length) {
           onFinally.pop()();
