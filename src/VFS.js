@@ -19,9 +19,15 @@ export class Base {
     this._module = module;
   }
 
+  /**
+   * @returns {void|Promise<void>} 
+   */
   close() {
   }
 
+  /**
+   * @returns {boolean|Promise<boolean>}
+   */
   isReady() {
     return true;
   }

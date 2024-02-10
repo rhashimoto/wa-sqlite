@@ -38,7 +38,7 @@ declare interface SQLiteVFS {
   mxPathName?: number;
 
   close(): void|Promise<void>;
-  isReady(): Promise<boolean>;
+  isReady(): boolean|Promise<boolean>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xClose(fileId: number): number|Promise<number>;
