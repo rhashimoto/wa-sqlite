@@ -6,13 +6,7 @@ import { AccessHandlePoolVFS } from '../src/examples/AccessHandlePoolVFS.js';
 
 import { createSharedServicePort } from './SharedService/SharedService.js';
 
-import GOOG from '../test/GOOG.js';
 import { createTag } from "../src/examples/tag.js";
-import { ArrayModule } from "../src/examples/ArrayModule.js";
-
-const sqlite3Ready = SQLiteESMFactory().then(module => {
-  return SQLite.Factory(module);
-});
 
 class DatabaseService {
   #chain;
@@ -36,15 +30,14 @@ class DatabaseService {
 
   async #initialize() {
     // Create the database.
-    const sqlite3 = await sqlite3Ready;
-    const vfs = new AccessHandlePoolVFS('/demo-AccessHandlePoolVFS');
-    await vfs.isReady;
-    sqlite3.vfs_register(vfs, true);
-    const db = await sqlite3.open_v2('demo');
+    const module = await SQLiteESMFactory();
+    const sqlite3 = await SQLite.Factory(module);
 
-    // Add an example module with an array back-end.
-    // @ts-ignore
-    sqlite3.create_module(db, 'array', new ArrayModule(sqlite3, db, GOOG.rows, GOOG.columns));
+    const vfs = await AccessHandlePoolVFS.create('/demo-AccessHandlePoolVFS', module);
+    await vfs.createPersistentDatabaseFile('demo');
+    sqlite3.vfs_register(vfs, true);
+    
+    const db = await sqlite3.open_v2('demo');
 
     // Add example functions regex and regex_replace.
     sqlite3.create_function(
