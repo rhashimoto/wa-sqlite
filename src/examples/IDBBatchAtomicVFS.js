@@ -65,6 +65,10 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   //   console.log(...args);
   // }
 
+  close() {
+    this.#idb.close();
+  }
+  
   async isReady() {
     await super.isReady();
     await this.#isReady;
@@ -637,6 +641,10 @@ export class IDBContext {
 
   constructor(database) {
     this.#database = database;
+  }
+
+  close() {
+    this.#database.close();
   }
 
   /**

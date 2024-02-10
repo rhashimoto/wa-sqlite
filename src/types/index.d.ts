@@ -37,6 +37,9 @@ declare interface SQLiteVFS {
   /** Maximum length of a file path in UTF-8 bytes (default 64) */
   mxPathName?: number;
 
+  close(): void|Promise<void>;
+  isReady(): Promise<boolean>;
+
   /** @see https://sqlite.org/c3ref/io_methods.html */
   xClose(fileId: number): number|Promise<number>;
 
@@ -339,27 +342,25 @@ declare interface SQLiteAPI {
    * Array example using numbered parameters (numbering is implicit in
    * this example):
    * ```
-   * const str = sqlite3.str_new(db, `
-   *   INSERT INTO tbl VALUES (?, ?, ?);
-   * `);
-   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
-   * sqlite3.bind_collection(prepared.stmt, [42, 'hello', null]);
-   * ...
+   * const sql = 'INSERT INTO tbl VALUES (?, ?, ?)';
+   * for await (const stmt of sqlite3.statements(db, sql) {
+   *   sqlite3.bind_collection(stmt, [42, 'hello', null]);
+   *   ...
+   * }
    * ```
    * 
    * Object example using named parameters (':', '@', or '$' prefixes
    * are allowed):
    * ```
-   * const str = sqlite3.str_new(db, `
-   *   INSERT INTO tbl VALUES (@foo, @bar, @baz);
-   * `);
-   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
-   * sqlite3.bind_collection(prepared.stmt, {
-   *   '@foo': 42,
-   *   '@bar': 'hello',
-   *   '@baz': null,
-   * });
-   * ...
+   * const sql = 'INSERT INTO tbl VALUES (?, ?, ?)';
+   * for await (const stmt of sqlite3.statements(db, sql) {
+   *   sqlite3.bind_collection(stmt, {
+   *     '@foo': 42,
+   *     '@bar': 'hello',
+   *     '@baz': null,
+   *   });
+   *   ...
+   * }
    * ```
    * 
    * Note that SQLite bindings are indexed beginning with 1, but when
@@ -680,7 +681,8 @@ declare interface SQLiteAPI {
   ): Promise<number>;
 
   /**
-   * Destroy a prepared statement object compiled with {@link prepare_v2}
+   * Destroy a prepared statement object compiled by {@link statements}
+   * with the `unscoped` option set to `true`
    * 
    * This function does *not* throw on error.
    * @see https://www.sqlite.org/c3ref/finalize.html

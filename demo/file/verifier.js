@@ -10,7 +10,8 @@ const DB_NAME = SEARCH_PARAMS.get('db') ?? 'sqlite.db';
   const module = await SQLiteESMFactory();
   const sqlite3 = SQLite.Factory(module);
 
-  const vfs = new IDBBatchAtomicVFS(IDB_NAME);
+  const vfs = await IDBBatchAtomicVFS.create(IDB_NAME, module);
+  // @ts-ignore
   sqlite3.vfs_register(vfs, true);
 
   const db = await sqlite3.open_v2(DB_NAME, SQLite.SQLITE_OPEN_READWRITE, IDB_NAME);

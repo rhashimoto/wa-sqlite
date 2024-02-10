@@ -19,7 +19,11 @@ export class Base {
     this._module = module;
   }
 
-  async isReady() {
+  close() {
+  }
+
+  isReady() {
+    return true;
   }
 
   /**
