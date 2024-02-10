@@ -29,19 +29,29 @@ export const WebLocksExclusive = superclass => class extends superclass {
     super(...args);
   }
 
-  async jLock(pFile, lockType) {
-    if (!this.#mapIdToReleaser.has(pFile)) {
-      const name = this.getLockName(pFile);
+  /**
+   * @param {number} fileId 
+   * @param {number} lockType 
+   * @returns {Promise<number>}
+   */
+  async jLock(fileId, lockType) {
+    if (!this.#mapIdToReleaser.has(fileId)) {
+      const name = this.getLockName(fileId);
       const release = await acquireLock(name);
-      this.#mapIdToReleaser.set(pFile, release);
+      this.#mapIdToReleaser.set(fileId, release);
     }
     return VFS.SQLITE_OK;
   }
 
-  async jUnlock(pFile, lockType) {
+  /**
+   * @param {number} fileId 
+   * @param {number} lockType 
+   * @returns {Promise<number>}
+   */
+  async jUnlock(fileId, lockType) {
     if (lockType === VFS.SQLITE_LOCK_NONE) {
-      this.#mapIdToReleaser.get(pFile)?.();
-      this.#mapIdToReleaser.delete(pFile);
+      this.#mapIdToReleaser.get(fileId)?.();
+      this.#mapIdToReleaser.delete(fileId);
     }
     return VFS.SQLITE_OK;
   }
@@ -61,6 +71,11 @@ export const WebLocksShared = superclass => class extends superclass {
     super(...args);
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} lockType 
+   * @returns {Promise<number>}
+   */
   async jLock(fileId, lockType) {
     const state = this.#mapIdToState.get(fileId) || {
       lockType: VFS.SQLITE_LOCK_NONE,
@@ -138,6 +153,11 @@ export const WebLocksShared = superclass => class extends superclass {
     return VFS.SQLITE_OK;
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} lockType 
+   * @returns {Promise<number>}
+   */
   async jUnlock(fileId, lockType) {
     const state = this.#mapIdToState.get(fileId);
     if (!state) return VFS.SQLITE_IOERR_UNLOCK;
