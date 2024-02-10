@@ -125,6 +125,11 @@ document.getElementById('start').addEventListener('click', async event => {
   }
 });
 
+document.getElementById('reset').addEventListener('click', async event => {
+  localStorage.removeItem('contention');
+  window.location.reload();
+});
+
 function syncWorkers(workers) {
   return Promise.all(workers.map(worker => new Promise(resolve => {
     const abortController = new AbortController();

@@ -131,7 +131,7 @@ const BUILDS = new Map([
       nIterations++;
     }
   }
-  postMessage(`conn ${index} ${type} ${nIterations} iterations`);
+  postMessage(`worker ${index} ${type} ${nIterations} iterations`);
   postMessage(null);
 })().catch(e => {
   console.error(e);

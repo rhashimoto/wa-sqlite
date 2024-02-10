@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>wa-sqlite contention</title>
   <style>
-    button {
+    #start {
       font-size: 14pt;
       margin-top: 1em;
     }
@@ -35,7 +35,8 @@
   <script src="contention.js" type="module"></script>
 </head>
 <body>
-  <h1>wa-sqlite contention test</h1>
+  <h1>wa-sqlite contention test  <button id="reset">Restore defaults</button></h1>
+
   <div class="setup-container">
     <div class="setup">
       <span>Global init</span>
@@ -55,8 +56,8 @@
     </div>
   </div>
   <button id="start">Start</button>
+  <span id="demo"></span>
 
   <div id="output"></div>
-  <div id="demo"></div>
 </body>
 </html>
