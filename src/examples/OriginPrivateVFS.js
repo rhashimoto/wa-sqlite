@@ -1,7 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksExclusive as WebLocksMixin } from '../WebLocksMixins.js';
+import { WebLocksExclusive } from '../WebLocksMixins.js';
 
 const LOCK_NOTIFY_INTERVAL = 1000;
 
@@ -56,7 +56,7 @@ class File {
   }
 }
 
-export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
+export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
