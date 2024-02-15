@@ -596,6 +596,35 @@ function shared(sqlite3Ready) {
     `);
     await expectAsync(result).toBeResolved();
   });
+
+  it("update_hook", async function () {
+    const calls = [];
+    function hook(updateType, dbName, tblName, rowid) {
+      calls.push([updateType, dbName, tblName, rowid]);
+    }
+    sqlite3.update_hook(db, hook);
+
+    // insert some rows
+    // last row's row id is max safe integer * 10
+    await sqlite3.exec(
+      db,
+      `
+      CREATE TABLE foo (i integer primary key, x);
+      INSERT INTO foo VALUES (1, 'foo'), (2, 'bar'), (90071992547409910, 'baz');
+    `
+    );
+    expect(calls).toEqual([
+      [18, "main", "foo", 1n],
+      [18, "main", "foo", 2n],
+      [18, "main", "foo", 90071992547409910n],
+    ]);
+    calls.length = 0;
+    await sqlite3.exec(db, `DELETE FROM foo WHERE i = 2`);
+    expect(calls).toEqual([[9, "main", "foo", 2n]]);
+    calls.length = 0;
+    await sqlite3.exec(db, `UPDATE foo SET x = 'bar' WHERE i = 1`);
+    expect(calls).toEqual([[23, "main", "foo", 1n]]);
+  });
 }
 
 describe('sqlite-api', function() {

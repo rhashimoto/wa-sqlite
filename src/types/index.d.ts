@@ -960,6 +960,26 @@ declare interface SQLiteAPI {
   str_finish(str: number): void;
 
   /**
+   * Install an update hook on the SQLite connection.
+   * @see https://www.sqlite.org/c3ref/update_hook.html
+   *
+   * updateType is one of:
+   * - SQLITE_DELETE: 9
+   * - SQLITE_INSERT: 18
+   * - SQLITE_UPDATE: 23
+   * @see https://www.sqlite.org/c3ref/c_alter_table.html
+   */
+  update_hook(
+    db: number,
+    xUpdate: (
+      updateType: 9 | 18 | 23,
+      dbName: string,
+      tblName: string,
+      rowid: bigint
+    ) => void
+  ): void;
+
+  /**
    * Get application data in custom function implementation
    * @see https://sqlite.org/c3ref/user_data.html
    * @param context context pointer
