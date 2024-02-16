@@ -83,10 +83,10 @@ const BUILDS = new Map([
     const vfs = await namespace[className].create(vfsName, module, config.vfsOptions);
     sqlite3.vfs_register(vfs, true);
 
-    if (config.vfsModule.includes('AccessHandlePoolVFS')) {
-      // Special setup for AccessHandlePoolVFS. The database and journal
+    if (config.vfsModule.includes('UnsafeHandlePoolVFS')) {
+      // Special setup for UnsafeHandlePoolVFS. The database and journal
       // files must be created before instantiating the VFS if they are
-      // to be persistent. This method exists only on AccessHandlePoolVFS.
+      // to be persistent.
       await vfs.createPersistentDatabaseFile(dbName);
     }
   }
@@ -123,11 +123,13 @@ const BUILDS = new Map([
         }
         throw e;
       }
+      await new Promise(resolve => setTimeout(resolve));
       nIterations++;
     }
   } else {
     while (Date.now() < endTime) {
       await sqlite3.exec(db, queries.reader);
+      await new Promise(resolve => setTimeout(resolve));
       nIterations++;
     }
   }

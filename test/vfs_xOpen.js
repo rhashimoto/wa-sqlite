@@ -5,9 +5,9 @@ const FILEID = 1;
 
 export function vfs_xOpen(context) {
   describe('vfs_xOpen', function() {
-    let vfs;
+    let vfs, module;
     beforeEach(async function() {
-      ({ vfs } = await context.create());
+      ({ vfs, module } = await context.create());
     });
 
     afterEach(async function() {
@@ -32,7 +32,14 @@ export function vfs_xOpen(context) {
       let rc;
       const pOpenOutput = Comlink.proxy(new DataView(new ArrayBuffer(4)));
       const openFlags = VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
-      rc = await vfs.jOpen('test',  1, openFlags, pOpenOutput);
+      
+      do {
+        const nRetryOps = await context.module.retryOps.length;
+        for (let i = 0; i < nRetryOps; i++) {
+          await context.module.retryOps[i];
+        }
+        rc = await vfs.jOpen('test',  1, openFlags, pOpenOutput);
+      } while (rc === VFS.SQLITE_BUSY);
       expect(rc).toEqual(VFS.SQLITE_OK);
       expect(pOpenOutput.getInt32(0, true)).toEqual(openFlags);
 

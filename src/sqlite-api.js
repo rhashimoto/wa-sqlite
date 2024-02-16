@@ -27,6 +27,7 @@ const async = true;
 export function Factory(Module) {
   /** @type {SQLiteAPI} */ const sqlite3 = {};
 
+  Module.retryOps = [];
   const sqliteFreeAddress = Module._getSqliteFree();
 
   // Allocate some space for 32-bit returned values.
@@ -508,13 +509,14 @@ export function Factory(Module) {
       flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
       zVfs = createUTF8(zVfs);
       try {
-        const result = await f(zFilename, tmpPtr[0], flags, zVfs);
+        // Allow retry operations.
+        const rc = await retry(() => f(zFilename, tmpPtr[0], flags, zVfs));
 
         const db = Module.getValue(tmpPtr[0], '*');
         databases.add(db);
 
         Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-        check(fname, result);
+        check(fname, rc);
         return db;
       } finally {
         Module._sqlite3_free(zVfs);
@@ -708,15 +710,20 @@ export function Factory(Module) {
           maybeFinalize();
 
           // Call sqlite3_prepare_v3() for the next statement.
-          const status = await prepare(
-            db,
-            Module.getValue(pzTail, '*'),
-            pzEnd - pzTail,
-            options.flags || 0,
-            pStmt,
-            pzTail);
-          if (status !== SQLite.SQLITE_OK) {
-            check('sqlite3_prepare_v3', status, db);
+          // Allow retry operations.
+          const zTail = Module.getValue(pzTail, '*');
+          const rc = await retry(() => {
+            return prepare(
+              db,
+              zTail,
+              pzEnd - pzTail,
+              options.flags || 0,
+              pStmt,
+              pzTail);
+          });
+
+          if (rc !== SQLite.SQLITE_OK) {
+            check('sqlite3_prepare_v3', rc, db);
           }
           
           stmt = Module.getValue(pStmt, '*');
@@ -738,8 +745,11 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
       verifyStatement(stmt);
-      const result = await f(stmt);
-      return check(fname, result, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
+
+      // Allow retry operations.
+      const rc = await retry(() => f(stmt));
+
+      return check(fname, rc, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
     };
   })();
 
@@ -849,6 +859,26 @@ export function Factory(Module) {
       Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :
       fname;
     throw new SQLiteError(message, result);
+  }
+
+  // This function is used to automatically retry failed calls that
+  // have pending retry operations that should allow the retry to
+  // succeed.
+  async function retry(f) {
+    let rc;
+    do {
+      // Wait for all pending retry operations to complete. This is
+      // normally empty on the first loop iteration.
+      if (Module.retryOps.length) {
+        await Promise.all(Module.retryOps);
+        Module.retryOps = [];
+      }
+      
+      rc = await f();
+
+      // Retry on failure with new pending retry operations.
+    } while (rc && Module.retryOps.length);
+    return rc;
   }
 
   return sqlite3;
