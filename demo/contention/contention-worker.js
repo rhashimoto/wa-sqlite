@@ -50,6 +50,19 @@ const BUILDS = new Map([
   },
 ].map(config => [config.name, config]));
 
+const releaseTask = (function() {
+  const { port1, port2 } = new MessageChannel();
+  port1.start();
+  port2.start();
+
+  return function() {
+    return new Promise(resolve => {
+      port2.onmessage = resolve;
+      port1.postMessage(null);
+    });
+  };
+})();
+
 (async function() {
   const broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
   const searchParams = new URLSearchParams(globalThis.location.search);
@@ -113,6 +126,7 @@ const BUILDS = new Map([
     while (Date.now() < endTime) {
       try {
         await sqlite3.exec(db, queries.writer);
+        await releaseTask();
       } catch (e) {
         // Retry on SQLITE_BUSY.
         if (e.code === SQLite.SQLITE_BUSY) {
@@ -128,6 +142,7 @@ const BUILDS = new Map([
   } else {
     while (Date.now() < endTime) {
       await sqlite3.exec(db, queries.reader);
+      await releaseTask();
       nIterations++;
     }
   }

@@ -19,7 +19,7 @@ with synchronous
 [Access Handle](https://github.com/WICG/file-system-access/blob/main/AccessHandle.md).
 
 ### AccessHandlePoolVFS
-This VFS is synchronous and so is faster than OriginPrivateVFS across the board, but does not have general multiple connection support.
+This VFS is synchronous and so is faster than OriginPrivateVFS across the board.
 
 ### FLOOR
 This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation).
@@ -32,13 +32,12 @@ This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the S
 |Asyncify build|✅|✅|✅|✅|✅|✅|
 |JSPI build|✅|✅|✅|✅|✅|✅|
 |Contexts|All|All|All|Worker|Worker|Worker|
-|Multiple connections|:x:|:x:|✅|✅|✅[^1]|✅[^2]|
+|Multiple connections|:x:|:x:|✅|✅|✅|✅[^1]|
 |Full durability|✅|✅|✅|✅|✅|:x:|
 |Relaxed durability|:x:|:x:|✅|:x:|:x:|✅|
 |Filesystem transparency|:x:|:x:|:x:|✅|✅|✅|
 |Write-ahead logging|:x:|:x:|:x:|:x:|:x:|✅|
-|Cross-origin isolation *not* required[^3]|✅|✅|✅|✅|✅|✅|
+|Cross-origin isolation *not* required[^2]|✅|✅|✅|✅|✅|✅|
 
-[^1]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support *and* application coordination.
-[^2]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support.
-[^3]: Using certain web APIs (e.g. SharedArrayBuffer, Atomics) requires strict cross-origin restrictions.
+[^1]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support.
+[^2]: Using certain web APIs (e.g. SharedArrayBuffer, Atomics) requires strict cross-origin restrictions.

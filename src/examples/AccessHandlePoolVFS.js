@@ -441,7 +441,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
       // Don't change any state if this unlock is because xLock returned
       // SQLITE_BUSY.
       if (!file.persistentFile.isLockBusy) {
-        if (!this._module.retryOps.length && file.persistentFile.isHandleRequested) {
+        if (file.persistentFile.isHandleRequested) {
             // Another connection wants the access handle.
           this.#releaseAccessHandle(file);
           this.isHandleRequested = false;
@@ -452,7 +452,10 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     return VFS.SQLITE_OK;
   }
   
-
+  /**
+   * @param {Uint8Array} zBuf 
+   * @returns 
+   */
   jGetLastError(zBuf) {
     if (this.lastError) {
       console.error(this.lastError);
@@ -463,6 +466,10 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     return VFS.SQLITE_OK
   }
 
+  /**
+   * @param {FileSystemFileHandle} fileHandle 
+   * @returns {Promise<PersistentFile>}
+   */
   async #createPersistentFile(fileHandle) {
     const persistentFile = new PersistentFile(fileHandle);
     const root = await navigator.storage.getDirectory();
@@ -523,6 +530,10 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     this.log?.(`lock released for ${file.path}`)
   }
 
+  /**
+   * @param {PersistentFile} persistentFile 
+   * @returns  {Promise<function>} lock releaser
+   */
   #acquireLock(persistentFile) {
     return new Promise(resolve => {
       // Tell other connections we want the access handle.
