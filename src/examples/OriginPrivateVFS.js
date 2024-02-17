@@ -100,24 +100,6 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
 
       if ((flags & VFS.SQLITE_OPEN_MAIN_DB) && !hasUnsafeAccessHandle) {
         file.handleRequestChannel = new BroadcastChannel(this.getLockName(fileId));
-        file.handleRequestChannel.onmessage = event => {
-          if (file.handleLockReleaser) {
-            if(!file.isFileLocked) {
-              // We have the access handle but the file is not locked.
-              // Release the access handle for the requester.
-              file.accessHandle.close();
-              file.accessHandle = null;
-              file.handleLockReleaser();
-              file.handleLockReleaser = null;
-              log('access handle requested and released');
-            } else {
-              // We're still using the access handle, so mark it to be
-              // released when we're done.
-              file.isHandleRequested = true;
-              log('access handle requested');
-            }
-          }
-        };
 
         // Acquire the access handle lock. The first read of a database
         // file is done outside xLock/xUnlock so we get that lock here.
@@ -332,7 +314,27 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
 
     const file = this.mapIdToFile.get(fileId);
     if (!file.isFileLocked) {
+      file.isFileLocked = true;
       if (!file.handleLockReleaser) {
+        // Listen for other connections wanting the access handle.
+        file.handleRequestChannel.onmessage = event => {
+          if(!file.isFileLocked) {
+            // We have the access handle but the file is not locked.
+            // Release the access handle for the requester.
+            file.accessHandle.close();
+            file.accessHandle = null;
+            file.handleLockReleaser();
+            file.handleLockReleaser = null;
+            log('access handle requested and released');
+          } else {
+            // We're still using the access handle, so mark it to be
+            // released when we're done.
+            file.isHandleRequested = true;
+            log('access handle requested');
+          }
+          file.handleRequestChannel.onmessage = null;
+        };
+
         // We don't have the access handle. First acquire the lock.
         file.handleLockReleaser = await new Promise((resolve, reject) => {
           // Tell everyone we want the access handle.
@@ -356,7 +358,6 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
         log('access handle acquired');
       }
 
-      file.isFileLocked = true;
     }
     return VFS.SQLITE_OK;
   }
@@ -372,13 +373,15 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
     if (lockType === VFS.SQLITE_LOCK_NONE) {
       const file = this.mapIdToFile.get(fileId);
       if (file.isHandleRequested) {
-        // Another connection wants the access handle.
-        file.accessHandle.close();
-        file.accessHandle = null;
-        file.handleLockReleaser();
-        file.handleLockReleaser = null;
+        if (file.handleLockReleaser) {
+          // Another connection wants the access handle.
+          file.accessHandle.close();
+          file.accessHandle = null;
+          file.handleLockReleaser();
+          file.handleLockReleaser = null;
+          log('access handle released');
+        }
         file.isHandleRequested = false;
-        log('access handle released');
       }
       file.isFileLocked = false;
     }
