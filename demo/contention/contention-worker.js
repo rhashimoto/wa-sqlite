@@ -123,13 +123,11 @@ const BUILDS = new Map([
         }
         throw e;
       }
-      await new Promise(resolve => setTimeout(resolve));
       nIterations++;
     }
   } else {
     while (Date.now() < endTime) {
       await sqlite3.exec(db, queries.reader);
-      await new Promise(resolve => setTimeout(resolve));
       nIterations++;
     }
   }
