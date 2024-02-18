@@ -1,16 +1,12 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksExclusive } from '../WebLocksMixins.js';
+import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
 
 const LOCK_NOTIFY_INTERVAL = 1000;
 
 const hasUnsafeAccessHandle =
   globalThis.FileSystemSyncAccessHandle.prototype.hasOwnProperty('mode');
-
-function log(...args) {
-  // console.log(...args);
-}
 
 /**
  * @param {string} pathname 
@@ -56,9 +52,11 @@ class File {
   }
 }
 
-export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
+export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
+
+  log = null;
 
   static async create(name, module) {
     const vfs = new OriginPrivateVFS(name, module);
@@ -70,10 +68,6 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
     super(name, module);
   }
   
-  // log(...args) {
-  //   console.log(...args);
-  // }
-
   getLockName(fileId) {
     const pathname = this.mapIdToFile.get(fileId).pathname;
     return `OPFS:${pathname}`
@@ -118,7 +112,7 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
             });
           });
         });
-        log('access handle acquired for open');
+        this.log?.('access handle acquired for open');
       }
 
       // @ts-ignore
@@ -220,7 +214,7 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
         file.accessHandle = null;
         file.openLockReleaser();
         file.openLockReleaser = null;
-        log('access handle released for open');
+        this.log?.('access handle released for open');
       }
 
       if (bytesRead < pData.byteLength) {
@@ -325,12 +319,12 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
             file.accessHandle = null;
             file.handleLockReleaser();
             file.handleLockReleaser = null;
-            log('access handle requested and released');
+            this.log?.('access handle requested and released');
           } else {
             // We're still using the access handle, so mark it to be
             // released when we're done.
             file.isHandleRequested = true;
-            log('access handle requested');
+            this.log?.('access handle requested');
           }
           file.handleRequestChannel.onmessage = null;
         };
@@ -355,7 +349,7 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
 
         // The access handle should now be available.
         file.accessHandle = await file.fileHandle.createSyncAccessHandle();
-        log('access handle acquired');
+        this.log?.('access handle acquired');
       }
 
     }
@@ -379,7 +373,7 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
           file.accessHandle = null;
           file.handleLockReleaser();
           file.handleLockReleaser = null;
-          log('access handle released');
+          this.log?.('access handle released');
         }
         file.isHandleRequested = false;
       }
@@ -401,7 +395,7 @@ export class OriginPrivateVFS extends WebLocksExclusive(FacadeVFS) {
         case VFS.SQLITE_FCNTL_PRAGMA:
           const key = extractString(pArg, 4);
           const value = extractString(pArg, 8);
-          log('xFileControl', file.pathname, 'PRAGMA', key, value);
+          this.log?.('xFileControl', file.pathname, 'PRAGMA', key, value);
           switch (key.toLowerCase()) {
             case 'journal_mode':
               if (value &&
