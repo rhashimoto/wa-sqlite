@@ -32,7 +32,6 @@ class PersistentFile {
 
   /** @type {boolean} */ isLockBusy = false;
   /** @type {boolean} */ isFileLocked = false;
-  /** @type {boolean} */ isOpenLocked = false;
   /** @type {boolean} */ isRequestInProgress = false;
   /** @type {function} */ handleLockReleaser = null;
 
@@ -153,7 +152,6 @@ export class AccessHandlePoolVFS extends FacadeVFS {
               // Get access handles for the files.
               const file = new File(path, flags);
               file.persistentFile = this.persistentFiles.get(path);
-              file.persistentFile.isOpenLocked = true;
               await this.#requestAccessHandle(file);
             } catch (e) {
               // Use an invalid persistent file to signal this error
@@ -174,7 +172,6 @@ export class AccessHandlePoolVFS extends FacadeVFS {
           this._module.retryOps.push((async () => {
             const file = new File(path, flags);
             file.persistentFile = this.persistentFiles.get(path);
-            file.persistentFile.isOpenLocked = true;
             await this.#requestAccessHandle(file);
           })());
           return VFS.SQLITE_BUSY;
@@ -298,11 +295,8 @@ export class AccessHandlePoolVFS extends FacadeVFS {
       const bytesRead = accessHandle.read(pData.subarray(), { at: iOffset });
 
       // Opening a database file performs one read without a xLock call.
-      // We use a special flag to prevent releasing the access handle
-      // until this read happens. 
-      if (file.persistentFile?.isOpenLocked) {
+      if ((file.flags & VFS.SQLITE_OPEN_MAIN_DB) && !file.persistentFile.isFileLocked) {
         this.#releaseAccessHandle(file);
-        file.persistentFile.isOpenLocked = false;
       }
 
       if (bytesRead < pData.byteLength) {
