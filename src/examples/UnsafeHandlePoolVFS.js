@@ -4,8 +4,6 @@ import * as VFS from '../VFS.js';
 
 const DEFAULT_TEMPORARY_FILES = 10;
 
-const hasUnsafeAccessHandle =
-  globalThis.FileSystemSyncAccessHandle.prototype.hasOwnProperty('mode');
 const finalizationRegistry = new FinalizationRegistry(releaser => releaser());
 
 class File {
@@ -22,6 +20,8 @@ class File {
 export class UnsafeHandlePoolVFS extends FacadeVFS {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
+
+  log = null;
 
   /** @type {FileSystemDirectoryHandle} */ rootDirectory;
   /** @type {Map<string, FileSystemSyncAccessHandle>} */ persistentHandles = new Map();
@@ -92,10 +92,10 @@ export class UnsafeHandlePoolVFS extends FacadeVFS {
           lock => !lock);
   
         if (!isLocked) {
-          this.log(`Deleting temporary directory ${entry.name}`);
+          this.log?.(`Deleting temporary directory ${entry.name}`);
           await this.rootDirectory.removeEntry(entry.name, { recursive: true });
         } else {
-          this.log(`Temporary directory ${entry.name} is locked`);
+          this.log?.(`Temporary directory ${entry.name} is locked`);
         }
       } else {
         await traverseTree(entry);
@@ -121,15 +121,6 @@ export class UnsafeHandlePoolVFS extends FacadeVFS {
       const tmpAccessHandle = await tmpFile.createSyncAccessHandle({ mode: 'readwrite-unsafe' });
       this.unboundHandles.add(tmpAccessHandle);
     }
-  }
-
-  log(...args) {
-    // console.log(...args);
-  }
-
-  getLockName(fileId) {
-    const path = this.mapIdToFile.get(fileId).path;
-    return `AHP:${path}`
   }
 
   /**
