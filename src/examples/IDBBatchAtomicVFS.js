@@ -3,13 +3,6 @@ import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
 import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
 
-function log(...args) {
-  // console.log(...args);
-}
-log.debug = function(...args) {
-  // console.debug(...args);
-};
-
 /**
  * @typedef Metadata
  * @property {string} name
@@ -43,6 +36,8 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
+  log = null; // console.log
+
   /** @type {Promise} */ #isReady;
   /** @type {IDBContext} */ #idb;
 
@@ -60,10 +55,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   async #initialize(name) {
     this.#idb = await IDBContext.create(name);
   }
-
-  // log(...args) {
-  //   console.log(...args);
-  // }
 
   close() {
     this.#idb.close();
@@ -444,7 +435,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         case VFS.SQLITE_FCNTL_PRAGMA:
           const key = extractString(pArg, 4);
           const value = extractString(pArg, 8);
-          log('xFileControl', file.path, 'PRAGMA', key, value);
+          this.log?.('xFileControl', file.path, 'PRAGMA', key, value);
           const setPragmaResponse = response => {
             const encoded = new TextEncoder().encode(response);
             const out = this._module._sqlite3_malloc(encoded.byteLength);
@@ -488,7 +479,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           }
           break;
         case VFS.SQLITE_FCNTL_SYNC:
-          log('xFileControl', file.path, 'SYNC');
+          this.log?.('xFileControl', file.path, 'SYNC');
           const commmitMetadata = Object.assign({}, file.metadata);
           const prevFileSize = file.rollback.fileSize
           this.#idb.q(({ metadata, blocks }) => {
@@ -511,14 +502,14 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           break;
         case VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE:
           // Every write transaction is atomic, so this is a no-op.
-          log('xFileControl', file.path, 'BEGIN_ATOMIC_WRITE');
+          this.log?.('xFileControl', file.path, 'BEGIN_ATOMIC_WRITE');
           return VFS.SQLITE_OK;
         case VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE:
           // Every write transaction is atomic, so this is a no-op.
-          log('xFileControl', file.path, 'COMMIT_ATOMIC_WRITE');
+          this.log?.('xFileControl', file.path, 'COMMIT_ATOMIC_WRITE');
           return VFS.SQLITE_OK;
         case VFS.SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE:
-          log('xFileControl', file.path, 'ROLLBACK_ATOMIC_WRITE');
+          this.log?.('xFileControl', file.path, 'ROLLBACK_ATOMIC_WRITE');
           file.metadata = file.rollback;
           const rollbackMetadata = Object.assign({}, file.metadata);
           this.#idb.q(({ metadata, blocks }) => {
@@ -551,6 +542,10 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
     | VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
+  /**
+   * @param {Uint8Array} zBuf 
+   * @returns {number|Promise<number>}
+   */
   jGetLastError(zBuf) {
     if (this.lastError) {
       console.error(this.lastError);
@@ -579,6 +574,8 @@ export class IDBContext {
   /** @type {IDBRequest?} */ #request = null;
   /** @type {WeakSet<IDBTransaction>} */ #txPending = new WeakSet();
   
+  log = null;
+
   static async create(name) {
     const database = await new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 6);
@@ -703,11 +700,11 @@ export class IDBContext {
         // Create the new transaction.
         // @ts-ignore
         tx = this.#database.transaction(this.#database.objectStoreNames, mode, options);
-        log.debug('IDBTransaction open', mode);
+        this.log?.('IDBTransaction open', mode);
         this.#txPending.add(tx);
         this.#txComplete = new Promise((resolve, reject) => {
           tx.addEventListener('complete', () => {
-            log.debug('IDBTransaction complete');
+            this.log?.('IDBTransaction complete');
             this.#txPending.delete(tx);
             resolve();
           });
@@ -732,7 +729,7 @@ export class IDBContext {
         // happen if the last request in the transaction completed
         // in a previous task but the transaction has not yet committed.
         if (!i && e.name === 'TransactionInactiveError') {
-          log.debug('TransactionInactiveError, retrying');
+          this.log?.('TransactionInactiveError, retrying');
           tx = null;
           continue;
         }
@@ -758,12 +755,12 @@ export class IDBContext {
             // @ts-ignore
             if (maybeRequest instanceof IDBRequest && !property.endsWith('Cursor')) {
               // // Debug logging.
-              // log.debug(`${target.name}.${String(property)}`, args);
+              // this.log?.(`${target.name}.${String(property)}`, args);
               // maybeRequest.addEventListener('success', () => {
-              //   log.debug(`${target.name}.${String(property)} success`, maybeRequest.result);
+              //   this.log?.(`${target.name}.${String(property)} success`, maybeRequest.result);
               // });
               // maybeRequest.addEventListener('error', () => {
-              //   log.debug(`${target.name}.${String(property)} error`, maybeRequest.error);
+              //   this.log?.(`${target.name}.${String(property)} error`, maybeRequest.error);
               // });
               
               // Save the request.
