@@ -16,7 +16,7 @@ This VFS works with older browsers and on all contexts (i.e. Window, Worker, Sha
 This VFS uses the 
 [Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
 with synchronous
-[Access Handle](https://github.com/WICG/file-system-access/blob/main/AccessHandle.md).
+[Access Handle](https://github.com/WICG/file-system-access/blob/main/proposals/AccessHandle.md).
 
 ### AccessHandlePoolVFS
 This VFS is synchronous and so is faster than OriginPrivateVFS across the board.
