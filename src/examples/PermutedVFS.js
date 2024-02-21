@@ -198,22 +198,7 @@ export class PermutedVFS extends FacadeVFS {
 
               // Defer processing if we are in a transaction.
               if (file.lockState === VFS.SQLITE_LOCK_NONE) {
-                // Apply pending transactions in sequence order.
-                let needsSharing = false;
-                while (file.mapTxToPending.has(file.txCurrent + 1)) {
-                  const pending = file.mapTxToPending.get(file.txCurrent + 1);
-                  file.mapTxToPending.delete(file.txCurrent + 1);
-                  this.#processPending(file, pending);
-                  needsSharing = true;
-                }
-
-                // Publish our transaction id if changed.
-                if (needsSharing) {
-                  this.#shareTxId(file);
-                }
-
-                // Asynchronously update the free list.
-                this.#reclaimOffsets(file);
+                this.#processPendings(file);
               }
             }
           };
@@ -522,6 +507,9 @@ export class PermutedVFS extends FacadeVFS {
 
     if (lockType < VFS.SQLITE_LOCK_RESERVED) {
       file.lockRelease?.();
+      if (lockType === VFS.SQLITE_LOCK_NONE) {
+        this.#processPendings(file);
+      }
     }
 
     file.lockState = lockType;
@@ -700,6 +688,28 @@ export class PermutedVFS extends FacadeVFS {
         file.freeOffsets.add(offset);
       }
       file.mapTxToReclaim.delete(txId);
+    }
+  }
+
+  /**
+   * @param {File} file 
+   */
+  #processPendings(file) {
+    // Apply pending transactions in sequence order.
+    let needsSharing = false;
+    while (file.mapTxToPending.has(file.txCurrent + 1)) {
+      const pending = file.mapTxToPending.get(file.txCurrent + 1);
+      file.mapTxToPending.delete(file.txCurrent + 1);
+      this.#processPending(file, pending);
+      needsSharing = true;
+    }
+
+    // Publish our transaction id if changed.
+    if (needsSharing) {
+      this.#shareTxId(file);
+
+      // Asynchronously update the free list.
+      this.#reclaimOffsets(file);
     }
   }
 
