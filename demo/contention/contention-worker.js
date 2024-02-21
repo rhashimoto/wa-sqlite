@@ -111,12 +111,12 @@ const releaseTask = (function() {
   // Open the database.
   if (index === 0) {
     const db = await sqlite3.open_v2(dbName);
-    await sqlite3.exec(db, queries.global);
+    await query(sqlite3, db, queries.global);
     await sqlite3.close(db);
   }
   const db = await sqlite3.open_v2(dbName);
   await new Promise(resolve => setTimeout(resolve));
-  await sqlite3.exec(db, queries.connection);
+  await query(sqlite3, db, queries.connection);
 
   postMessage(null);
   const { endTime } = await new Promise(resolve => {
@@ -127,29 +127,11 @@ const releaseTask = (function() {
 
   // Run contention test
   let nIterations = 0;
-  if (type === 'writer') {
-    while (Date.now() < endTime) {
-      try {
-        await sqlite3.exec(db, queries.writer);
-        await releaseTask();
-      } catch (e) {
-        // Retry on SQLITE_BUSY.
-        if (e.code === SQLite.SQLITE_BUSY) {
-          if (!sqlite3.get_autocommit(db)) {
-            await sqlite3.exec(db, 'ROLLBACK;');
-          }
-          continue;
-        }
-        throw e;
-      }
-      nIterations++;
-    }
-  } else {
-    while (Date.now() < endTime) {
-      await sqlite3.exec(db, queries.reader);
-      await releaseTask();
-      nIterations++;
-    }
+  const sql = type === 'writer' ? queries.writer : queries.reader;
+  while (Date.now() < endTime) {
+    await query(sqlite3, db, sql);
+    await releaseTask();
+    nIterations++;
   }
   postMessage(`worker ${index} ${type} ${nIterations} iterations`);
   postMessage(null);
@@ -157,6 +139,23 @@ const releaseTask = (function() {
   console.error(e);
   postMessage({ error: e });
 });
+
+async function query(sqlite3, db, sql) {
+  while (true) {
+    try {
+      const rc = await sqlite3.exec(db, sql);
+      return rc;
+    } catch (e) {
+      if (e.code === SQLite.SQLITE_BUSY) {
+        if (!sqlite3.get_autocommit(db)) {
+          await sqlite3.exec(db, 'ROLLBACK;');
+        }
+        continue;
+      }
+      throw e;
+    }
+  }
+}
 
 async function clearStorage() {
   const root = await navigator.storage?.getDirectory();

@@ -477,8 +477,10 @@ export class PermutedVFS extends FacadeVFS {
         });
       });
       if (!file.lockRelease) {
+        this.log?.(`failed to acquire lock ${this.#getLockName(file)}`);
         return VFS.SQLITE_BUSY;
       }
+      this.log?.(`acquired lock ${this.#getLockName(file)}`);
 
       // Check that we are on the latest transaction. This might not
       // be the case if we haven't received and processed all pending
@@ -489,6 +491,8 @@ export class PermutedVFS extends FacadeVFS {
       if (recent.length) {
         // TODO: Bring state up to date (but still return busy). Retransmit
         // pending transactions in case the original sender failed.
+        this.log?.(`lock acquired but tx ${file.txCurrent} out of date`, recent);
+        file.lockRelease();
         return VFS.SQLITE_BUSY;
       }
     }
@@ -706,6 +710,7 @@ export class PermutedVFS extends FacadeVFS {
 
     // Publish our transaction id if changed.
     if (needsSharing) {
+      // Publish our new transaction id.
       this.#shareTxId(file);
 
       // Asynchronously update the free list.

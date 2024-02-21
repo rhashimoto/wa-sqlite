@@ -5,8 +5,10 @@ const searchParams = new URLSearchParams(globalThis.location.search);
 
 const queries = JSON.parse(localStorage.getItem('contention') ?? 'null') || {
   global: `
+    BEGIN IMMEDIATE;
     CREATE TABLE kv(key PRIMARY KEY, value);
     REPLACE INTO kv VALUES ('counter', 0);
+    COMMIT;
   `.split('\n').map(line => line.replace(/^[ ]{4}/, '')).join('\n').trim(),
 
   connection: `
@@ -14,7 +16,7 @@ const queries = JSON.parse(localStorage.getItem('contention') ?? 'null') || {
   `.split('\n').map(line => line.replace(/^[ ]{4}/, '')).join('\n').trim(),
 
   writer: `
-    BEGIN IMMEDIATE TRANSACTION;
+    BEGIN IMMEDIATE;
     UPDATE kv SET value = value + 1 WHERE key='counter';
     COMMIT;
   `.split('\n').map(line => line.replace(/^[ ]{4}/, '')).join('\n').trim(),
