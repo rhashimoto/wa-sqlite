@@ -161,9 +161,10 @@ export class PermutedVFS extends FacadeVFS {
 
           // Get the page map from IndexedDB. Also check digests past the
           // previously verified transaction.
+          let maxIndex = 0;
           let pages = [];
           do {
-            const range = IDBKeyRange.bound([file.path, file.txCurrent + 1], [file.path, Infinity]);
+            const range = IDBKeyRange.bound([file.path, maxIndex + 1], [file.path, Infinity]);
             pages = await idb(tx.objectStore('pages').getAll(range, BATCH_SIZE));
             for (const page of pages) {
               if (page.t > verified) {
@@ -171,12 +172,13 @@ export class PermutedVFS extends FacadeVFS {
               }
               file.mapPageToOffset.set(page.i, page.o);
               file.txCurrent = Math.max(file.txCurrent, page.t);
-              file.fileSize = Math.max(file.fileSize, page.i * file.pageSize);
+              maxIndex = Math.max(maxIndex, page.i);
 
               // This offset holds a current page, so it's not reclaimable.
               reclaimable.delete(page.o);
             }
           } while (pages.length === BATCH_SIZE);
+          file.fileSize = Math.max(file.fileSize, maxIndex * file.pageSize);
 
           // Set the reclaimable offsets. When all connections reach this
           // transaction, these offsets can be moved to the free list.
@@ -204,6 +206,9 @@ export class PermutedVFS extends FacadeVFS {
                 if (needsSharing) {
                   this.#shareTxId(file);
                 }
+
+                // Asynchronously update the free list.
+                this.#reclaimOffsets(file);
               }
             }
           };
@@ -487,7 +492,7 @@ export class PermutedVFS extends FacadeVFS {
       // Check that we are on the latest transaction. This might not
       // be the case if we haven't received and processed all pending
       // transaction messages.
-      const objectStore = this.db.transaction('recent').objectStore('recent');
+      const objectStore = this.db.transaction('recent', 'readwrite').objectStore('recent');
       const range = IDBKeyRange.bound([file.path, file.txCurrent], [file.path, Infinity], true);
       const recent = await idb(objectStore.getAll(range));
       if (recent.length) {
@@ -584,6 +589,9 @@ export class PermutedVFS extends FacadeVFS {
             this.#processPending(file, pending);
             this.#shareTxId(file);
 
+            // Asynchronously update the free list.
+            this.#reclaimOffsets(file);
+
             file.txPageData = null;
           }
           break;
@@ -642,6 +650,32 @@ export class PermutedVFS extends FacadeVFS {
     // Release the old lock.
     file.txRelease?.();
     file.txRelease = releaser;
+  }
+
+  /**
+   * @param {File} file 
+   * @returns 
+   */
+  async #reclaimOffsets(file) {
+    let txInUse = file.txCurrent;
+    const pattern = new RegExp(`^${this.#getLockName(file)}\\[(\\d+)\\]$`);
+    const locks = await navigator.locks.query();
+    for (const lock of locks.held) {
+      const match = lock.name.match(pattern);
+      if (match) {
+        txInUse = Math.min(txInUse, Number(match[1]));
+      }
+    }
+    this.log?.(`reclaiming up to tx ${txInUse}`);
+
+    for (const [txId, reclaimable] of file.mapTxToReclaim) {
+      if (txId > txInUse) return;
+      for (const offset of reclaimable) {
+        this.log?.(`reclaiming offset ${offset}`);
+        file.freeOffsets.add(offset);
+      }
+      file.mapTxToReclaim.delete(txId);
+    }
   }
 
   /**
