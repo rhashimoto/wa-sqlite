@@ -4,6 +4,8 @@ import * as VFS from '../VFS.js';
 
 const BATCH_SIZE = 1;
 
+const INSTANCE = new URLSearchParams(location.search).get('index');
+
 /**
  * @param {string} pathname 
  * @param {boolean} create 
@@ -50,9 +52,10 @@ class File {
   /** @type {Map<number, { offset: number, digest: Uint32Array }>} */ txPageData;
   /** @type {number} */ txFileSize;
 
-  pendingTimeout;
-  lockRelease;
-  txRelease;
+  /** @type {function} */ lockRelease;
+  /** @type {function} */ txRelease;
+
+  /** @type {Promise} */ pendingOps;
 
   constructor(pathname, flags) {
     this.path = pathname;
@@ -64,7 +67,7 @@ export class PermutedVFS extends FacadeVFS {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
-  log = console.log;
+  log = (...args) => console.log(`[${INSTANCE}]`, ...args);
 
   /** @type {IDBDatabase} */ db;
 
@@ -122,6 +125,7 @@ export class PermutedVFS extends FacadeVFS {
         file.lockState = VFS.SQLITE_LOCK_NONE;
         file.pageSize = 0;
         file.fileSize = 0;
+        file.pendingOps = Promise.resolve();
 
         file.txCurrent = 0;
         file.broadcastChannel = new BroadcastChannel(`permuted:${path}`);
@@ -133,21 +137,13 @@ export class PermutedVFS extends FacadeVFS {
         
         file.txPageData = null;
 
-        const pageSizeBuffer = new DataView(new ArrayBuffer(2));
-        if (file.accessHandle.read(pageSizeBuffer, { at: 16 }) === 2) {
-          file.pageSize = pageSizeBuffer.getUint16(0);
-          if (file.pageSize === 1) {
-            file.pageSize = 65536;
-          }
-        }
-
-        navigator.locks.request(this.#getLockName(file), async () => {
+        await navigator.locks.request(this.#getLockName(file), async () => {
           // Get metadata and last verified transaction. from IndexedDB.
+          this.log?.(`acquired open lock ${this.#getLockName(file)}`);
           const tx = this.db.transaction(['pages', 'verified'], 'readwrite');
           const verified = await idb(tx.objectStore('verified').get(file.path));
           if (verified === undefined) {
             await idb(tx.objectStore('verified').put(0, file.path));
-            return;
           }
 
           // Initialize reclaimable offsets.
@@ -178,6 +174,15 @@ export class PermutedVFS extends FacadeVFS {
               reclaimable.delete(page.o);
             }
           } while (pages.length === BATCH_SIZE);
+
+          // Compute the file size.
+          const pageSizeBuffer = new DataView(new ArrayBuffer(2));
+          if (file.accessHandle.read(pageSizeBuffer, { at: 16 }) === 2) {
+            file.pageSize = pageSizeBuffer.getUint16(0);
+            if (file.pageSize === 1) {
+              file.pageSize = 65536;
+            }
+          }
           file.fileSize = Math.max(file.fileSize, maxIndex * file.pageSize);
 
           // Set the reclaimable offsets. When all connections reach this
@@ -215,6 +220,7 @@ export class PermutedVFS extends FacadeVFS {
 
           await this.#shareTxId(file);
         });
+        this.log?.(`released open lock ${this.#getLockName(file)}`);
       }
 
       pOutFlags.setInt32(0, flags, true);
@@ -282,7 +288,7 @@ export class PermutedVFS extends FacadeVFS {
       await file?.accessHandle?.close();
 
       if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
-        // TODO: Wait for pending broadcasts to be sent.
+        await file.pendingOps;
         file.broadcastChannel.close();
         file.lockRelease?.();
         file.txRelease?.();
@@ -482,7 +488,7 @@ export class PermutedVFS extends FacadeVFS {
         const lockName = this.#getLockName(file);
         navigator.locks.request(lockName, { ifAvailable: true }, lock => {
           if (lock) return new Promise(resolve);
-          resolve();
+          resolve(null);
         });
       });
       if (!file.lockRelease) {
@@ -545,6 +551,9 @@ export class PermutedVFS extends FacadeVFS {
               break;
           }
           break;
+        case VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE:
+        case VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE:
+          return VFS.SQLITE_OK;
         case VFS.SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE:
           // TODO: Return used offsets to the free list.
           file.txPageData = null;
@@ -579,11 +588,16 @@ export class PermutedVFS extends FacadeVFS {
 
             // When the IndexedDB transaction commits, post the SQLite
             // transaction details to the broadcast channel.
-            tx.oncomplete = () => {
+            const txComplete = new Promise((resolve, reject) => {
+              tx.oncomplete = resolve;
+              tx.onerror = () => reject(tx.error);
+            }).then(() => {
               file.broadcastChannel.postMessage(Object.assign({
                 path: file.path
               }, pending));
-            };
+              this.log?.(`posted pending ${pending.tx}`, pending);
+            });
+            file.pendingOps = Promise.all([file.pendingOps, txComplete]);
 
             // Apply the transaction ourselves.
             this.#processPending(file, pending);
@@ -601,6 +615,16 @@ export class PermutedVFS extends FacadeVFS {
       return VFS.SQLITE_IOERR;
     }
     return VFS.SQLITE_NOTFOUND;
+  }
+
+  /**
+   * @param {number} fileId
+   * @returns {number|Promise<number>}
+   */
+  jDeviceCharacteristics(fileId) {
+    return 0
+    | VFS.SQLITE_IOCAP_BATCH_ATOMIC
+    | VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
   /**
@@ -643,6 +667,7 @@ export class PermutedVFS extends FacadeVFS {
     const releaser = await new Promise(resolve => {
       const lockName = this.#getLockName(file) + `[${file.txCurrent}]`;
       navigator.locks.request(lockName, { mode: 'shared' }, () => {
+        this.log?.(`acquired shared lock ${lockName}`);
         return new Promise(resolve);
       });
     });

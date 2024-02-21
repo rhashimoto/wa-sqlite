@@ -45,6 +45,10 @@ const BUILDS = new Map([
     vfsModule: '../../src/examples/AccessHandlePoolVFS.js',
   },
   {
+    name: 'PermutedVFS',
+    vfsModule: '../../src/examples/PermutedVFS.js',
+  },
+  {
     name: 'FLOOR',
     vfsModule: '../../src/examples/FLOOR.js',
   },
@@ -111,6 +115,7 @@ const releaseTask = (function() {
     await sqlite3.close(db);
   }
   const db = await sqlite3.open_v2(dbName);
+  await new Promise(resolve => setTimeout(resolve));
   await sqlite3.exec(db, queries.connection);
 
   postMessage(null);
