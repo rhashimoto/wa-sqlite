@@ -551,7 +551,10 @@ export class PermutedVFS extends FacadeVFS {
           file.txPageData = null;
           return VFS.SQLITE_OK;
         case VFS.SQLITE_FCNTL_SYNC:
+          // TODO: Flush only before deleting recent transactions
+          // from IndexedDB.
           this.log?.('xFileControl', 'SYNC', file.path);
+          file.accessHandle.flush();
           if (file.txPageData) {
             const pending = {
               tx: file.txCurrent + 1,
