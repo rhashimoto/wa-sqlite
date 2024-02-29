@@ -1,6 +1,6 @@
 {
   "name": "wa-sqlite",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "type": "module",
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
@@ -15,7 +15,6 @@
   ],
   "scripts": {
     "build-docs": "typedoc",
-    "prepack": "make",
     "start": "web-dev-server --node-resolve",
     "test": "karma start karma.conf.cjs --browsers ChromeHeadless",
     "test-manual": "karma start karma.conf.cjs --auto-watch --no-single-run --reporters progress"
