@@ -15,7 +15,6 @@
   ],
   "scripts": {
     "build-docs": "typedoc",
-    "prepack": "make",
     "start": "web-dev-server --node-resolve",
     "test": "karma start karma.conf.cjs --browsers ChromeHeadless",
     "test-manual": "karma start karma.conf.cjs --auto-watch --no-single-run --reporters progress"
