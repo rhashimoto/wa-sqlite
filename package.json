@@ -1,5 +1,5 @@
 {
-  "name": "wa-sqlite",
+  "name": "@mendix/wa-sqlite",
   "version": "1.0.7",
   "type": "module",
   "license": "MIT",

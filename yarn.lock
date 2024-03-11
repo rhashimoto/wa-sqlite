@@ -73,6 +73,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@mendix/wa-sqlite@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@mendix/wa-sqlite@workspace:."
+  dependencies:
+    "@types/jasmine": "npm:^5.1.4"
+    "@web/dev-server": "npm:^0.4.6"
+    "@web/test-runner": "npm:^0.20.0"
+    "@web/test-runner-core": "npm:^0.13.4"
+    comlink: "npm:^4.4.1"
+    jasmine-core: "npm:^4.5.0"
+    monaco-editor: "npm:^0.34.1"
+    typedoc: "npm:^0.25.7"
+    typescript: "npm:^5.3.3"
+    web-test-runner-jasmine: "npm:^0.0.6"
+  dependenciesMeta:
+    monaco-editor@0.34.1:
+      unplugged: true
+    web-test-runner-jasmine@0.0.6:
+      unplugged: true
+  languageName: unknown
+  linkType: soft
+
 "@nodelib/fs.scandir@npm:2.1.5":
   version: 2.1.5
   resolution: "@nodelib/fs.scandir@npm:2.1.5"
@@ -4240,28 +4262,6 @@ __metadata:
   checksum: 9fa7d66d6042cb090d116c2d8820d34c8870cfcbaed6e404da89f66b899970ed0ac47b59a2e30fc40a25af5414822bb3ea27974f714e9b91910d69c894be95f7
   languageName: node
   linkType: hard
-
-"wa-sqlite@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "wa-sqlite@workspace:."
-  dependencies:
-    "@types/jasmine": "npm:^5.1.4"
-    "@web/dev-server": "npm:^0.4.6"
-    "@web/test-runner": "npm:^0.20.0"
-    "@web/test-runner-core": "npm:^0.13.4"
-    comlink: "npm:^4.4.1"
-    jasmine-core: "npm:^4.5.0"
-    monaco-editor: "npm:^0.34.1"
-    typedoc: "npm:^0.25.7"
-    typescript: "npm:^5.3.3"
-    web-test-runner-jasmine: "npm:^0.0.6"
-  dependenciesMeta:
-    monaco-editor@0.34.1:
-      unplugged: true
-    web-test-runner-jasmine@0.0.6:
-      unplugged: true
-  languageName: unknown
-  linkType: soft
 
 "web-test-runner-jasmine@npm:^0.0.6":
   version: 0.0.6

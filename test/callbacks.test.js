@@ -1,6 +1,6 @@
 import { TestContext } from "./TestContext.js";
-import AsyncifyFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs';
-import JSPIFactory from 'wa-sqlite/dist/wa-sqlite-jspi.mjs';
+import AsyncifyFactory from '@mendix/wa-sqlite/dist/wa-sqlite-async.mjs';
+import JSPIFactory from '@mendix/wa-sqlite/dist/wa-sqlite-jspi.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 
 const FACTORIES = new Map([
