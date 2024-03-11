@@ -2,6 +2,7 @@
   "name": "wa-sqlite",
   "version": "1.0.8",
   "type": "module",
+  "license": "MIT",
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
   "files": [
