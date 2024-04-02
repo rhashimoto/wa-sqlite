@@ -29,10 +29,14 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+
     - uses: browser-actions/setup-chrome@v1
+      id: setup-chrome
       with:
         chrome-version: 121
-      
+    - run: |
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+
     # Install yarn dependencies.
     - name: Get yarn cache directory path
       id: yarn-cache-dir-path
