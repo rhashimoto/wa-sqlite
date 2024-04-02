@@ -45,10 +45,6 @@ const BUILDS = new Map([
     vfsModule: '../../src/examples/AccessHandlePoolVFS.js',
   },
   {
-    name: 'PermutedVFS',
-    vfsModule: '../../src/examples/PermutedVFS.js',
-  },
-  {
     name: 'FLOOR',
     vfsModule: '../../src/examples/FLOOR.js',
   },
