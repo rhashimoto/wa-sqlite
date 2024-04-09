@@ -451,6 +451,32 @@ function shared(sqlite3Ready) {
     expect(Array.from(rows[3][0])).toEqual([...new Uint8Array([0xde, 0xad, 0xbe, 0xef])]);
   });
 
+  it('should handle blobs with {bind, column}', async function() {
+    /** @type {[string, Uint8Array][]} */
+    const entries = [
+      ['[]', new Uint8Array([])],
+      ['[42]', new Uint8Array([42])],
+      ['[0,1,2]', new Uint8Array([0, 1, 2])],
+      ['[0xde, 0xad, 0xbe, 0xef]', new Uint8Array([0xde, 0xad, 0xbe, 0xef])],
+
+    ];
+    await sqlite3.exec(db, `CREATE TABLE t (key PRIMARY KEY, value)`);
+    for await (const stmt of sqlite3.statements(db, 'INSERT INTO t VALUES (?, ?)')) {
+      for (const [key, value] of entries) {
+        await sqlite3.reset(stmt);
+        sqlite3.bind(stmt, 1, key);
+        sqlite3.bind(stmt, 2, value);
+        await sqlite3.step(stmt);
+
+        for await (const s of sqlite3.statements(db, `SELECT value FROM t WHERE key='${key}'`)) {
+          await sqlite3.step(s);
+          const result = /** @type {Uint8Array} */ (sqlite3.column(s, 0));
+          expect(result).toEqual(value);
+        }
+      }
+    }
+  });
+
   it('should handle 64-bit integer with {bind,column}_int64', async function() {
     /** @type {[string, bigint][]} */
     const entries = [
