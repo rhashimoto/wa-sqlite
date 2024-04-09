@@ -138,7 +138,12 @@ export function Factory(Module) {
       verifyStatement(stmt);
       // @ts-ignore
       const byteLength = value.byteLength ?? value.length;
-      const ptr = Module._sqlite3_malloc(byteLength);
+
+      // Allocate empty buffer in the case of zero-length
+      // bytearray to differentiate from NULL
+      const ptr = byteLength === 0 ?
+        createUTF8('') :
+        Module._sqlite3_malloc(byteLength);
       Module.HEAPU8.subarray(ptr).set(value);
       const result = f(stmt, i, ptr, byteLength, sqliteFreeAddress);
       // trace(fname, result);
