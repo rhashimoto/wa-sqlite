@@ -26,8 +26,6 @@ EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 # intermediate files
-# OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
-# OBJ_FILES_DIST = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
 OBJ_FILES_DEBUG_FTS = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
 OBJ_FILES_DIST_FTS = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
 
@@ -154,14 +152,6 @@ deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 .PHONY: clean-tmp
 clean-tmp:
 	rm -rf tmp
-
-# tmp/obj/debug/%.o: %.c
-# 	mkdir -p tmp/obj/debug
-# 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
-
-# tmp/obj/dist/%.o: %.c
-# 	mkdir -p tmp/obj/dist
-# 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
 tmp/obj/debug/%.o: %.c
 	mkdir -p tmp/obj/debug
