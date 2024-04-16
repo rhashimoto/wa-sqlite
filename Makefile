@@ -26,8 +26,10 @@ EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 
 # intermediate files
-OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
-OBJ_FILES_DIST = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
+# OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
+# OBJ_FILES_DIST = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
+OBJ_FILES_DEBUG_FTS = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
+OBJ_FILES_DIST_FTS = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
 
 RS_LIB = powersync
 RS_LIB_DIR = ./powersync-sqlite-core
@@ -51,7 +53,7 @@ EMFLAGS_COMMON = \
 	-s WASM=1 \
 	-s INVOKE_RUN \
 	-s ENVIRONMENT="web,worker" \
-	-s STACK_SIZE=512KB \
+	-s TOTAL_STACK=512KB \
 	$(EMFLAGS_EXTRA)
 
 EMFLAGS_DEBUG = \
@@ -106,17 +108,20 @@ WASQLITE_DEFINES = \
 	-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE \
 	$(WASQLITE_EXTRA_DEFINES)
 
+WASQLITE_FTS_DEFINES ?= $(WASQLITE_DEFINES) \
+  -DSQLITE_ENABLE_FTS5
+
 # directories
 .PHONY: all
 all: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist dist-xl debug tmp
+	rm -rf dist debug tmp
 
 .PHONY: spotless
 spotless:
-	rm -rf dist dist-xl debug tmp deps cache
+	rm -rf dist debug tmp deps cache
 
 ## cache
 .PHONY: clean-cache
@@ -150,13 +155,21 @@ deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 clean-tmp:
 	rm -rf tmp
 
+# tmp/obj/debug/%.o: %.c
+# 	mkdir -p tmp/obj/debug
+# 	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
+
+# tmp/obj/dist/%.o: %.c
+# 	mkdir -p tmp/obj/dist
+# 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+
 tmp/obj/debug/%.o: %.c
 	mkdir -p tmp/obj/debug
-	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DEBUG) $(WASQLITE_FTS_DEFINES) $^ -c -o $@
 
 tmp/obj/dist/%.o: %.c
 	mkdir -p tmp/obj/dist
-	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_FTS_DEFINES) $^ -c -o $@
 
 $(RS_DEBUG_BC): FORCE
 	mkdir -p tmp/bc/dist
@@ -172,29 +185,79 @@ $(RS_RELEASE_BC): FORCE
 ## debug
 .PHONY: clean-debug
 clean-debug:
-	rm -rf debug
+	rm -rf debug debug-fts
+
+# .PHONY: debug
+# debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
+
+# debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+# 	mkdir -p debug
+# 	$(EMCC) $(EMFLAGS_DEBUG) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
+# 	  $(OBJ_FILES_DEBUG) *.o -o $@
+
+# debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+# 	mkdir -p debug
+# 	$(EMCC) $(EMFLAGS_DEBUG) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
+# 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
+# 	  $(OBJ_FILES_DEBUG) *.o -o $@
 
 .PHONY: debug
 debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
 
-debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG_FTS) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
-	  $(OBJ_FILES_DEBUG) *.o -o $@
+	  $(OBJ_FILES_DEBUG_FTS) *.o -o $@
 
-debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG_FTS) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
-	  $(OBJ_FILES_DEBUG) *.o -o $@
+	  $(OBJ_FILES_DEBUG_FTS) *.o -o $@
 
+# For future use as an optimised build target
+# To build add dist to the .PHONY: all target
 ## dist
+# .PHONY: clean-dist
+# clean-dist:
+# 	rm -rf dist
+
+# .PHONY: dist
+# dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs
+
+# dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+# 	mkdir -p dist
+# 	$(EMCC) $(EMFLAGS_DIST) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
+# 	  $(OBJ_FILES_DIST)  -o $@
+
+# dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+# 	mkdir -p dist
+# 	$(EMCC) $(EMFLAGS_DIST) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 	  $(EMFLAGS_ASYNCIFY_DIST) \
+# 		$(CFLAGS_DIST) \
+# 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
+# 	  $(OBJ_FILES_DIST)  -o $@
+
+# FORCE: ;
+
+# FTS builds
 .PHONY: clean-dist
 clean-dist:
 	rm -rf dist
@@ -202,15 +265,15 @@ clean-dist:
 .PHONY: dist
 dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs
 
-dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+dist/wa-sqlite.mjs: $(OBJ_FILES_DIST_FTS) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
-	  $(OBJ_FILES_DIST)  -o $@
+	  $(OBJ_FILES_DIST_FTS)  -o $@
 
-dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST_FTS) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
@@ -218,6 +281,6 @@ dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTION
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 		$(CFLAGS_DIST) \
 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
-	  $(OBJ_FILES_DIST)  -o $@
+	  $(OBJ_FILES_DIST_FTS)  -o $@
 
 FORCE: ;
