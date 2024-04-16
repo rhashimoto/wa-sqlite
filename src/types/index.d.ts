@@ -15,13 +15,7 @@
  * each element converted to a byte); SQLite always returns blob data as
  * `Uint8Array`
  */
-type SQLiteCompatibleType =
-  | number
-  | string
-  | Uint8Array
-  | Array<number>
-  | bigint
-  | null;
+type SQLiteCompatibleType = number | string | Uint8Array | Array<number> | bigint | null;
 
 /**
  * SQLite Virtual File System object
@@ -77,12 +71,7 @@ declare interface SQLiteVFS {
   xDeviceCharacteristics(fileId: number): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xOpen(
-    name: string | null,
-    fileId: number,
-    flags: number,
-    pOutFlags: DataView
-  ): number;
+  xOpen(name: string | null, fileId: number, flags: number, pOutFlags: DataView): number;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
   xDelete(name: string, syncDir: number): number;
@@ -137,24 +126,12 @@ declare interface SQLiteModule {
   /**
    * @see https://sqlite.org/vtab.html#the_xcreate_method
    */
-  xCreate?(
-    db: number,
-    appData,
-    argv: string[],
-    pVTab: number,
-    pzErr: DataView
-  ): number;
+  xCreate?(db: number, appData, argv: string[], pVTab: number, pzErr: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xconnect_method
    */
-  xConnect(
-    db: number,
-    appData,
-    argv: string[],
-    pVTab: number,
-    pzErr: DataView
-  ): number;
+  xConnect(db: number, appData, argv: string[], pVTab: number, pzErr: DataView): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xbestindex_method
@@ -184,12 +161,7 @@ declare interface SQLiteModule {
   /**
    * @see https://sqlite.org/vtab.html#the_xfilter_method
    */
-  xFilter(
-    pCursor: number,
-    idxNum: number,
-    idxString: string | null,
-    values: number[]
-  ): number;
+  xFilter(pCursor: number, idxNum: number, idxString: string | null, values: number[]): number;
 
   /**
    * @see https://sqlite.org/vtab.html#the_xnext_method
@@ -326,9 +298,7 @@ declare interface SQLiteAPI {
    */
   bind_collection(
     stmt: number,
-    bindings:
-      | { [index: string]: SQLiteCompatibleType | null }
-      | Array<SQLiteCompatibleType | null>
+    bindings: { [index: string]: SQLiteCompatibleType | null } | Array<SQLiteCompatibleType | null>
   ): number;
 
   /**
@@ -602,12 +572,7 @@ declare interface SQLiteAPI {
    * @param appData
    * @returns `SQLITE_OK` (throws exception on error)
    */
-  create_module(
-    db: number,
-    zName: string,
-    module: SQLiteModule,
-    appData?
-  ): number;
+  create_module(db: number, zName: string, module: SQLiteModule, appData?): number;
 
   /**
    * Get number of columns in current row of a prepared statement
@@ -643,10 +608,7 @@ declare interface SQLiteAPI {
   exec(
     db: number,
     zSQL: string,
-    callback?: (
-      row: Array<SQLiteCompatibleType | null>,
-      columns: string[]
-    ) => void
+    callback?: (row: Array<SQLiteCompatibleType | null>, columns: string[]) => void
   ): Promise<number>;
 
   /**
@@ -705,14 +667,12 @@ declare interface SQLiteAPI {
    */
   open_v2(zFilename: string, iFlags?: number, zVfs?: string): Promise<number>;
 
+
   /**
    * Registers table row on change callback
-   *
+   * 
    */
-  register_table_onchange_hook(
-    db: number,
-    callback: (opType: number, tableName: string, rowId: number) => void
-  ): void;
+  register_table_onchange_hook(db: number, callback: (opType: number, tableName: string, rowId: number) => void): void;
 
   /**
    * Compile an SQL statement
@@ -757,10 +717,7 @@ declare interface SQLiteAPI {
    * pointer and next SQL pointer, or a Promise containing `null` when
    * no statement remains
    */
-  prepare_v2(
-    db: number,
-    sql: number
-  ): Promise<{ stmt: number; sql: number } | null>;
+  prepare_v2(db: number, sql: number): Promise<{ stmt: number; sql: number } | null>;
 
   /**
    * Specify callback to be invoked between long-running queries
@@ -769,12 +726,7 @@ declare interface SQLiteAPI {
    * @param handler
    * @param userData
    */
-  progress_handler(
-    db: number,
-    nProgressOps: number,
-    handler: (userData: any) => number,
-    userData
-  );
+  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number, userData);
 
   /**
    * Reset a prepared statement object
@@ -789,10 +741,7 @@ declare interface SQLiteAPI {
    * @param context context pointer
    * @param value
    */
-  result(
-    context: number,
-    value: (SQLiteCompatibleType | number[]) | null
-  ): void;
+  result(context: number, value: (SQLiteCompatibleType | number[]) | null): void;
 
   /**
    * Set the result of a function or vtable column
@@ -1074,7 +1023,7 @@ declare interface SQLiteAPI {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/src/sqlite-constants.js" {
+declare module '@journeyapps/wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_OK: 0;
   export const SQLITE_ERROR: 1;
   export const SQLITE_INTERNAL: 2;
@@ -1307,8 +1256,8 @@ declare module "@journeyapps/wa-sqlite/src/sqlite-constants.js" {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite" {
-  export * from "@journeyapps/wa-sqlite/src/sqlite-constants.js";
+declare module '@journeyapps/wa-sqlite' {
+  export * from '@journeyapps/wa-sqlite/src/sqlite-constants.js';
 
   /**
    * Builds a Javascript API from the Emscripten module. This API is still
@@ -1326,31 +1275,20 @@ declare module "@journeyapps/wa-sqlite" {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/dist/wa-sqlite.mjs" {
+declare module '@journeyapps/wa-sqlite/dist/wa-sqlite.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs" {
-  function ModuleFactory(config?: object): Promise<any>;
-  export = ModuleFactory;
-}
-
-declare module "@journeyapps/wa-sqlite/dist-fts/wa-sqlite.mjs" {
+declare module '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/dist-fts/wa-sqlite-async.mjs" {
-  function ModuleFactory(config?: object): Promise<any>;
-  export = ModuleFactory;
-}
-
-/** @ignore */
-declare module "@journeyapps/wa-sqlite/src/VFS.js" {
-  export * from "@journeyapps/wa-sqlite/src/sqlite-constants.js";
+declare module '@journeyapps/wa-sqlite/src/VFS.js' {
+  export * from '@journeyapps/wa-sqlite/src/sqlite-constants.js';
 
   export class Base {
     mxPathName: number;
@@ -1365,14 +1303,22 @@ declare module "@journeyapps/wa-sqlite/src/VFS.js" {
      * @param {number} iOffset
      * @returns {number}
      */
-    xRead(fileId: number, pData: Uint8Array, iOffset: number): number;
+    xRead(
+      fileId: number,
+      pData:  Uint8Array,
+      iOffset: number
+    ): number;
     /**
      * @param {number} fileId
      * @param {Uint8Array} pData
      * @param {number} iOffset
      * @returns {number}
      */
-    xWrite(fileId: number, pData: Uint8Array, iOffset: number): number;
+    xWrite(
+      fileId: number,
+      pData: Uint8Array,
+      iOffset: number
+    ): number;
     /**
      * @param {number} fileId
      * @param {number} iSize
@@ -1433,12 +1379,7 @@ declare module "@journeyapps/wa-sqlite/src/VFS.js" {
      * @param {DataView} pOutFlags
      * @returns {number}
      */
-    xOpen(
-      name: string | null,
-      fileId: number,
-      flags: number,
-      pOutFlags: DataView
-    ): number;
+    xOpen(name: string | null, fileId: number, flags: number, pOutFlags: DataView): number;
     /**
      *
      * @param {string} name
@@ -1464,7 +1405,7 @@ declare module "@journeyapps/wa-sqlite/src/VFS.js" {
 }
 
 /** @ignore */
-declare module "wa-sqlite/src/examples/ArrayModule.js" {
+declare module 'wa-sqlite/src/examples/ArrayModule.js' {
   export class ArrayModule {
     /**
      * @param {SQLiteAPI} sqlite3
@@ -1472,12 +1413,7 @@ declare module "wa-sqlite/src/examples/ArrayModule.js" {
      * @param {Array<Array>} rows Table data.
      * @param {Array<string>} columns Column names.
      */
-    constructor(
-      sqlite3: SQLiteAPI,
-      db: number,
-      rows: Array<any[]>,
-      columns: Array<string>
-    );
+    constructor(sqlite3: SQLiteAPI, db: number, rows: Array<any[]>, columns: Array<string>);
     mapCursorToState: Map<any, any>;
     sqlite3: any;
     db: number;
@@ -1551,12 +1487,7 @@ declare module "wa-sqlite/src/examples/ArrayModule.js" {
      * @param {Array<number>} values
      * @returns {number|Promise<number>}
      */
-    xFilter(
-      pCursor: number,
-      idxNum: number,
-      idxStr: string | null,
-      values: Array<number>
-    ): number | Promise<number>;
+    xFilter(pCursor: number, idxNum: number, idxStr: string | null, values: Array<number>): number | Promise<number>;
     /**
      * @param {number} pCursor
      * @returns {number|Promise<number>}
@@ -1573,11 +1504,7 @@ declare module "wa-sqlite/src/examples/ArrayModule.js" {
      * @param {number} iCol
      * @returns {number|Promise<number>}
      */
-    xColumn(
-      pCursor: number,
-      pContext: number,
-      iCol: number
-    ): number | Promise<number>;
+    xColumn(pCursor: number, pContext: number, iCol: number): number | Promise<number>;
     /**
      * @param {number} pCursor
      * @param {{ set: function(number): void}} pRowid
@@ -1606,8 +1533,8 @@ declare module "wa-sqlite/src/examples/ArrayModule.js" {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/src/examples/ArrayAsyncModule.js" {
-  import { ArrayModule } from "wa-sqlite/src/examples/ArrayModule.js";
+declare module '@journeyapps/wa-sqlite/src/examples/ArrayAsyncModule.js' {
+  import { ArrayModule } from 'wa-sqlite/src/examples/ArrayModule.js';
   export class ArrayAsyncModule extends ArrayModule {
     /**
      * @param {function} f
@@ -1618,8 +1545,8 @@ declare module "@journeyapps/wa-sqlite/src/examples/ArrayAsyncModule.js" {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/src/examples/AccessHandlePoolVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module '@journeyapps/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class AccessHandlePoolVFS extends VFS.Base {
     /**
      * @param {string} directoryPath Flat directory where all OPFS files are stored
@@ -1629,60 +1556,55 @@ declare module "@journeyapps/wa-sqlite/src/examples/AccessHandlePoolVFS.js" {
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class IDBBatchAtomicVFS extends VFS.Base {
     /**
      * @param {string} idbDatabaseName IndexDB DB name
      */
-    constructor(
-      idbDatabaseName?: string,
-      options?: Partial<{
-        durability: string;
-        purge: string;
-        purgeAtLeast: number;
-      }>
-    );
+    constructor(idbDatabaseName?: string, options?: Partial<{
+      durability: string,
+      purge: string,
+      purgeAtLeast: number
+    }>);
 
     close(): Promise<void>;
   }
 }
 
 /** @ignore */
-declare module "@journeyapp/wa-sqlite/src/examples/IDBVersionedVFS.js" {
-  import { IDBBatchAtomicVFS } from "@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js";
+declare module '@journeyapp/wa-sqlite/src/examples/IDBVersionedVFS.js' {
+  import {IDBBatchAtomicVFS} from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
   export class IDBVersionedVFS extends IDBBatchAtomicVFS {}
 }
 
+
 /** @ignore */
-declare module "@journeyapp/wa-sqlite/src/examples/OriginPrivatefileSystemVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module '@journeyapp/wa-sqlite/src/examples/OriginPrivatefileSystemVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class OriginPrivateFileSystemVFS extends VFS.Base {
     close(): Promise<void>;
   }
 }
 
 /** @ignore */
-declare module "wa-sqlite/src/examples/IDBMinimalVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module 'wa-sqlite/src/examples/IDBMinimalVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class IDBMinimalVFS extends VFS.Base {
     /**
      * @param {string} idbDatabaseName IndexDB DB name
      */
-    constructor(
-      idbDatabaseName?: string,
-      options?: Partial<{
-        durability: string;
-      }>
-    );
+    constructor(idbDatabaseName?: string, options?: Partial<{
+      durability: string,
+    }>);
 
     close(): Promise<void>;
   }
 }
 
 /** @ignore */
-declare module "@journeyapps/wa-sqlite/src/examples/IndexedDbVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module '@journeyapps/wa-sqlite/src/examples/IndexedDbVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class IndexedDbVFS extends VFS.Base {
     /**
      * @param {string} idbName Name of IndexedDB database.
@@ -1734,8 +1656,8 @@ declare module "@journeyapps/wa-sqlite/src/examples/IndexedDbVFS.js" {
 }
 
 /** @ignore */
-declare module "wa-sqlite/src/examples/MemoryVFS.js" {
-  import * as VFS from "@journeyapps/wa-sqlite/src/VFS.js";
+declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
+  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
   export class MemoryVFS extends VFS.Base {
     name: string;
     mapNameToFile: Map<any, any>;
@@ -1744,13 +1666,13 @@ declare module "wa-sqlite/src/examples/MemoryVFS.js" {
 }
 
 /** @ignore */
-declare module "wa-sqlite/src/examples/MemoryAsyncVFS.js" {
-  import { MemoryVFS } from "wa-sqlite/src/examples/MemoryVFS.js";
+declare module 'wa-sqlite/src/examples/MemoryAsyncVFS.js' {
+  import { MemoryVFS } from 'wa-sqlite/src/examples/MemoryVFS.js';
   export class MemoryAsyncVFS extends MemoryVFS {}
 }
 
 /** @ignore */
-declare module "wa-sqlite/src/examples/tag.js" {
+declare module 'wa-sqlite/src/examples/tag.js' {
   /**
    * Template tag builder. This function creates a tag with an API and
    * database from the same module, then the tag can be used like this:
@@ -1769,8 +1691,5 @@ declare module "wa-sqlite/src/examples/tag.js" {
    * @param {number} db
    * @returns {function(TemplateStringsArray, ...any): Promise<object[]>}
    */
-  export function tag(
-    sqlite3: any,
-    db: number
-  ): (arg0: TemplateStringsArray, ...args: any[]) => Promise<object[]>;
+  export function tag(sqlite3: any, db: number): (arg0: TemplateStringsArray, ...args: any[]) => Promise<object[]>;
 }
