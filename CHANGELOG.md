@@ -1,5 +1,12 @@
 # @journeyapps/wa-sqlite
 
+## 0.2.0
+
+### Minor Changes
+
+- 0077436: Added full text search (FTS5) support out of the box by default. There should be no configuration required.
+  Updated from upstream changes
+
 ## 0.1.1
 
 ### Patch Changes
