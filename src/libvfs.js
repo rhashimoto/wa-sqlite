@@ -22,7 +22,7 @@ const vfs_methods = {
         vfs['handleAsync'] = Asyncify.handleAsync;
       }
 
-      const mxPathName = vfs.mxPathName ?? 64;
+      const mxPathName = vfs['mxPathName'] ?? 64;
       const out = Module['_malloc'](4);
       const result = ccall('register_vfs', 'number', ['string', 'number', 'number', 'number'],
         [vfs.name, mxPathName, makeDefault ? 1 : 0, out]);

@@ -17,6 +17,13 @@ CFILES = \
 	libvfs.c \
 	$(CFILES_EXTRA)
 
+JSFILES = \
+	src/libauthorizer.js \
+	src/libfunction.js \
+	src/libmodule.js \
+	src/libprogress.js \
+	src/libvfs.js
+
 vpath %.c src
 vpath %.c deps
 vpath %.c deps/$(SQLITE_VERSION)
@@ -56,7 +63,7 @@ EMFLAGS_COMMON = \
 
 EMFLAGS_DEBUG = \
 	-s ASSERTIONS=1 \
-	-g -Oz \
+	-g -Oz -Oz \
 	$(EMFLAGS_COMMON)
 
 EMFLAGS_DIST = \
@@ -104,6 +111,7 @@ WASQLITE_DEFINES = \
 	-DSQLITE_THREADSAFE=0 \
 	-DSQLITE_USE_ALLOCA \
 	-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE \
+	-DSQLITE_ENABLE_FTS5 \
 	$(WASQLITE_EXTRA_DEFINES)
 
 # directories
@@ -112,11 +120,11 @@ all: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist dist-xl debug tmp
+	rm -rf dist debug tmp
 
 .PHONY: spotless
 spotless:
-	rm -rf dist dist-xl debug tmp deps cache
+	rm -rf dist debug tmp deps cache
 
 ## cache
 .PHONY: clean-cache
@@ -194,6 +202,27 @@ debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(RS_DEBUG_BC) $(EXPORTED_FUNCTION
 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
 	  $(OBJ_FILES_DEBUG) *.o -o $@
 
+## Debug FTS builds
+# .PHONY: debug
+# debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
+
+# debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG_FTS) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+# 	mkdir -p debug
+# 	$(EMCC) $(EMFLAGS_DEBUG) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
+# 	  $(OBJ_FILES_DEBUG_FTS) *.o -o $@
+
+# debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG_FTS) $(RS_DEBUG_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+# 	mkdir -p debug
+# 	$(EMCC) $(EMFLAGS_DEBUG) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
+# 		$(RS_WASM_TGT_DIR)/debug/deps/*.bc \
+# 	  $(OBJ_FILES_DEBUG_FTS) *.o -o $@
+
 ## dist
 .PHONY: clean-dist
 clean-dist:
@@ -221,3 +250,31 @@ dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(RS_RELEASE_BC) $(EXPORTED_FUNCTION
 	  $(OBJ_FILES_DIST)  -o $@
 
 FORCE: ;
+
+# FTS builds
+# .PHONY: clean-dist
+# clean-dist:
+# 	rm -rf dist
+
+# .PHONY: dist
+# dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs
+
+# dist/wa-sqlite.mjs: $(OBJ_FILES_DIST_FTS) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+# 	mkdir -p dist
+# 	$(EMCC) $(EMFLAGS_DIST) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
+# 	  $(OBJ_FILES_DIST_FTS)  -o $@
+
+# dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST_FTS) $(RS_RELEASE_BC) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+# 	mkdir -p dist
+# 	$(EMCC) $(EMFLAGS_DIST) \
+# 	  $(EMFLAGS_INTERFACES) \
+# 	  $(EMFLAGS_LIBRARIES) \
+# 	  $(EMFLAGS_ASYNCIFY_DIST) \
+# 		$(CFLAGS_DIST) \
+# 		$(RS_WASM_TGT_DIR)/wasm/deps/*.bc \
+# 	  $(OBJ_FILES_DIST_FTS)  -o $@
+
+# FORCE: ;

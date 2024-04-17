@@ -29,7 +29,7 @@ Here are the build steps:
 * `git clone git@github.com:rhashimoto/wa-sqlite.git`
 * `cd wa-sqlite`
 * `yarn install`
-* `make` (or `yarn prepack`)
+* `make`
 
 The default build produces ES6 modules + WASM, [synchronous and asynchronous](https://github.com/rhashimoto/wa-sqlite/issues/7) (using Asyncify) in `dist/`.
 
@@ -51,7 +51,7 @@ git submodule init
 ```
 
 ```bash
-git submodule update --recursive
+git submodule update --init --recursive
 ```
 
 ```bash
