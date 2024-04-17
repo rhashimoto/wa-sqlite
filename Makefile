@@ -17,6 +17,13 @@ CFILES = \
 	libvfs.c \
 	$(CFILES_EXTRA)
 
+JSFILES = \
+	src/libauthorizer.js \
+	src/libfunction.js \
+	src/libmodule.js \
+	src/libprogress.js \
+	src/libvfs.js
+
 vpath %.c src
 vpath %.c deps
 vpath %.c deps/$(SQLITE_VERSION)
@@ -56,7 +63,7 @@ EMFLAGS_COMMON = \
 
 EMFLAGS_DEBUG = \
 	-s ASSERTIONS=1 \
-	-g -Oz \
+	-g -Oz -Oz \
 	$(EMFLAGS_COMMON)
 
 EMFLAGS_DIST = \
