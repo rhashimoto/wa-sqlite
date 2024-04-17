@@ -173,7 +173,7 @@ $(RS_RELEASE_BC): FORCE
 ## debug
 .PHONY: clean-debug
 clean-debug:
-	rm -rf debug debug-fts
+	rm -rf debug
 
 .PHONY: debug
 debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs
