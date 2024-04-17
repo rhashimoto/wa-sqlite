@@ -37,7 +37,7 @@
     "karma-jasmine": "^5.1.0",
     "monaco-editor": "^0.34.1",
     "puppeteer": "^19.6.3",
-    "sinon": "^15.0.1",
+    "sinon": "15.0.1",
     "typedoc": "^0.22.11",
     "typescript": "^4.2.4"
   },
