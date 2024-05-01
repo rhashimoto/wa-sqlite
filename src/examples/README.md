@@ -18,14 +18,14 @@ This VFS uses the
 with synchronous
 [Access Handle](https://github.com/WICG/file-system-access/blob/main/proposals/AccessHandle.md).
 
-### AccessHandlePoolVFS
+### OPFSCoopSyncVFS
 This VFS is synchronous and so is faster than OriginPrivateVFS across the board.
 
 ### FLOOR
 This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation).
 
 ## VFS Comparison
-||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OriginPrivateVFS|AccessHandlePoolVFS|FLOOR|
+||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OriginPrivateVFS|OPFSCoopSyncVFS|FLOOR|
 |-|-|-|-|-|-|-|
 |Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS/IndexedDB|
 |Synchronous build|✅|:x:|:x:|:x:|✅|:x:|

@@ -9,8 +9,6 @@ const DB_RELATED_FILE_SUFFIXES = ['', '-journal', '-wal'];
 
 const finalizationRegistry = new FinalizationRegistry(releaser => releaser());
 
-const contextName = new URLSearchParams(location.search).get('index');
-
 class File {
   /** @type {string} */ path
   /** @type {number} */ flags;
@@ -43,7 +41,7 @@ class PersistentFile {
   }
 }
 
-export class AccessHandlePoolVFS extends FacadeVFS {
+export class OPFSCoopSyncVFS extends FacadeVFS {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
 
   lastError = null;
@@ -56,7 +54,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   releaser = null;
 
   static async create(name, module) {
-    const vfs = new AccessHandlePoolVFS(name, module);
+    const vfs = new OPFSCoopSyncVFS(name, module);
     await Promise.all([
       vfs.isReady(),
       vfs.#initialize(DEFAULT_TEMPORARY_FILES),

@@ -2,7 +2,7 @@
 
 import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { AccessHandlePoolVFS } from '../src/examples/AccessHandlePoolVFS.js';
+import { OPFSCoopSyncVFS } from '../src/examples/OPFSCoopSyncVFS.js';
 
 import { createSharedServicePort } from './SharedService/SharedService.js';
 
@@ -33,8 +33,7 @@ class DatabaseService {
     const module = await SQLiteESMFactory();
     const sqlite3 = await SQLite.Factory(module);
 
-    const vfs = await AccessHandlePoolVFS.create('/demo-AccessHandlePoolVFS', module);
-    await vfs.createPersistentDatabaseFile('demo');
+    const vfs = await OPFSCoopSyncVFS.create('/demo-OPFSCoopSyncVFS', module);
     sqlite3.vfs_register(vfs, true);
     
     const db = await sqlite3.open_v2('demo');

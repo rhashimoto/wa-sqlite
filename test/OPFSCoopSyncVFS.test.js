@@ -5,8 +5,8 @@ import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 
-describe('AccessHandlePoolVFS', function() {
-  const context = new TestContext('default', 'AccessHandlePoolVFS');
+describe('OPFSCoopSyncVFS', function() {
+  const context = new TestContext('default', 'OPFSCoopSyncVFS');
 
   vfs_xAccess(context);
   vfs_xOpen(context);

@@ -41,8 +41,8 @@ const BUILDS = new Map([
     vfsModule: '../src/examples/OriginPrivateVFS.js',
   },
   {
-    name: 'AccessHandlePoolVFS',
-    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+    name: 'OPFSCoopSyncVFS',
+    vfsModule: '../src/examples/OPFSCoopSyncVFS.js',
   },
   {
     name: 'UnsafeHandlePoolVFS',
