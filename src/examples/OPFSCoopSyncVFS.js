@@ -322,7 +322,8 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
       // an error because pData is a Proxy of a Uint8Array. Calling
       // subarray() produces a real Uint8Array and that works.
       const accessHandle = file.accessHandle || file.persistentFile.accessHandle;
-      accessHandle.write(pData.subarray(), { at: iOffset });
+      const nBytes = accessHandle.write(pData.subarray(), { at: iOffset });
+      if (nBytes !== pData.byteLength) throw new Error('short write');
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;

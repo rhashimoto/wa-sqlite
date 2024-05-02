@@ -45,6 +45,10 @@ const BUILDS = new Map([
     vfsModule: '../../src/examples/OPFSCoopSyncVFS.js',
   },
   {
+    name: 'AccessHandlePoolVFS',
+    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+  },
+  {
     name: 'FLOOR',
     vfsModule: '../../src/examples/FLOOR.js',
   },
@@ -95,13 +99,6 @@ const releaseTask = (function() {
     const className = config.vfsClassName ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
     const vfs = await namespace[className].create(vfsName, module, config.vfsOptions);
     sqlite3.vfs_register(vfs, true);
-
-    if (config.vfsModule.includes('UnsafeHandlePoolVFS')) {
-      // Special setup for UnsafeHandlePoolVFS. The database and journal
-      // files must be created before instantiating the VFS if they are
-      // to be persistent.
-      await vfs.createPersistentDatabaseFile(dbName);
-    }
   }
 
   // Open the database.
