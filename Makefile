@@ -17,6 +17,12 @@ CFILES = \
 	libvfs.c \
 	$(CFILES_EXTRA)
 
+JSFILES = \
+	src/libauthorizer.js \
+	src/libfunction.js \
+	src/libprogress.js \
+	src/libvfs.js
+
 vpath %.c src
 vpath %.c deps
 vpath %.c deps/$(SQLITE_VERSION)
@@ -164,14 +170,14 @@ clean-debug:
 .PHONY: debug
 debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs debug/wa-sqlite-jspi.mjs
 
-debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(OBJ_FILES_DEBUG) -o $@
 
-debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
@@ -179,7 +185,7 @@ debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_R
 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
 	  $(OBJ_FILES_DEBUG) -o $@
 
-debug/wa-sqlite-jspi.mjs: $(OBJ_FILES_DEBUG) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+debug/wa-sqlite-jspi.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p debug
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
@@ -195,14 +201,14 @@ clean-dist:
 .PHONY: dist
 dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs dist/wa-sqlite-jspi.mjs
 
-dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
+dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(OBJ_FILES_DIST) -o $@
 
-dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
@@ -210,7 +216,7 @@ dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUN
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(OBJ_FILES_DIST) -o $@
 
-dist/wa-sqlite-jspi.mjs: $(OBJ_FILES_DIST) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
+dist/wa-sqlite-jspi.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p dist
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
