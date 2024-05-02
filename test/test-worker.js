@@ -16,6 +16,10 @@ const VFS_CONFIGS = new Map([
     vfsModule: null
   },
   {
+    name: 'AccessHandlePoolVFS',
+    vfsModule: '../src/examples/AccessHandlePoolVFS.js',
+  },
+  {
     name: 'OPFSCoopSyncVFS',
     vfsModule: '../src/examples/OPFSCoopSyncVFS.js',
   },
