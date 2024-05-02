@@ -25,19 +25,21 @@ This VFS is synchronous and so is faster than OriginPrivateVFS across the board.
 This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation).
 
 ## VFS Comparison
-||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OriginPrivateVFS|OPFSCoopSyncVFS|FLOOR|
-|-|-|-|-|-|-|-|
-|Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS/IndexedDB|
-|Synchronous build|✅|:x:|:x:|:x:|✅|:x:|
-|Asyncify build|✅|✅|✅|✅|✅|✅|
-|JSPI build|✅|✅|✅|✅|✅|✅|
-|Contexts|All|All|All|Worker|Worker|Worker|
-|Multiple connections|:x:|:x:|✅|✅|✅|✅[^1]|
-|Full durability|✅|✅|✅|✅|✅|:x:|
-|Relaxed durability|:x:|:x:|✅|:x:|:x:|✅|
-|Filesystem transparency|:x:|:x:|:x:|✅|✅|✅|
-|Write-ahead logging|:x:|:x:|:x:|:x:|:x:|✅|
-|Cross-origin isolation *not* required[^2]|✅|✅|✅|✅|✅|✅|
+
+||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OriginPrivateVFS|AccessHandlePoolVFS|OPFSCoopSyncVFS|FLOOR|
+|-|-|-|-|-|-|-|-|
+|Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS|OPFS/IndexedDB|
+|Synchronous build|✅|:x:|:x:|:x:|✅|✅|:x:|
+|Asyncify build|✅|✅|✅|✅|✅|✅|✅|
+|JSPI build|✅|✅|✅|✅|✅|✅|✅|
+|Contexts|All|All|All|Worker|Worker|Worker|Worker|
+|Multiple connections|:x:|:x:|✅|✅|:x:|✅|✅[^1]|
+|Full durability|✅|✅|✅|✅|✅|✅|:x:|
+|Relaxed durability|:x:|:x:|✅|:x:|:x:|:x:|✅|
+|Filesystem transparency|:x:|:x:|:x:|✅|:x:|✅|✅|
+|Write-ahead logging|:x:|:x:|:x:|:x:|:x:|:x:|✅|
+|Multi-database transactions|✅|✅|✅|✅|✅|:x:|✅|
+|Cross-origin isolation *not* required[^2]|✅|✅|✅|✅|✅|✅|✅|
 
 [^1]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support.
 [^2]: Using certain web APIs (e.g. SharedArrayBuffer, Atomics) requires strict cross-origin restrictions.
