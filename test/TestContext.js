@@ -6,18 +6,38 @@ const TEST_WORKER_TERMINATE = true;
 const mapProxyToReleaser = new WeakMap();
 const workerFinalization = new FinalizationRegistry(release => release());
 
-export class TestContext {
-  #proxy;
+/**
+ * @typedef TestContextParams
+ * @property {string} [build]
+ * @property {string} [config]
+ * @property {boolean} [reset]
+ */
 
-  constructor(build, config) {
-    this.build = build
-    this.config = config;
+/** @type {TestContextParams} */
+const DEFAULT_PARAMS = Object.freeze({
+  build: 'default',
+  config: 'default',
+  reset: true
+});
+
+export class TestContext {
+  #params = structuredClone(DEFAULT_PARAMS);
+
+  /**
+   * @param {TestContextParams} params 
+   */
+  constructor(params = {}) {
+    Object.assign(this.#params, params);
   }
 
-  async create() {
+  async create(extras = {}) {
     const url = new URL(TEST_WORKER_URL, import.meta.url);
-    url.searchParams.set('build', this.build);
-    url.searchParams.set('config', this.config);
+    for (const [key, value] of Object.entries(this.#params)) {
+      url.searchParams.set(key, value.toString());
+    }
+    for (const [key, value] of Object.entries(extras)) {
+      url.searchParams.set(key, value.toString());
+    }
 
     const worker = new Worker(url, { type: 'module' });
     const port = await new Promise(resolve => {
@@ -39,27 +59,16 @@ export class TestContext {
       workerFinalization.register(proxy, releaser);
     }
 
-    this.#proxy = proxy;
     return proxy;
   }
 
-  async destroy() {
-    this.#proxy[Comlink.releaseProxy]();
-    mapProxyToReleaser.get(this.#proxy)?.();
-
-    this.#proxy = null;
-  }
-
-  get module() {
-    return this.#proxy.module;
-  }
-
-  get sqlite3() {
-    return this.#proxy.sqlite3;
-  }
-
-  get vfs() {
-    return this.#proxy.vfs;
+  async destroy(proxy) {
+    proxy[Comlink.releaseProxy]();
+    const releaser = mapProxyToReleaser.get(proxy);
+    if (releaser) {
+      workerFinalization.unregister(releaser);
+      releaser();
+    }
   }
 
   static async supportsJSPI() {

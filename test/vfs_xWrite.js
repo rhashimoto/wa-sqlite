@@ -5,13 +5,14 @@ const FILEID = 1;
 
 export function vfs_xWrite(context) {
   describe('vfs_xWrite', function() {
-    let vfs;
+    let proxy, vfs;
     beforeEach(async function() {
-      ({ vfs } = await context.create());
+      proxy = await context.create();
+      vfs = proxy.vfs;
     });
 
     afterEach(async function() {
-      await context.destroy();
+      await context.destroy(proxy);
     });
 
     it('should round-trip data', async function() {

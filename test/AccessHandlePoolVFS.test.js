@@ -5,12 +5,23 @@ import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 
-describe('AccessHandlePoolVFS', function() {
-  const context = new TestContext('default', 'AccessHandlePoolVFS');
+const CONFIG = 'AccessHandlePoolVFS';
+const BUILDS = ['default', 'asyncify', 'jspi'];
 
-  vfs_xAccess(context);
-  vfs_xOpen(context);
-  vfs_xClose(context);
-  vfs_xRead(context);
-  vfs_xWrite(context);  
+const supportsJSPI = await TestContext.supportsJSPI();
+
+describe(CONFIG, function() {
+  for (const build of BUILDS) {
+    if (build === 'jspi' && !supportsJSPI) return;
+
+    describe(build, function() {
+      const context = new TestContext({ build, config: CONFIG });
+    
+      vfs_xAccess(context);
+      vfs_xOpen(context);
+      vfs_xClose(context);
+      vfs_xRead(context);
+      vfs_xWrite(context);
+    });
+  }
 });

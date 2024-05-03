@@ -32,7 +32,7 @@
     "sinon": "^15.0.1",
     "typedoc": "^0.25.7",
     "typescript": "^5.3.3",
-    "web-test-runner-jasmine": "^0.0.5"
+    "web-test-runner-jasmine": "^0.0.6"
   },
   "dependenciesMeta": {
     "monaco-editor@0.34.1": {

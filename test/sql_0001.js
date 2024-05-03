@@ -1,17 +1,17 @@
 import * as Comlink from 'comlink';
-import * as SQLite from '../src/sqlite-api.js';
 
 export function sql_0001(context) {
   describe('sql_0001', function() {
-    let sqlite3, db;
+    let proxy, sqlite3, db;
     beforeEach(async function() {
-      ({ sqlite3 } = await context.create());
+      proxy = await context.create();
+      sqlite3 = proxy.sqlite3;
       db = await sqlite3.open_v2('demo');
     });
 
     afterEach(async function() {
       await sqlite3.close(db);
-      await context.destroy();
+      await context.destroy(proxy);
     });
 
     it('should rollback a transaction', async function() {

@@ -49,7 +49,7 @@ const INDEXEDDB_DBNAMES = ['demo'];
 
 const searchParams = new URLSearchParams(location.search);
 
-reset().then(async () => {
+maybeReset().then(async () => {
   const buildName = searchParams.get('build') || BUILDS.keys().next().value;
   const configName = searchParams.get('config') || VFS_CONFIGS.keys().next().value;
   const config = VFS_CONFIGS.get(configName);
@@ -125,7 +125,11 @@ reset().then(async () => {
   postMessage(cvtErrorToCloneable(e));
 });
 
-async function reset() {
+async function maybeReset() {
+  if (searchParams.get('reset') !== 'true') {
+    return;
+  }  
+  
   // Limit the amount of time in this function.
   const abortController = new AbortController();
   setTimeout(() => abortController.abort(), 10_000);

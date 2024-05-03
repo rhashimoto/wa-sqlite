@@ -5,22 +5,23 @@ import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 
-describe('IDBBatchAtomicVFS asyncify', function() {
-  const context = new TestContext('asyncify', 'IDBBatchAtomicVFS');
+const CONFIG = 'IDBBatchAtomicVFS';
+const BUILDS = ['asyncify', 'jspi'];
 
-  vfs_xAccess(context);
-  vfs_xOpen(context);
-  vfs_xClose(context);
-  vfs_xRead(context);
-  vfs_xWrite(context);  
-});
+const supportsJSPI = await TestContext.supportsJSPI();
 
-describe('OriginPrivateVFS jspi', function() {
-  const context = new TestContext('jspi', 'OriginPrivateVFS');
+describe(CONFIG, function() {
+  for (const build of BUILDS) {
+    if (build === 'jspi' && !supportsJSPI) return;
 
-  vfs_xAccess(context);
-  vfs_xOpen(context);
-  vfs_xClose(context);
-  vfs_xRead(context);
-  vfs_xWrite(context);  
+    describe(build, function() {
+      const context = new TestContext({ build, config: CONFIG });
+    
+      vfs_xAccess(context);
+      vfs_xOpen(context);
+      vfs_xClose(context);
+      vfs_xRead(context);
+      vfs_xWrite(context);
+    });
+  }
 });

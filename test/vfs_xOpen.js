@@ -5,13 +5,14 @@ const FILEID = 1;
 
 export function vfs_xOpen(context) {
   describe('vfs_xOpen', function() {
-    let vfs, module;
+    let proxy, vfs;
     beforeEach(async function() {
-      ({ vfs, module } = await context.create());
+      proxy = await context.create();
+      vfs = proxy.vfs;
     });
 
     afterEach(async function() {
-      await context.destroy();
+      await context.destroy(proxy);
     });
 
     it('should create a file', async function() {
@@ -34,9 +35,9 @@ export function vfs_xOpen(context) {
       const openFlags = VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE | VFS.SQLITE_OPEN_MAIN_DB;
       
       do {
-        const nRetryOps = await context.module.retryOps.length;
+        const nRetryOps = await proxy.module.retryOps.length;
         for (let i = 0; i < nRetryOps; i++) {
-          await context.module.retryOps[i];
+          await proxy.module.retryOps[i];
         }
         rc = await vfs.jOpen('test',  1, openFlags, pOpenOutput);
       } while (rc === VFS.SQLITE_BUSY);
