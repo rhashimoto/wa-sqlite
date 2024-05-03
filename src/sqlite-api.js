@@ -145,7 +145,6 @@ export function Factory(Module) {
       const ptr = Module._sqlite3_malloc(byteLength);
       Module.HEAPU8.subarray(ptr).set(value);
       const result = f(stmt, i, ptr, byteLength, sqliteFreeAddress);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -156,7 +155,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -167,7 +165,6 @@ export function Factory(Module) {
     return function(stmt, i, value) {
       verifyStatement(stmt);
       const result = f(stmt, i, value);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -180,7 +177,6 @@ export function Factory(Module) {
       if (value > 0x7fffffff || value < -0x80000000) return SQLite.SQLITE_RANGE;
 
       const result = f(stmt, i, value);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -195,7 +191,6 @@ export function Factory(Module) {
       const lo32 = value & 0xffffffffn;
       const hi32 = value >> 32n;
       const result = f(stmt, i, Number(lo32), Number(hi32));
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -206,7 +201,6 @@ export function Factory(Module) {
     return function(stmt, i) {
       verifyStatement(stmt);
       const result = f(stmt, i);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -217,7 +211,6 @@ export function Factory(Module) {
     return function(stmt, i) {
       verifyStatement(stmt);
       const result = f(stmt, i);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -229,7 +222,6 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const ptr = createUTF8(value);
       const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -240,7 +232,6 @@ export function Factory(Module) {
     return function(db) {
       verifyDatabase(db);
       const result = f(db);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -285,7 +276,6 @@ export function Factory(Module) {
       const nBytes = sqlite3.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
       const result = Module.HEAPU8.subarray(address, address + nBytes);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -296,7 +286,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -307,7 +296,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -318,7 +306,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -331,7 +318,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -344,7 +330,6 @@ export function Factory(Module) {
       const lo32 = f(stmt, iCol);
       const hi32 = Module.getTempRet0();
       const result = cvt32x2ToBigInt(lo32, hi32);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -355,7 +340,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -375,7 +359,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -386,7 +369,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -419,7 +401,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -646,7 +627,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -765,7 +745,6 @@ export function Factory(Module) {
       const nBytes = sqlite3.value_bytes(pValue);
       const address = f(pValue);
       const result = Module.HEAPU8.subarray(address, address + nBytes);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -775,7 +754,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -785,7 +763,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -795,7 +772,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -807,7 +783,6 @@ export function Factory(Module) {
       const lo32 = f(pValue);
       const hi32 = Module.getTempRet0();
       const result = cvt32x2ToBigInt(lo32, hi32);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -817,7 +792,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:s'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -827,7 +801,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -838,7 +811,6 @@ export function Factory(Module) {
   };
 
   function check(fname, result, db = null, allowed = [SQLite.SQLITE_OK]) {
-    // trace(fname, result);
     if (allowed.includes(result)) return result;
     const message = db ?
       Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :
@@ -867,15 +839,6 @@ export function Factory(Module) {
   }
 
   return sqlite3;
-}
-
-function trace(...args) {
-  // const date = new Date();
-  // const t = date.getHours().toString().padStart(2, '0') + ':' +
-  //           date.getMinutes().toString().padStart(2, '0') + ':' +
-  //           date.getSeconds().toString().padStart(2, '0') + '.' +
-  //           date.getMilliseconds().toString().padStart(3, '0');
-  // console.debug(t, ...args);
 }
 
 // Helper function to use a more compact signature specification.
