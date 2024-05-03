@@ -2,6 +2,7 @@ import { TestContext } from "./TestContext.js";
 import { sql_0001 } from "./sql_0001.js";
 import { sql_0002 } from "./sql_0002.js";
 import { sql_0003 } from "./sql_0003.js";
+import { sql_0004 } from "./sql_0004.js";
 
 const ALL_BUILDS = ['default', 'asyncify', 'jspi'];
 const ASYNC_BUILDS = ['asyncify', 'jspi'];
@@ -22,6 +23,7 @@ const CONFIGS = new Map([
 ]);
 
 const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'FLOOR'];
+const NOT_PERSISTENT = ['', 'MemoryVFS', 'MemoryAsyncVFS'];
 
 describe('SQL', function() {
   for (const [config, builds] of CONFIGS) {
@@ -47,5 +49,9 @@ function sqlSpecs(build, config) {
     // These tests change the page size, which is not supported by these
     // VFS classes.
     sql_0003(context);
+  }
+  if (!NOT_PERSISTENT.includes(config)) {
+    // These tests require persistent storage.
+    sql_0004(context);
   }
 }
