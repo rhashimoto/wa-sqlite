@@ -326,6 +326,46 @@ export function api_statements(context) {
         } 
       }
     });
+
+    it('should allow unscoped lifetime', async function() {
+      let rc;
+
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t AS VALUES ('foo', 0), ('bar', 1), ('baz', 2);
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      let stmt;
+      const sql = 'SELECT column2 FROM t WHERE column1 = ?';
+      for await (const s of i(sqlite3.statements(db, sql, { unscoped: true }))) {
+        if (s) {
+          stmt = s;
+        }
+      }
+      expect(stmt).toBeGreaterThan(0);
+
+      // The statement should be active beyond the iterator lifecycle.
+      rc = await sqlite3.bind_text(stmt, 1, 'foo');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      rc = await sqlite3.step(stmt);
+      expect(rc).toEqual(SQLite.SQLITE_ROW);
+      await expectAsync(sqlite3.column_int(stmt, 0)).toBeResolvedTo(0);
+
+      rc = await sqlite3.reset(stmt);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.bind_text(stmt, 1, 'bar');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      rc = await sqlite3.step(stmt);
+      expect(rc).toEqual(SQLite.SQLITE_ROW);
+      await expectAsync(sqlite3.column_int(stmt, 0)).toBeResolvedTo(1);
+
+      rc = await sqlite3.step(stmt);
+      expect(rc).toEqual(SQLite.SQLITE_DONE);
+
+      rc = await sqlite3.finalize(stmt);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+    });
   });
 }
 
