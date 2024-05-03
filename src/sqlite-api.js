@@ -413,12 +413,6 @@ export function Factory(Module) {
     return check('sqlite3_create_function', result, db);
   };
 
-  sqlite3.create_module = function(db, zName, module, appData) {
-    verifyDatabase(db);
-    const result = Module.createModule(db, zName, module, appData);
-    return check('sqlite3_create_module', result, db);
-  };
-
   sqlite3.data_count = (function() {
     const fname = 'sqlite3_data_count';
     const f = Module.cwrap(fname, ...decl('n:n'));
@@ -430,15 +424,6 @@ export function Factory(Module) {
     };
   })();
 
-  sqlite3.declare_vtab = (function() {
-    const fname = 'sqlite3_declare_vtab';
-    const f = Module.cwrap(fname, ...decl('ns:n'));
-    return function(pVTab, zSQL) {
-      const result = f(pVTab, zSQL);
-      return check('sqlite3_declare_vtab', result);
-    }
-  })();
-    
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       let columns;
