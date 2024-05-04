@@ -12,8 +12,12 @@ probably start by looking at these classes, as well as the
 ### IDBBatchAtomicVFS
 This IndexedDB VFS is the most general and compatible implementation.
 
+Changing the page size after the database is created is not supported.
+
 ### OriginPrivateVFS
 This OPFS VFS supports multiple connections without the proposed "readwrite-unsafe" locking mode, but is more performant if it is available.
+
+If the new mode is not supported then only journaling modes "delete" (default), "memory", and "off" are allowed.
 
 ### AccessHandlePoolVFS
 This OPFS VFS can be used with the synchronous WebAssembly build.
@@ -21,8 +25,12 @@ This OPFS VFS can be used with the synchronous WebAssembly build.
 ### OPFSCoopSyncVFS
 This is a new VFS that works with the synchronous WebAssembly build but also supports multiple connections.
 
+Transactions involving more than one main (non-temporary) database are not supported.
+
 ### FLOOR
 This is an experimental hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation). It requires the proposed "readwrite-unsafe" locking mode for OPFS access handles.
+
+Changing the page size after the database is created is not supported. Write transaction durability is not guaranteed.
 
 ## VFS Comparison
 
