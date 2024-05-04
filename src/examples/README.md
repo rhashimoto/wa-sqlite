@@ -10,19 +10,19 @@ probably start by looking at these classes, as well as the
 [SQLite VFS documentation](https://www.sqlite.org/vfs.html).
 
 ### IDBBatchAtomicVFS
-This VFS works with older browsers and on all contexts (i.e. Window, Worker, Shared Worker, Service Worker).
+This IndexedDB VFS is the most general and compatible implementation.
 
 ### OriginPrivateVFS
-This VFS uses the 
-[Origin Private File System](https://wicg.github.io/file-system-access/#wellknowndirectory-origin-private-file-system)
-with synchronous
-[Access Handle](https://github.com/WICG/file-system-access/blob/main/proposals/AccessHandle.md).
+This OPFS VFS supports multiple connections without the proposed "readwrite-unsafe" locking mode, but is more performant if it is available.
+
+### AccessHandlePoolVFS
+This OPFS VFS can be used with the synchronous WebAssembly build.
 
 ### OPFSCoopSyncVFS
-This VFS is synchronous and so is faster than OriginPrivateVFS across the board.
+This is a new VFS that works with the synchronous WebAssembly build but also supports multiple connections.
 
 ### FLOOR
-This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation).
+This is an experimental hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the SQLite WAL implementation). It requires the proposed "readwrite-unsafe" locking mode for OPFS access handles.
 
 ## VFS Comparison
 
@@ -39,7 +39,7 @@ This is a hybrid OPFS/IndexedDB VFS that uses write-ahead-logging (but not the S
 |Filesystem transparency|:x:|:x:|:x:|✅|:x:|✅|✅|
 |Write-ahead logging|:x:|:x:|:x:|:x:|:x:|:x:|✅|
 |Multi-database transactions|✅|✅|✅|✅|✅|:x:|✅|
-|Cross-origin isolation *not* required[^2]|✅|✅|✅|✅|✅|✅|✅|
+|Change page size|✅|✅|:x:|✅|✅|✅|:x:|
+|No COOP/COEP requirements|✅|✅|✅|✅|✅|✅|✅|
 
 [^1]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support.
-[^2]: Using certain web APIs (e.g. SharedArrayBuffer, Atomics) requires strict cross-origin restrictions.
