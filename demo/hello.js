@@ -3,23 +3,23 @@
 // Uncomment one of the following imports to choose which SQLite build
 // to use. Note that an asynchronous VFS requires an asynchronous build
 // (JSPI or Asyncify).
-// import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
-import SQLiteESMFactory from '../dist/wa-sqlite-jspi.mjs';
+import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
+// import SQLiteESMFactory from '../dist/wa-sqlite-jspi.mjs';
 // import SQLiteESMFactory from '../dist/wa-sqlite-async.mjs';
 
 // Uncomment one of the following imports to choose a VFS. Note that an
 // asynchronous VFS requires an asynchronous build, and an VFS using
 // FileSystemSyncAccessHandle (generally any OPFS VFS) will run only
 // in a Worker.
-// import { MemoryVFS as MyVFS } from '../src/examples/MemoryVFS.js';
+import { MemoryVFS as MyVFS } from '../src/examples/MemoryVFS.js';
 // import { MemoryAsyncVFS as MyVFS} from '../src/examples/MemoryAsyncVFS.js';
-import { OriginPrivateVFS as MyVFS } from '../src/examples/OriginPrivateVFS.js';
+// import { OriginPrivateVFS as MyVFS } from '../src/examples/OriginPrivateVFS.js';
 
 import * as SQLite from 'wa-sqlite';
 
 const broadcast = new BroadcastChannel('hello');
 
-reset().then(async () => {
+Promise.resolve().then(async () => {
   const module = await SQLiteESMFactory();
   const sqlite3 = SQLite.Factory(module);
 
@@ -36,7 +36,6 @@ reset().then(async () => {
   });
 
   await sqlite3.exec(db, `
-    PRAGMA cache_size=0;
     CREATE TABLE IF NOT EXISTS t(x);
     INSERT INTO t VALUES ('how'), ('now'), ('brown'), ('cow');
     SELECT * FROM t;
@@ -57,4 +56,15 @@ async function reset() {
       await root.removeEntry(name, { recursive: true });
     }
   }
+
+  // Delete all IndexedDB databases.
+  await indexedDB.databases().then(async databases => {
+    for (const { name } of databases) {
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+    }
+  });
 }
