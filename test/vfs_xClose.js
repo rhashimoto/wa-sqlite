@@ -37,9 +37,13 @@ export function vfs_xClose(context) {
       rc = await vfs.jOpen('test', FILEID, openFlags, pOpenOutput);
       expect(rc).toEqual(VFS.SQLITE_OK);
 
+      const pAccessOutput = Comlink.proxy(new DataView(new ArrayBuffer(4)));
+      rc = await vfs.jAccess('test', VFS.SQLITE_ACCESS_READWRITE, pAccessOutput);
+      expect(rc).toEqual(VFS.SQLITE_OK);
+      expect(pAccessOutput.getInt32(0, true)).toEqual(1);
+
       await vfs.jClose(FILEID);
 
-      const pAccessOutput = Comlink.proxy(new DataView(new ArrayBuffer(4)));
       rc = await vfs.jAccess('test', VFS.SQLITE_ACCESS_READWRITE, pAccessOutput);
       expect(rc).toEqual(VFS.SQLITE_OK);
       expect(pAccessOutput.getInt32(0, true)).toEqual(0);
