@@ -3,6 +3,7 @@ import { sql_0001 } from "./sql_0001.js";
 import { sql_0002 } from "./sql_0002.js";
 import { sql_0003 } from "./sql_0003.js";
 import { sql_0004 } from "./sql_0004.js";
+import { sql_0005 } from "./sql_0005.js";
 
 const ALL_BUILDS = ['default', 'asyncify', 'jspi'];
 const ASYNC_BUILDS = ['asyncify', 'jspi'];
@@ -24,6 +25,7 @@ const CONFIGS = new Map([
 
 const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'FLOOR'];
 const NOT_PERSISTENT = ['', 'MemoryVFS', 'MemoryAsyncVFS'];
+const SINGLE_CONNECTION = ['', 'MemoryVFS', 'MemoryAsyncVFS', 'AccessHandlePoolVFS'];
 
 describe('SQL', function() {
   for (const [config, builds] of CONFIGS) {
@@ -53,5 +55,9 @@ function sqlSpecs(build, config) {
   if (!NOT_PERSISTENT.includes(config)) {
     // These tests require persistent storage.
     sql_0004(context);
+  }
+  if (!SINGLE_CONNECTION.includes(config)) {
+    // These tests require multiple connections.
+    sql_0005(context);
   }
 }
