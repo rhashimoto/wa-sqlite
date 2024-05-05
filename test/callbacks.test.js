@@ -263,5 +263,56 @@ for (const [key, factory] of FACTORIES) {
       expect(result).toEqual(42);
     });
   });
+
+  describe(`${key} progress_handler`, function() {
+    let db;
+    beforeEach(async function() {
+      db = await sqlite3.open_v2(':memory:');
+    });
+  
+    afterEach(async function() {
+      await sqlite3.close(db);
+    });
+
+    it('should call progress handler', async function() {
+      let rc;
+      
+      let count = 0;
+      await sqlite3.progress_handler(db, 1, () => ++count && 0, null);
+  
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t AS
+        WITH RECURSIVE cnt(x) AS (
+          SELECT 1
+          UNION ALL
+          SELECT x+1 FROM cnt
+            LIMIT 100
+        )
+        SELECT x FROM cnt;
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(count).toBeGreaterThan(0);
+    });
+
+    it('should call asynchronous progress handler', async function() {
+      let rc;
+      
+      let count = 0;
+      await sqlite3.progress_handler(db, 1, async () => ++count && 0, null);
+  
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t AS
+        WITH RECURSIVE cnt(x) AS (
+          SELECT 1
+          UNION ALL
+          SELECT x+1 FROM cnt
+            LIMIT 100
+        )
+        SELECT x FROM cnt;
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(count).toBeGreaterThan(0);
+    });
+  });
 }
 
