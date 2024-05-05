@@ -40,8 +40,8 @@ const VFS_CONFIGS = new Map([
     vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
   },
   {
-    name: 'OriginPrivateVFS',
-    vfsModule: '../src/examples/OriginPrivateVFS.js',
+    name: 'OPFSAdaptiveVFS',
+    vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
   },
 ].map(config => [config.name, config]));
 

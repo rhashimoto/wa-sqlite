@@ -5,7 +5,7 @@ import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 
-const CONFIG = 'OriginPrivateVFS';
+const CONFIG = 'OPFSAdaptiveVFS';
 const BUILDS = ['asyncify', 'jspi'];
 
 const supportsJSPI = await TestContext.supportsJSPI();

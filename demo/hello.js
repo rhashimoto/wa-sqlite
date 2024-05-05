@@ -13,7 +13,7 @@ import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
 // in a Worker.
 import { MemoryVFS as MyVFS } from '../src/examples/MemoryVFS.js';
 // import { MemoryAsyncVFS as MyVFS} from '../src/examples/MemoryAsyncVFS.js';
-// import { OriginPrivateVFS as MyVFS } from '../src/examples/OriginPrivateVFS.js';
+// import { OPFSAdaptiveVFS as MyVFS } from '../src/examples/OPFSAdaptiveVFS.js';
 
 import * as SQLite from 'wa-sqlite';
 

@@ -14,7 +14,7 @@ This IndexedDB VFS is the most general and compatible implementation.
 
 Changing the page size after the database is created is not supported.
 
-### OriginPrivateVFS
+### OPFSAdaptiveVFS
 This OPFS VFS supports multiple connections without the proposed "readwrite-unsafe" locking mode, but is more performant if it is available.
 
 If the new mode is not supported then only journaling modes "delete" (default), "memory", and "off" are allowed.
@@ -34,7 +34,7 @@ Changing the page size after the database is created is not supported. Write tra
 
 ## VFS Comparison
 
-||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OriginPrivateVFS|AccessHandlePoolVFS|OPFSCoopSyncVFS|FLOOR|
+||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OPFSAdaptiveVFS|AccessHandlePoolVFS|OPFSCoopSyncVFS|FLOOR|
 |-|-|-|-|-|-|-|-|
 |Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS|OPFS/IndexedDB|
 |Synchronous build|✅|:x:|:x:|:x:|✅|✅|:x:|

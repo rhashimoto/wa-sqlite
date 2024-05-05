@@ -37,8 +37,8 @@ const BUILDS = new Map([
     vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
   },
   {
-    name: 'OriginPrivateVFS',
-    vfsModule: '../src/examples/OriginPrivateVFS.js',
+    name: 'OPFSAdaptiveVFS',
+    vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
   },
   {
     name: 'OPFSCoopSyncVFS',

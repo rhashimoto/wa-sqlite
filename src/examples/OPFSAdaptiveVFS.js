@@ -52,14 +52,14 @@ class File {
   }
 }
 
-export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
+export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Map<number, File>} */ mapIdToFile = new Map();
   lastError = null;
 
   log = null;
 
   static async create(name, module) {
-    const vfs = new OriginPrivateVFS(name, module);
+    const vfs = new OPFSAdaptiveVFS(name, module);
     await vfs.isReady();
     return vfs;
   }
