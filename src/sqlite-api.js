@@ -606,18 +606,25 @@ export function Factory(Module) {
 
   sqlite3.set_authorizer = function(db, xAuth, pApp) {
     verifyDatabase(db);
-    const result = Module.set_authorizer(
-      db,
-      (_, iAction, p3, p4, p5, p6) => {
-        return xAuth(
-          pApp,
-          iAction,
-          Module.UTF8ToString(p3),
-          Module.UTF8ToString(p4),
-          Module.UTF8ToString(p5),
-          Module.UTF8ToString(p6));
-      },
-      pApp);
+
+    // Convert SQLite callback arguments to JavaScript-friendly arguments.
+    function cvtArgs(_, iAction, p3, p4, p5, p6) {
+      return [
+        _,
+        iAction,
+        Module.UTF8ToString(p3),
+        Module.UTF8ToString(p4),
+        Module.UTF8ToString(p5),
+        Module.UTF8ToString(p6)
+      ];
+    };
+    function adapt(f) {
+      return f instanceof AsyncFunction ?
+        (async (_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6))) :
+        ((_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6)));
+    }
+
+    const result = Module.set_authorizer(db, adapt(xAuth), pApp);
     return check('sqlite3_set_authorizer', result, db);
   };;
   

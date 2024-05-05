@@ -580,7 +580,7 @@ declare interface SQLiteAPI {
    * @param handler 
    * @param userData 
    */
-  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number, userData);
+  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number|Promise<number>, userData);
 
   /**
    * Reset a prepared statement object
@@ -665,7 +665,7 @@ declare interface SQLiteAPI {
    */
   set_authorizer(
     db: number,
-    authFunction: (userData: any, iActionCode: number, param3: string|null, param4: string|null, param5: string|null, param6: string|null) => number,
+    authFunction: (userData: any, iActionCode: number, param3: string|null, param4: string|null, param5: string|null, param6: string|null) => number|Promise<number>,
     userData: any): number;
   
   /**

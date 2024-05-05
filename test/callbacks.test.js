@@ -314,5 +314,60 @@ for (const [key, factory] of FACTORIES) {
       expect(count).toBeGreaterThan(0);
     });
   });
+
+  describe(`${key} set_authorizer`, function() {
+    let db;
+    beforeEach(async function() {
+      db = await sqlite3.open_v2(':memory:');
+    });
+  
+    afterEach(async function() {
+      await sqlite3.close(db);
+    });
+
+    it('should call authorizer', async function() {
+      let rc;
+
+      const authorizations = [];
+      rc = sqlite3.set_authorizer(db, (_, iActionCode, p3, p4, p5, p6) => {
+        authorizations.push([iActionCode, p3, p4, p5, p6]);
+        return SQLite.SQLITE_OK;
+      });
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.exec(db, 'CREATE TABLE t(x)');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      expect(authorizations.length).toBeGreaterThan(0);
+    });
+
+    it('should deny authorization', async function() {
+      let rc;
+
+      rc = sqlite3.set_authorizer(db, (_, iActionCode, p3, p4, p5, p6) => {
+        return SQLite.SQLITE_DENY;
+      });
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      const result = sqlite3.exec(db, 'CREATE TABLE t(x)');
+      await expectAsync(result).toBeRejectedWith(new Error('not authorized'));
+    });
+
+    it('should call async authorizer', async function() {
+      let rc;
+
+      const authorizations = [];
+      rc = sqlite3.set_authorizer(db, async (_, iActionCode, p3, p4, p5, p6) => {
+        authorizations.push([iActionCode, p3, p4, p5, p6]);
+        return SQLite.SQLITE_OK;
+      });
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.exec(db, 'CREATE TABLE t(x)');
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      expect(authorizations.length).toBeGreaterThan(0);
+    });
+  });
 }
 
