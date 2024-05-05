@@ -400,8 +400,8 @@ export class OriginPrivateVFS extends WebLocksMixin(FacadeVFS) {
             case 'journal_mode':
               if (value &&
                   !hasUnsafeAccessHandle && 
-                  !['off', 'memory', 'delete'].includes(value.toLowerCase())) {
-                throw new Error('journal_mode must be "off", "memory", or "delete"');
+                  !['off', 'memory', 'delete', 'wal'].includes(value.toLowerCase())) {
+                throw new Error('journal_mode must be "off", "memory", "delete", or "wal"');
               }
               break;
           }

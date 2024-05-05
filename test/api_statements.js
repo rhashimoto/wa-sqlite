@@ -16,7 +16,7 @@ export function api_statements(context) {
 
     it('should iterate', async function() {
       const sql = [
-        'PRAGMA journal_mode=memory',
+        'PRAGMA journal_mode',
         'CREATE TABLE t(x)',
         'SELECT * FROM sqlite_master'
       ];

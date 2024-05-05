@@ -446,6 +446,37 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
   }
   
   /**
+   * @param {number} fileId
+   * @param {number} op
+   * @param {DataView} pArg
+   * @returns {number|Promise<number>}
+   */
+  jFileControl(fileId, op, pArg) {
+    try {
+      const file = this.mapIdToFile.get(fileId);
+      switch (op) {
+        case VFS.SQLITE_FCNTL_PRAGMA:
+          const key = extractString(pArg, 4);
+          const value = extractString(pArg, 8);
+          this.log?.('xFileControl', file.path, 'PRAGMA', key, value);
+          switch (key.toLowerCase()) {
+            case 'journal_mode':
+              if (value &&
+                  !['off', 'memory', 'delete', 'wal'].includes(value.toLowerCase())) {
+                throw new Error('journal_mode must be "off", "memory", "delete", or "wal"');
+              }
+              break;
+          }
+          break;
+      }
+    } catch (e) {
+      this.lastError = e;
+      return VFS.SQLITE_IOERR;
+    }
+    return VFS.SQLITE_NOTFOUND;
+  }
+
+  /**
    * @param {Uint8Array} zBuf 
    * @returns 
    */
@@ -547,4 +578,13 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
       });
     });
   }
+}
+
+function extractString(dataView, offset) {
+  const p = dataView.getUint32(offset, true);
+  if (p) {
+    const chars = new Uint8Array(dataView.buffer, p);
+    return new TextDecoder().decode(chars.subarray(0, chars.indexOf(0)));
+  }
+  return null;
 }
