@@ -115,11 +115,11 @@ all: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist dist-xl debug tmp
+	rm -rf dist debug tmp
 
 .PHONY: spotless
 spotless:
-	rm -rf dist dist-xl debug tmp deps cache
+	rm -rf dist debug tmp deps cache
 
 ## cache
 .PHONY: clean-cache
