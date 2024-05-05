@@ -245,12 +245,10 @@ describe('create_function', function() {
       'fn',
       0,
       SQLite.SQLITE_DETERMINISTIC, 0,
-      (function(context, values) {
-        return module.handleAsync(async () => {
-          await new Promise(resolve => setTimeout(resolve));
-          sqlite3.result_int(context, 42);
-        });
-      }));
+      async (context, values) => {
+        await new Promise(resolve => setTimeout(resolve));
+        sqlite3.result_int(context, 42);
+      });
     expect(rc).toEqual(SQLite.SQLITE_OK);
 
     let result;
