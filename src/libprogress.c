@@ -15,7 +15,7 @@ static int libprogress_xProgress(void* pApp) {
   return PROGRESS_JS(ipp, pApp, pApp);
 }
 
-int EMSCRIPTEN_KEEPALIVE libprogress_progress_handler(
+void EMSCRIPTEN_KEEPALIVE libprogress_progress_handler(
   sqlite3* db,
   int nOps,
   int xProgress,
