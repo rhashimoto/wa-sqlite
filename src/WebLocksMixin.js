@@ -235,8 +235,9 @@ export const WebLocksMixin = superclass => class extends superclass {
             if (!await this.#acquire(lockState, 'reserved', POLL_EXCLUSIVE)) {
               return VFS.SQLITE_BUSY;
             }
+            lockState.access();
             console.assert(!lockState.gate);
-            console.assert(lockState.access);
+            console.assert(!lockState.access);
             console.assert(lockState.reserved);
             break;
 
@@ -267,11 +268,9 @@ export const WebLocksMixin = superclass => class extends superclass {
               return VFS.SQLITE_BUSY;
             }
 
-            // Drop our shared access lock and reacquire it with an
-            // exclusive lock. This will block until all other connections
-            // exit the SHARED state.
-            lockState.access();
+            // Block until all other connections exit the SHARED state.
             if (!await this.#acquire(lockState, 'access')) {
+              lockState.gate();
               return VFS.SQLITE_BUSY;
             }
             console.assert(lockState.gate);
@@ -321,6 +320,7 @@ export const WebLocksMixin = superclass => class extends superclass {
           case VFS.SQLITE_LOCK_SHARED:
             // This transition is rare, probably only on an I/O error
             // while writing to a journal file.
+            await this.#acquire(lockState, 'access', SHARED);
             lockState.reserved();
             console.assert(lockState.access);
             console.assert(!lockState.gate);
@@ -379,7 +379,10 @@ export const WebLocksMixin = superclass => class extends superclass {
         // Add a timeout to the lock request.
         const controller = new AbortController();
         options = Object.assign({}, options, { signal: controller.signal });
-        setTimeout(() => controller.abort(), this.#options.lockTimeout);
+        setTimeout(() => {
+          controller.abort();
+          resolve?.(false);
+        }, this.#options.lockTimeout);
       }
 
       const lockName = `lock##${lockState.baseName}##${name}`;
@@ -391,11 +394,15 @@ export const WebLocksMixin = superclass => class extends superclass {
               lockState[name] = null;
             };
             resolve(true);
+            resolve = null;
           });
         } else {
           lockState[name] = null;
           resolve(false);
+          resolve = null;
         }
+      }).catch(e => {
+        if (e.name !== 'AbortError') throw e;
       });
     });
   }
