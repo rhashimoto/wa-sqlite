@@ -9,6 +9,7 @@ class Tester extends WebLocksMixin(Object) {
 
 basicTests('exclusive');
 basicTests('shared');
+basicTests('shared+hint');
 
 function basicTests(policy) {
   beforeEach(async () => {

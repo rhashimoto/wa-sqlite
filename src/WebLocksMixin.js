@@ -4,13 +4,18 @@ import * as VFS from './VFS.js';
 /** @type {LockOptions} */ const POLL_SHARED = { ifAvailable: true, mode: 'shared' };
 /** @type {LockOptions} */ const POLL_EXCLUSIVE = { ifAvailable: true, mode: 'exclusive' };
 
+const POLICIES = ['exclusive', 'shared', 'shared+hint'];
+
 /**
  * @typedef LockState
  * @property {string} baseName
  * @property {number} type
+ * @property {boolean} writeHint
+ * 
  * @property {function?} [gate]
  * @property {function?} [access]
  * @property {function?} [reserved]
+ * @property {function?} [hint]
  */
 
 /**
@@ -28,7 +33,7 @@ export const WebLocksMixin = superclass => class extends superclass {
   constructor(name, module, options) {
     super(name, module, options);
     Object.assign(this.#options, options);
-    if (['exclusive', 'shared'].indexOf(this.#options.lockPolicy) === -1) {
+    if (POLICIES.indexOf(this.#options.lockPolicy) === -1) {
       throw new Error(`WebLocksMixin: invalid lock mode: ${options.lockPolicy}`);
     }
   }
@@ -45,7 +50,8 @@ export const WebLocksMixin = superclass => class extends superclass {
         const name = this.getFilename(fileId);
         const state = {
           baseName: name,
-          type: VFS.SQLITE_LOCK_NONE
+          type: VFS.SQLITE_LOCK_NONE,
+          writeHint: false
         };
         this.#mapIdToState.set(fileId, state);
       }
@@ -57,6 +63,7 @@ export const WebLocksMixin = superclass => class extends superclass {
         case 'exclusive':
           return await this.#lockExclusive(lockState, lockType);
         case 'shared':
+        case 'shared+hint':
           return await this.#lockShared(lockState, lockType);
       }
     } catch (e) {
@@ -79,7 +86,8 @@ export const WebLocksMixin = superclass => class extends superclass {
         case 'exclusive':
           return await this.#unlockExclusive(lockState, lockType);
         case 'shared':
-          return await this.#unlockShared(lockState, lockType);
+        case 'shared+hint':
+            return await this.#unlockShared(lockState, lockType);
       }
     } catch (e) {
       console.error('WebLocksMixin: unlock error', e);
@@ -99,7 +107,8 @@ export const WebLocksMixin = superclass => class extends superclass {
         case 'exclusive':
           return this.#checkExclusive(lockState, pResOut);
         case 'shared':
-          return await this.#checkShared(lockState, pResOut);
+        case 'shared+hint':
+            return await this.#checkShared(lockState, pResOut);
       }
     } catch (e) {
       console.error('WebLocksMixin: check reserved lock error', e);
@@ -210,8 +219,19 @@ export const WebLocksMixin = superclass => class extends superclass {
       case VFS.SQLITE_LOCK_NONE:
         switch (lockType) {
           case VFS.SQLITE_LOCK_SHARED:
+            if (this.#options.lockPolicy === 'shared+hint' && lockState.writeHint) {
+              // Something (PRAGMA or file control) has hinted that this
+              // transaction will write. Acquire the hint lock, which
+              // is required to reach the RESERVED state.
+              if (!await this.#acquire(lockState, 'hint')) {
+                return VFS.SQLITE_BUSY;
+              }
+              lockState.writeHint = false;
+            }
+
             // Must have the gate lock to request the access lock.
             if (!await this.#acquire(lockState, 'gate', SHARED)) {
+              lockState.hint?.();
               return VFS.SQLITE_BUSY;
             }
             await this.#acquire(lockState, 'access', SHARED);
@@ -228,11 +248,22 @@ export const WebLocksMixin = superclass => class extends superclass {
       case VFS.SQLITE_LOCK_SHARED:
         switch (lockType) {
           case VFS.SQLITE_LOCK_RESERVED:
+            if (this.#options.lockPolicy === 'shared+hint') {
+              // Ideally we should already have the hint lock, but if not
+              // poll for it here. If we can't acquire it, we're in deadlock
+              // and must return SQLITE_BUSY.
+              if (!lockState.hint &&
+                !await this.#acquire(lockState, 'hint', POLL_EXCLUSIVE)) {
+                return VFS.SQLITE_BUSY;
+              }
+            }
+
             // Poll for the reserved lock. If this fails, we're in deadlock.
             // The connection holding the reserved lock blocks us, and it
             // can't acquire an exclusive access lock because we hold a
             // shared access lock.
             if (!await this.#acquire(lockState, 'reserved', POLL_EXCLUSIVE)) {
+              lockState.hint?.();
               return VFS.SQLITE_BUSY;
             }
             lockState.access();
@@ -306,6 +337,7 @@ export const WebLocksMixin = superclass => class extends superclass {
             // reserved lock if we were handling a hot journal.
             lockState.gate();
             lockState.reserved?.();
+            lockState.hint?.();
             console.assert(lockState.access);
             console.assert(!lockState.gate);
             console.assert(!lockState.reserved);
@@ -322,6 +354,7 @@ export const WebLocksMixin = superclass => class extends superclass {
             // while writing to a journal file.
             await this.#acquire(lockState, 'access', SHARED);
             lockState.reserved();
+            lockState.hint?.();
             console.assert(lockState.access);
             console.assert(!lockState.gate);
             console.assert(!lockState.reserved);
@@ -368,7 +401,7 @@ export const WebLocksMixin = superclass => class extends superclass {
 
   /**
    * @param {LockState} lockState 
-   * @param {'gate'|'access'|'reserved'} name
+   * @param {'gate'|'access'|'reserved'|'hint'} name
    * @param {LockOptions} options 
    * @returns {Promise<boolean>}
    */
