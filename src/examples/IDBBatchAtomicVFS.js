@@ -65,7 +65,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
     await this.#isReady;
   }
 
-  getLockName(fileId) {
+  getFilename(fileId) {
     const pathname = this.mapIdToFile.get(fileId).path;
     return `IDB(${this.name}):${pathname}`
   }

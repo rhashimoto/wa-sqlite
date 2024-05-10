@@ -42,7 +42,7 @@ export const WebLocksMixin = superclass => class extends superclass {
     try {
       // Create state on first lock.
       if (!this.#mapIdToState.has(fileId)) {
-        const name = this.getLockName(fileId);
+        const name = this.getFilename(fileId);
         const state = {
           baseName: name,
           type: VFS.SQLITE_LOCK_NONE

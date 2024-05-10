@@ -30,11 +30,11 @@ export class FacadeVFS extends VFS.Base {
   }
   
   /**
-   * Return the lock name for a file to be used by locking mixins.
+   * Return the filename for a file id for use by mixins.
    * @param {number} pFile 
    * @returns {string}
    */
-  getLockName(pFile) {
+  getFilename(pFile) {
     throw new Error('unimplemented');
   }
 

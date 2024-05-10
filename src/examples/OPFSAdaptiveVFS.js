@@ -68,7 +68,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     super(name, module, options);
   }
   
-  getLockName(fileId) {
+  getFilename(fileId) {
     const pathname = this.mapIdToFile.get(fileId).pathname;
     return `OPFS:${pathname}`
   }
@@ -93,7 +93,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       file.fileHandle = await directoryHandle.getFileHandle(filename, { create });
 
       if ((flags & VFS.SQLITE_OPEN_MAIN_DB) && !hasUnsafeAccessHandle) {
-        file.handleRequestChannel = new BroadcastChannel(this.getLockName(fileId));
+        file.handleRequestChannel = new BroadcastChannel(this.getFilename(fileId));
 
         // Acquire the access handle lock. The first read of a database
         // file is done outside xLock/xUnlock so we get that lock here.
@@ -104,7 +104,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
         setTimeout(notify);
 
         file.openLockReleaser = await new Promise((resolve, reject) => {
-          navigator.locks.request(this.getLockName(fileId), lock => {
+          navigator.locks.request(this.getFilename(fileId), lock => {
             clearInterval(notifyId);
             if (!lock) return reject();
             return new Promise(release => {
@@ -338,7 +338,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
           const notifyId = setInterval(notify, LOCK_NOTIFY_INTERVAL);
           setTimeout(notify);
 
-          navigator.locks.request(this.getLockName(fileId), lock => {
+          navigator.locks.request(this.getFilename(fileId), lock => {
             clearInterval(notifyId);
             if (!lock) return reject();
             return new Promise(release => {
