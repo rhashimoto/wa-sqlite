@@ -47,9 +47,9 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
     return vfs;
   }
 
-  constructor(name, module, options) {
+  constructor(name, module, options = {}) {
     super(name, module, options);
-    this.#isReady = this.#initialize(name);
+    this.#isReady = this.#initialize(options.idbName ?? name);
   }
 
   async #initialize(name) {

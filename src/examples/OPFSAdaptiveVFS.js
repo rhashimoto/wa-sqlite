@@ -64,7 +64,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     return vfs;
   }
 
-  constructor(name, module, options) {
+  constructor(name, module, options = {}) {
     super(name, module, options);
   }
   
