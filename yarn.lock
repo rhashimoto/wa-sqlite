@@ -3550,15 +3550,15 @@ __metadata:
   linkType: hard
 
 "puppeteer-core@npm:^22.0.0":
-  version: 22.7.1
-  resolution: "puppeteer-core@npm:22.7.1"
+  version: 22.8.0
+  resolution: "puppeteer-core@npm:22.8.0"
   dependencies:
     "@puppeteer/browsers": "npm:2.2.3"
     chromium-bidi: "npm:0.5.19"
     debug: "npm:4.3.4"
     devtools-protocol: "npm:0.0.1273771"
-    ws: "npm:8.16.0"
-  checksum: 25ac29edbc56fa370fbc456802358c2917527920d0c6ab723b583da8124ee742629e824605d14f7d5e6d56895a153bdf768f92f985f325aedd10f2e3fae00546
+    ws: "npm:8.17.0"
+  checksum: 9f352a4bbdd5facdf309776a6de1558ead0b1c9d3d0764e67958ccebab6554658b213a70363ba5f19031121c419ca6253b541e2cc9bdad2bc0d213945ae76a4b
   languageName: node
   linkType: hard
 
@@ -4432,7 +4432,7 @@ __metadata:
       unplugged: true
     sinon@15.0.1:
       unplugged: true
-    web-test-runner-jasmine@0.0.5:
+    web-test-runner-jasmine@0.0.6:
       unplugged: true
   languageName: unknown
   linkType: soft
@@ -4561,9 +4561,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:8.16.0":
-  version: 8.16.0
-  resolution: "ws@npm:8.16.0"
+"ws@npm:8.17.0":
+  version: 8.17.0
+  resolution: "ws@npm:8.17.0"
   peerDependencies:
     bufferutil: ^4.0.1
     utf-8-validate: ">=5.0.2"
@@ -4572,7 +4572,7 @@ __metadata:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 7c511c59e979bd37b63c3aea4a8e4d4163204f00bd5633c053b05ed67835481995f61a523b0ad2b603566f9a89b34cb4965cb9fab9649fbfebd8f740cea57f17
+  checksum: 5e1dcb0ae70c6e2f158f5b446e0a72a2cd335b07aba73ee1872e9bae1285382286a10e53ed479db21bdd690a5dfd05641a768611ebb236253c62fefa43ef58b4
   languageName: node
   linkType: hard
 
