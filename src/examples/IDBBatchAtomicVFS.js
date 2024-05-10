@@ -1,7 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
+import { WebLocksMixin } from '../WebLocksMixin.js';
 
 /**
  * @typedef Metadata
@@ -41,14 +41,14 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Promise} */ #isReady;
   /** @type {IDBContext} */ #idb;
 
-  static async create(name, module) {
-    const vfs = new IDBBatchAtomicVFS(name, module);
+  static async create(name, module, options) {
+    const vfs = new IDBBatchAtomicVFS(name, module, options);
     await vfs.isReady();
     return vfs;
   }
 
-  constructor(name, module) {
-    super(name, module);
+  constructor(name, module, options) {
+    super(name, module, options);
     this.#isReady = this.#initialize(name);
   }
 

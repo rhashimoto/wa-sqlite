@@ -1,7 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
-import { WebLocksShared as WebLocksMixin } from '../WebLocksMixins.js';
+import { WebLocksMixin } from '../WebLocksMixin.js';
 
 const LOCK_NOTIFY_INTERVAL = 1000;
 
@@ -58,14 +58,14 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
 
   log = null;
 
-  static async create(name, module) {
-    const vfs = new OPFSAdaptiveVFS(name, module);
+  static async create(name, module, options) {
+    const vfs = new OPFSAdaptiveVFS(name, module, options);
     await vfs.isReady();
     return vfs;
   }
 
-  constructor(name, module) {
-    super(name, module);
+  constructor(name, module, options) {
+    super(name, module, options);
   }
   
   getLockName(fileId) {
