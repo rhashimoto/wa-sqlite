@@ -404,6 +404,8 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
                 throw new Error('journal_mode must be "off", "memory", "delete", or "wal"');
               }
               break;
+            case 'write_hint':
+              return super.jFileControl(fileId, WebLocksMixin.WRITE_HINT_OP_CODE, null);
           }
           break;
       }

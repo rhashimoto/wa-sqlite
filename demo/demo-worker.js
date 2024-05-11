@@ -35,12 +35,12 @@ const BUILDS = new Map([
   {
     name: 'IDBBatchAtomicVFS',
     vfsModule: '../src/examples/IDBBatchAtomicVFS.js',
-    vfsOptions: { lockPolicy: 'shared' }
+    vfsOptions: { lockPolicy: 'shared+hint' }
   },
   {
     name: 'OPFSAdaptiveVFS',
     vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
-    vfsOptions: { lockPolicy: 'shared' }
+    vfsOptions: { lockPolicy: 'shared+hint' }
   },
   {
     name: 'OPFSCoopSyncVFS',

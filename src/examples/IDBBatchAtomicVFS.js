@@ -476,7 +476,9 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
                 }
               }
               break;
-          }
+            case 'write_hint':
+              return super.jFileControl(fileId, WebLocksMixin.WRITE_HINT_OP_CODE, null);
+            }
           break;
         case VFS.SQLITE_FCNTL_SYNC:
           this.log?.('xFileControl', file.path, 'SYNC');
@@ -529,7 +531,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       this.lastError = e;
       return VFS.SQLITE_IOERR;
     }
-    return VFS.SQLITE_NOTFOUND;
+    return super.jFileControl(fileId, op, pArg);
   }
   
   /**
