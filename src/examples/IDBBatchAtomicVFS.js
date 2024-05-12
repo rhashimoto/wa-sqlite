@@ -371,7 +371,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   async jLock(fileId, lockType) {
     // Call the actual lock implementation.
     const file = this.mapIdToFile.get(fileId);
-    const result = super.jLock(fileId, lockType);
+    const result = await super.jLock(fileId, lockType);
 
     if (lockType === VFS.SQLITE_LOCK_SHARED) {
       // Update metadata.
@@ -482,16 +482,16 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           break;
         case VFS.SQLITE_FCNTL_SYNC:
           this.log?.('xFileControl', file.path, 'SYNC');
-          const commmitMetadata = Object.assign({}, file.metadata);
+          const commitMetadata = Object.assign({}, file.metadata);
           const prevFileSize = file.rollback.fileSize
           this.#idb.q(({ metadata, blocks }) => {
-            metadata.put(commmitMetadata);
+            metadata.put(commitMetadata);
 
             // Remove old page versions.
             for (const offset of file.changedPages) {
               if (offset < prevFileSize) {
                 const range = IDBKeyRange.bound(
-                  [file.path, -offset, commmitMetadata.version],
+                  [file.path, -offset, commitMetadata.version],
                   [file.path, -offset, Infinity],
                   true);
                 blocks.delete(range);
