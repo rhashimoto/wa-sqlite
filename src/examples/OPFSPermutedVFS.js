@@ -46,7 +46,7 @@ class File {
   /** @type {Set<number>} */ freeOffsets;
 
   /** @type {number} */ lockState;
-  /** @type {object} */ locks;
+  /** @type {{read?: function, write?: function, reserved?: function}} */ locks;
 
   /** @type {Transaction?} */ txActive;
   /** @type {boolean} */ txIsOverwrite;
@@ -140,7 +140,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
           // Find page 1 and read the page size from the header.
           // https://sqlite.org/fileformat.html#page_size
           const header = new DataView(new ArrayBuffer(2));
-          const n = file.accessHandle.read(header, { at: file.mapPageToOffset.get(1) + 16 });
+          const n = file.accessHandle.read(header, { at: 16 });
           if (n !== header.byteLength) throw new Error('Failed to read page size');
           file.pageSize = header.getUint16(0);
           if (file.pageSize === 1) {
@@ -151,7 +151,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         
         // Initialize free offsets.
         const fileSize = file.accessHandle.getSize();
-        for (let i = 0; i < fileSize; i++) {
+        for (let i = 0; i < fileSize; i += file.pageSize) {
           if (!file.mapPageToOffset.has(i)) {
             file.freeOffsets.add(i);
           }
@@ -197,6 +197,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
             this.#processBroadcasts(file);
           }
         });
+
+        await this.#lock(file, 'read', SHARED)
       }
 
       pOutFlags.setInt32(0, flags, true);
@@ -345,7 +347,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
     try {
       const file = this.#mapIdToFile.get(fileId);
 
-      if ((file.flags & VFS.SQLITE_OPEN_MAIN_DB) && !file.txIsOverwrite) {
+      if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         if (!file.pageSize) {
           this.log?.(`set page size ${pData.byteLength}`)
           file.pageSize = pData.byteLength;
@@ -357,7 +359,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         let pageOffset;
         const pageIndex = Math.trunc(iOffset / file.pageSize) + 1;
-        if (file.txActive.pages.has(pageIndex)) {
+        if (file.txIsOverwrite) {
+          // For VACUUM, use the identity mapping to write each page
+          // at its canonical offset.
+          pageOffset = iOffset;
+        } else if (file.txActive.pages.has(pageIndex)) {
           // This page has already been written in this transaction.
           // Use the same offset.
           pageOffset = file.txActive.pages.get(pageIndex).offset;
@@ -367,9 +373,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
           pageOffset = 0;
           this.log?.(`write page ${pageIndex} at ${pageOffset}`);
         } else {
-          // Use the first non-zero offset.
+          // Use the first non-zero offset within the file.
+          const opfsFileSize = file.accessHandle.getSize();
           for (const maybeOffset of file.freeOffsets) {
-            if (maybeOffset) {
+            if (maybeOffset && maybeOffset < opfsFileSize) {
               pageOffset = maybeOffset;
               file.freeOffsets.delete(pageOffset);
               this.log?.(`write page ${pageIndex} at ${pageOffset}`);
@@ -379,8 +386,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
           if (pageOffset === undefined) {
             // Write to the end of the file.
-            // TODO: avoid i/o here
-            pageOffset = file.accessHandle.getSize();
+            pageOffset = opfsFileSize;
             this.log?.(`append page ${pageIndex} at ${pageOffset}`);
           }
         }
@@ -489,6 +495,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
       case VFS.SQLITE_LOCK_SHARED:
         if (!file.locks.read) {
           await this.#lock(file, 'read', SHARED);
+
+          // Remove free list offsets that are beyond the end of the file.
+          const opfsFileSize = file.accessHandle.getSize();
+          file.freeOffsets =
+            new Set([...file.freeOffsets].filter(offset => offset < opfsFileSize));
         }
         break;
       case VFS.SQLITE_LOCK_RESERVED:
@@ -533,7 +544,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
         }
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
-        // TODO: Handle txIsOverwrite with an exclusive read lock.
         await this.#lock(file, 'write');
         break;
     }
@@ -630,16 +640,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
           // This is a VACUUM. Get exclusive access to the database. Try
           // polling first.
           this.log?.('xFileControl', 'OVERWRITE', file.path);
-          file.locks.read?.();
-          if (!await this.#lock(file, 'read', POLL_EXCLUSIVE)) {
-            // We didn't get the read lock because other connections have
-            // it. Notify them that we want the lock and wait.
-            const lockRequest = this.#lock(file, 'read');
-            file.broadcastChannel.postMessage({ exclusive: true });
-            await lockRequest;
-          }
-          throw new Error('not implemented');
-          file.txIsOverwrite = true;
+          await this.#prepareOverwrite(file);
           break;
       }
     } catch (e) {
@@ -832,24 +833,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
    * @param {File} file 
    */
   async #commitTx(file) {
-    if (file.txIsOverwrite) {
-      // TODO: Implement overwrite.
-      file.txIsOverwrite = false;
-      return;
-    }
-
     // TODO: Decide whether to finalize pending transactions.
-    if (true) {
-      // Find the oldest transaction in use.
-      const TX_LOCK_REGEX = /^(.*)@@\[(\d+)\]$/;
-      file.txActive.oldestTxId = file.txActive.txId;
-      const locks = await navigator.locks.query();
-      for (const { name } of locks.held) {
-        const m = TX_LOCK_REGEX.exec(name);
-        if (m && m[1] === file.path) {
-          file.txActive.oldestTxId = Math.min(file.txActive.oldestTxId, Number(m[2]));
-        }
-      }
+    if (true || file.txIsOverwrite) {
+      file.txActive.oldestTxId = await this.#getOldestTxInUse(file);
     }
 
     const tx = file.idb.transaction(
@@ -859,6 +845,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
     if (file.txActive.oldestTxId) {
       // Ensure that all pending data is safely on storage.
+      if (file.txIsOverwrite) {
+        file.accessHandle.truncate(file.txActive.fileSize);
+      }
       file.accessHandle.flush();
       
       // Transfer page mappings to the pages store for all pending
@@ -889,6 +878,22 @@ export class OPFSPermutedVFS extends FacadeVFS {
     this.#acceptTx(file, file.txActive);
     this.#setView(file, file.txActive);
     file.txActive = null;
+
+    if (file.txIsOverwrite) {
+      // Wait until all connections have seen the transaction.
+      while (file.viewTx.txId !== await this.#getOldestTxInUse(file)) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+
+      // Downgrade the exclusive read lock to a shared lock.
+      file.locks.read();
+      await this.#lock(file, 'read', SHARED);
+
+      // There should be no extra space in the file now.
+      file.freeOffsets.clear();
+
+      file.txIsOverwrite = false;
+    }
   }
 
   /**
@@ -901,6 +906,86 @@ export class OPFSPermutedVFS extends FacadeVFS {
       file.freeOffsets.add(offset);
     }
     file.txActive = null;
+  }
+
+  /**
+   * @param {File} file 
+   */
+  async #prepareOverwrite(file) {
+    file.locks.read?.();
+    if (!await this.#lock(file, 'read', POLL_EXCLUSIVE)) {
+      // We didn't get the read lock because other connections have
+      // it. Notify them that we want the lock and wait.
+      const lockRequest = this.#lock(file, 'read');
+      file.broadcastChannel.postMessage({ exclusive: true });
+      await lockRequest;
+    }
+
+    // Create a intermediate transaction to copy all current page data to
+    // an offset past fileSize. 
+    file.txActive = {
+      txId: file.viewTx.txId + 1,
+      pages: new Map(),
+      fileSize: file.fileSize
+    };
+
+    const pageBuffer = new Uint8Array(file.pageSize);
+    for (let offset = 0; offset < file.fileSize; offset += file.pageSize) {
+      const pageIndex = offset / file.pageSize + 1;
+      const oldOffset = file.mapPageToOffset.get(pageIndex);
+      if (oldOffset < file.fileSize) {
+        // This page is stored below fileSize. Read it into memory.
+        if (file.accessHandle.read(pageBuffer, { at: oldOffset }) !== file.pageSize) {
+          throw new Error('Failed to read page');
+        }
+        
+        // Find a place above fileSize to copy the page.
+        let newOffset = -1;
+        while (newOffset < file.fileSize) {
+          newOffset = file.freeOffsets.values().next().value ?? file.accessHandle.getSize();
+          file.freeOffsets.delete(newOffset);
+        }
+
+        // Perform the copy.
+        if (file.accessHandle.write(pageBuffer, { at: newOffset }) !== file.pageSize) {
+          throw new Error('Failed to write page');
+        }
+
+        // TODO: add digest
+        file.txActive.pages.set(pageIndex, { offset: newOffset, digest: null });
+      }
+    }
+    file.accessHandle.flush();
+
+    // Publish transaction for others.
+    file.broadcastChannel.postMessage(file.txActive);
+    file.idb.transaction('pending', 'readwrite')
+      .objectStore('pending')
+      .put(file.txActive);
+
+    // Incorporate the transaction into our view.
+    this.#acceptTx(file, file.txActive);
+    this.#setView(file, file.txActive);
+    file.txActive = null;
+
+    file.txIsOverwrite = true;
+  }
+
+  /**
+   * @param {File} file 
+   * @returns {Promise<number>}
+   */
+  async #getOldestTxInUse(file) {
+    const TX_LOCK_REGEX = /^(.*)@@\[(\d+)\]$/;
+    let oldestTxId = file.viewTx.txId;
+    const locks = await navigator.locks.query();
+    for (const { name } of locks.held) {
+      const m = TX_LOCK_REGEX.exec(name);
+      if (m && m[1] === file.path) {
+        oldestTxId = Math.min(oldestTxId, Number(m[2]));
+      }
+    }
+    return oldestTxId;
   }
 }
 
