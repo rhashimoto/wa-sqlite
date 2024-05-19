@@ -7,6 +7,7 @@ import * as VFS from 'wa-sqlite/src/VFS.js';
 /** @type {LockOptions} */ const POLL_SHARED = { ifAvailable: true, mode: 'shared' };
 /** @type {LockOptions} */ const POLL_EXCLUSIVE = { ifAvailable: true, mode: 'exclusive' };
 
+// Used only for debug logging.
 const contextId = Math.random().toString(36).slice(2);
 
 /**
@@ -132,13 +133,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
         await this.#lock(file, 'write');
         onFinally.push(() => file.locks.write());
 
-        // Load the initial page map from the database.
-        const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
-        const pageData = await idbX(tx.objectStore('pages').getAll());
-        file.mapPageToOffset = new Map(pageData.map(({ i, o }) => [i, o]));
-
         // Get the page size.
-        if (file.mapPageToOffset.has(1)) {
+        if (file.accessHandle.getSize()) {
           // Offset 0 will always contain a page 1. Even if it is out of
           // date it will have a valid page size.
           // https://sqlite.org/fileformat.html#page_size
@@ -150,6 +146,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
             file.pageSize = 65536;
           }
         }
+
+        // Load the initial page map from the database.
+        const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
+        const pageData = await idbX(tx.objectStore('pages').getAll());
+        file.mapPageToOffset = new Map(pageData.map(({ i, o }) => [i, o]));
         file.fileSize = pageData.length * file.pageSize;
         
         // Initialize free offsets.
@@ -165,20 +166,15 @@ export class OPFSPermutedVFS extends FacadeVFS {
           /** @type {Transaction[]} */
           const transactions = await idbX(tx.objectStore('pending').getAll());
           for (const transaction of transactions) {
-            // A transaction entry can be empty, containing only the tx id.
-            // This is a placeholder so new connections start with a valid
-            // id.
-            if (transaction.pages) {
-              // Verify checksums for all pages in this transaction.
-              for (const [index, { offset, digest }] of transaction.pages) {
-                const data = new Uint8Array(file.pageSize);
-                file.accessHandle.read(data, { at: offset });
-                if (checksum(data).some((v, i) => v !== digest[i])) {
-                  throw Object.assign(new Error('checksum error'), { txId: transaction.txId });
-                }
+            // Verify checksums for all pages in this transaction.
+            for (const [index, { offset, digest }] of transaction.pages) {
+              const data = new Uint8Array(file.pageSize);
+              file.accessHandle.read(data, { at: offset });
+              if (checksum(data).some((v, i) => v !== digest[i])) {
+                throw Object.assign(new Error('checksum error'), { txId: transaction.txId });
               }
-              this.#acceptTx(file, transaction);
             }
+            this.#acceptTx(file, transaction);
             file.viewTx = transaction;
           }
         } catch (e) {
@@ -541,10 +537,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
           // the transaction to IndexedDB ourselves.
           if (file.viewTx.txId) {
             console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
-          }
-          file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' })
+            file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' })
             .objectStore('pending')
             .put(file.viewTx);
+          }
           entries.unshift({ txId: file.viewTx.txId });
         }
 
