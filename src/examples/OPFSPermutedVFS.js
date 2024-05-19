@@ -1,6 +1,6 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
-import { FacadeVFS } from 'wa-sqlite/src/FacadeVFS.js';
-import * as VFS from 'wa-sqlite/src/VFS.js';
+import { FacadeVFS } from '../FacadeVFS.js';
+import * as VFS from '../VFS.js';
 
 // Options for navigator.locks.request().
 /** @type {LockOptions} */ const SHARED = { mode: 'shared' };
