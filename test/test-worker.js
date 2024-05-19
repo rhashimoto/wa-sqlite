@@ -43,6 +43,10 @@ const VFS_CONFIGS = new Map([
     name: 'OPFSAdaptiveVFS',
     vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
   },
+  {
+    name: 'OPFSPermutedVFS',
+    vfsModule: '../src/examples/OPFSPermutedVFS.js',
+  },
 ].map(config => [config.name, config]));
 
 const INDEXEDDB_DBNAMES = ['demo'];
