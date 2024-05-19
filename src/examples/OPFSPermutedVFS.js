@@ -131,7 +131,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         onFinally.push(() => file.locks.write());
 
         // Load the initial page map from the database.
-        const tx = file.idb.transaction(['pages', 'pending']);
+        const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
         const pageData = await idbX(tx.objectStore('pages').getAll());
         file.mapPageToOffset = new Map(pageData.map(({ i, o }) => [i, o]));
 
@@ -168,9 +168,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
             // id.
             if (transaction.pages) {
               // Verify checksums for all pages in this transaction.
-              for (const [index, { offset }] of transaction.pages) {
-                // TODO: Implement checksum verification.
-                if (false) {
+              for (const [index, { offset, digest }] of transaction.pages) {
+                const data = new Uint8Array(file.pageSize);
+                file.accessHandle.read(data, { at: offset });
+                if (checksum(data).some((v, i) => v !== digest[i])) {
                   throw Object.assign(new Error('checksum error'), { txId: transaction.txId });
                 }
               }
@@ -180,8 +181,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
           }
         } catch (e) {
           if (e.message === 'checksum error') {
-            console.warn(`Checksum error, removing tx ${e.tx}+`)
-            const range = IDBKeyRange.lowerBound(e.tx);
+            console.warn(`Checksum error, removing tx ${e.txId}+`)
+            const range = IDBKeyRange.lowerBound(e.txId);
             await idbX(tx.objectStore('pending').delete(range));
           } else {
             throw e;
@@ -404,7 +405,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         file.txActive.pages.set(pageIndex, {
           offset: pageOffset,
-          digest: null // TODO: compute digest
+          digest: checksum(pData.subarray())
         });
         file.accessHandle.write(pData.subarray(), { at: pageOffset });
         file.txActive.fileSize = Math.max(file.txActive.fileSize, pageIndex * file.pageSize);
@@ -963,8 +964,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
           throw new Error('Failed to write page');
         }
 
-        // TODO: add digest
-        file.txActive.pages.set(pageIndex, { offset: newOffset, digest: null });
+        file.txActive.pages.set(pageIndex, {
+          offset: newOffset,
+          digest: checksum(pageBuffer)
+        });
       }
     }
     file.accessHandle.flush();
@@ -1034,4 +1037,24 @@ function cvtString(dataView, offset) {
     return new TextDecoder().decode(chars.subarray(0, chars.indexOf(0)));
   }
   return null;
+}
+
+/**
+ * @param {ArrayBufferView} data 
+ * @returns {Uint32Array}
+ */
+function checksum(data) {
+  const array = new Uint32Array(
+    data.buffer,
+    data.byteOffset,
+    data.byteLength / Uint32Array.BYTES_PER_ELEMENT);
+
+  // https://en.wikipedia.org/wiki/Fletcher%27s_checksum
+  let h1 = 0;
+  let h2 = 0;
+  for (const value of array) {
+    h1 = (h1 + value) % 4294967295;
+    h2 = (h2 + h1) % 4294967295;
+  }
+  return new Uint32Array([h1, h2]);
 }
