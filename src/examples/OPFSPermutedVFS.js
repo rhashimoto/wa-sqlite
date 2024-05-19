@@ -31,11 +31,11 @@ class File {
   // Members below are only used for SQLITE_OPEN_MAIN_DB.
 
   /** @type {number} */ pageSize;
-  /** @type {number} */ fileSize;
+  /** @type {number} */ fileSize; // virtual file size exposed to SQLite
 
   /** @type {IDBDatabase} */ idb;
 
-  /** @type {Transaction} */ viewTx;
+  /** @type {Transaction} */ viewTx; // last transaction incorporated
   /** @type {function?} */ viewReleaser;
 
   /** @type {BroadcastChannel} */ broadcastChannel;
@@ -48,8 +48,8 @@ class File {
   /** @type {number} */ lockState;
   /** @type {{read?: function, write?: function, reserved?: function}} */ locks;
 
-  /** @type {Transaction?} */ txActive;
-  /** @type {boolean} */ txIsOverwrite;
+  /** @type {Transaction?} */ txActive; // transaction in progress
+  /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
 
   constructor(pathname, flags) {
     this.path = pathname;
@@ -137,7 +137,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         // Get the page size.
         if (file.mapPageToOffset.has(1)) {
-          // Find page 1 and read the page size from the header.
+          // Offset 0 will always contain a page 1. Even if it is out of
+          // date it will have a valid page size.
           // https://sqlite.org/fileformat.html#page_size
           const header = new DataView(new ArrayBuffer(2));
           const n = file.accessHandle.read(header, { at: 16 });
@@ -187,10 +188,12 @@ export class OPFSPermutedVFS extends FacadeVFS {
           }
         }
 
-        // Publish our view of the database.
+        // Publish our view of the database. This prevents other connections
+        // from overwriting file data we still need.
         await this.#setView(file, file.viewTx);
 
-        // Listen for broadcasts.
+        // Listen for broadcasts. Messages are cached until the database
+        // is unlocked.
         file.broadcastChannel.addEventListener('message', event => {
           file.broadcastReceived.push(event.data);
           if (file.lockState === VFS.SQLITE_LOCK_NONE) {
@@ -198,6 +201,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
           }
         });
 
+        // Connections usually hold this shared read lock so they don't
+        // acquire and release it for every transaction. The only time
+        // it is released is when a connection wants to VACUUM, which
+        // it signals with a broadcast message.
         await this.#lock(file, 'read', SHARED)
       }
 
@@ -296,7 +303,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
       let bytesRead = 0;
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
-        // Look up the page location in the file.
+        // Look up the page location in the file. Check the pages in
+        // any active write transaction first, then the main map.
         const pageIndex = file.pageSize ?
           Math.trunc(iOffset / file.pageSize) + 1:
           1;
@@ -353,6 +361,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
           file.pageSize = pData.byteLength;
         }
 
+        // The first write begins a transaction. Note that xLock/xUnlock
+        // is not a good way to determine transaction boundaries because
+        // PRAGMA locking_mode can change the behavior.
         if (!file.txActive) {
           this.#beginTx(file);
         }
@@ -423,7 +434,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         // Remove now obsolete pages from file.txActive.pages
         for (const [index, { offset }] of file.txActive.pages) {
-          if (index * file.pageSize >= iSize) {
+          // Page indices are 1-based.
+          if (index * file.pageSize > iSize) {
             file.txActive.pages.delete(index);
             file.freeOffsets.add(offset);
           }
