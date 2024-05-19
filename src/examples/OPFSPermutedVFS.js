@@ -517,6 +517,15 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         /** @type {Transaction[]} */
         const entries = await idbX(tx.objectStore('pending').getAll(range));
+        if (entries.length && entries.at(-1).txId > file.viewTx.txId) {
+          // There are newer transactions in IndexedDB that we haven't
+          // seen via broadcast. Ensure that they are incorporated on unlock,
+          // and force the application to retry.
+          file.broadcastReceived.push(...entries);
+          file.locks.reserved();
+          return VFS.SQLITE_BUSY
+        }
+
         if (entries[0]?.txId !== file.viewTx.txId) {
           // IndexedDB doesn't contain our current view transaction. This
           // could happen if the connection that wrote the transaction
@@ -525,19 +534,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
           if (file.viewTx.txId) {
             console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
             file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' })
-            .objectStore('pending')
-            .put(file.viewTx);
+              .objectStore('pending')
+              .put(file.viewTx);
           }
-          entries.unshift({ txId: file.viewTx.txId });
-        }
-
-        if (entries.at(-1).txId > file.viewTx.txId) {
-          // There are newer transactions in IndexedDB that we haven't
-          // seen via broadcast. Ensure that they are incorporated on unlock,
-          // and force the application to retry.
-          file.broadcastReceived.push(...entries);
-          file.locks.reserved();
-          return VFS.SQLITE_BUSY
         }
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
@@ -905,7 +904,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
       // Delete pending store entries that are no longer needed.
       tx.objectStore('pending')
-        .delete(IDBKeyRange.upperBound(file.txActive.oldestTxId));      
+        .delete(IDBKeyRange.upperBound(file.txActive.oldestTxId));
     }
 
     // Publish the transaction via broadcast and IndexedDB.
