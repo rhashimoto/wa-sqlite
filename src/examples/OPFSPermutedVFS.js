@@ -50,6 +50,7 @@ class File {
 
   /** @type {Transaction?} */ txActive; // transaction in progress
   /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
+  /** @type {number} */ txFlushInterval;
 
   constructor(pathname, flags) {
     this.path = pathname;
@@ -87,7 +88,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
   /** @type{IDBDatabase|Promise<IDBDatabase>} */ #idb;
 
-  log = (...args) => console.debug(contextId, ...args);
+  log = null; // (...args) => console.debug(contextId, ...args);
 
   static async create(name, module) {
     const vfs = new OPFSPermutedVFS(name, module);
@@ -124,6 +125,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         file.locks = {};
         file.txIsOverwrite = false;
         file.txActive = null;
+        file.txFlushInterval = 1;
 
         // Take the write lock so no other connection changes state
         // during our initialization.
@@ -444,7 +446,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
         return VFS.SQLITE_OK;
       }
       file.accessHandle.truncate(iSize);
-      file.fileSize = iSize;
       return VFS.SQLITE_OK;
     } catch (e) {
       console.error(e);
@@ -633,6 +634,26 @@ export class OPFSPermutedVFS extends FacadeVFS {
                 return VFS.SQLITE_ERROR;
               }
               break;
+            case 'flush':
+              file.accessHandle.flush();
+              break;
+            case 'flush_interval':
+              if (value) {
+                const interval = Number(value);
+                if (interval > 0) {
+                  file.txFlushInterval = Number(value);
+                } else {
+                  return VFS.SQLITE_ERROR;
+                }
+              } else {
+                // Report current value.
+                const buffer = new TextEncoder().encode(file.txFlushInterval.toString());
+                const s = this._module._sqlite3_malloc64(buffer.byteLength + 1);
+                new Uint8Array(this._module.HEAPU8.buffer, s, buffer.byteLength).set(buffer);
+                pArg.setUint32(0, s, true);
+                return VFS.SQLITE_OK;
+              }
+              break;
           }
           break;
         case VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE:
@@ -767,6 +788,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         }
       } else if (Object.hasOwn(message, 'exclusive')) {
         // Release the read lock if we have it.
+        this.log?.('releasing read lock');
         console.assert(file.lockState === VFS.SQLITE_LOCK_NONE);
         file.locks.read?.();
       }
@@ -846,8 +868,14 @@ export class OPFSPermutedVFS extends FacadeVFS {
    * @param {File} file 
    */
   async #commitTx(file) {
-    // TODO: Decide whether to finalize pending transactions.
-    if (true || file.txIsOverwrite) {
+    // Determine whether to finalize pending transactions, i.e. transfer
+    // them to the IndexedDB pages store. This is done every txFlushInterval
+    // transactions or when a VACUUM is requested.
+    //
+    // By default this is done on every transaction (txFlushInterval = 1)
+    // for full durability, but this can be changed with PRAGMA flush_interval
+    // to trade durability for performance.
+    if ((file.txActive.txId % file.txFlushInterval) === 0 || file.txIsOverwrite) {
       file.txActive.oldestTxId = await this.#getOldestTxInUse(file);
     }
 
