@@ -649,15 +649,15 @@ export class OPFSPermutedVFS extends FacadeVFS {
           this.log?.('xFileControl', 'ROLLBACK_ATOMIC_WRITE', file.path);
           this.#rollbackTx(file);
           return VFS.SQLITE_OK;
-        case VFS.SQLITE_FCNTL_SYNC:
-          this.log?.('xFileControl', 'SYNC', file.path);
-          await this.#commitTx(file);
-          break;
         case VFS.SQLITE_FCNTL_OVERWRITE:
           // This is a VACUUM. Get exclusive access to the database. Try
           // polling first.
           this.log?.('xFileControl', 'OVERWRITE', file.path);
           await this.#prepareOverwrite(file);
+          break;
+        case VFS.SQLITE_FCNTL_COMMIT_PHASETWO:
+          this.log?.('xFileControl', 'COMMIT_PHASETWO', file.path);
+          await this.#commitTx(file);
           break;
       }
     } catch (e) {
@@ -810,7 +810,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
    */
   #acceptTx(file, message) {
     file.pageSize = file.pageSize || this.#getPageSize(file);
-    
+
     // Add list of pages made obsolete by this transaction. These pages
     // can be moved to the free list when all connections have reached
     // this point.

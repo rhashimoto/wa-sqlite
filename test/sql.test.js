@@ -20,10 +20,11 @@ const CONFIGS = new Map([
   ['MemoryAsyncVFS', ASYNC_BUILDS],
   ['IDBBatchAtomicVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
+  ['OPFSPermutedVFS', ASYNC_BUILDS],
   ['FLOOR', ASYNC_BUILDS]
 ]);
 
-const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'FLOOR'];
+const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'OPFSPermutedVFS', 'FLOOR'];
 const NOT_PERSISTENT = ['', 'MemoryVFS', 'MemoryAsyncVFS'];
 const SINGLE_CONNECTION = ['', 'MemoryVFS', 'MemoryAsyncVFS', 'AccessHandlePoolVFS'];
 
@@ -48,8 +49,7 @@ function sqlSpecs(build, config) {
   sql_0001(context);
   sql_0002(context);
   if (!DISALLOWS_PAGE_SIZE_CHANGE.includes(config)) {
-    // These tests change the page size, which is not supported by these
-    // VFS classes.
+    // These tests change the page size.
     sql_0003(context);
   }
   if (!NOT_PERSISTENT.includes(config)) {
