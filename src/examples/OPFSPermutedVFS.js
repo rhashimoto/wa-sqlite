@@ -133,24 +133,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
         await this.#lock(file, 'write');
         onFinally.push(() => file.locks.write());
 
-        // Get the page size.
-        if (file.accessHandle.getSize()) {
-          // Offset 0 will always contain a page 1. Even if it is out of
-          // date it will have a valid page size.
-          // https://sqlite.org/fileformat.html#page_size
-          const header = new DataView(new ArrayBuffer(2));
-          const n = file.accessHandle.read(header, { at: 16 });
-          if (n !== header.byteLength) throw new Error('Failed to read page size');
-          file.pageSize = header.getUint16(0);
-          if (file.pageSize === 1) {
-            file.pageSize = 65536;
-          }
-        }
-
         // Load the initial page map from the database.
         const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
         const pageData = await idbX(tx.objectStore('pages').getAll());
         file.mapPageToOffset = new Map(pageData.map(({ i, o }) => [i, o]));
+        file.pageSize = this.#getPageSize(file);
         file.fileSize = pageData.length * file.pageSize;
         
         // Initialize free offsets.
@@ -704,6 +691,22 @@ export class OPFSPermutedVFS extends FacadeVFS {
     return VFS.SQLITE_OK
   }
 
+  #getPageSize(file) {
+    // Offset 0 will always contain a page 1. Even if it is out of
+    // date it will have a valid page size.
+    // https://sqlite.org/fileformat.html#page_size
+    const header = new DataView(new ArrayBuffer(2));
+    const n = file.accessHandle.read(header, { at: 16 });
+    if (n !== header.byteLength) return 0;
+    const pageSize = header.getUint16(0);
+    switch (pageSize) {
+      case 1:
+        return 65536;
+      default:
+        return pageSize;
+    }
+  }
+
   /**
    * @param {File} file 
    * @param {'read'|'write'|'reserved'} name 
@@ -806,6 +809,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
    * @param {Transaction} message 
    */
   #acceptTx(file, message) {
+    file.pageSize = file.pageSize || this.#getPageSize(file);
+    
     // Add list of pages made obsolete by this transaction. These pages
     // can be moved to the free list when all connections have reached
     // this point.
