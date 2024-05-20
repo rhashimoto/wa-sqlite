@@ -533,9 +533,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
           // the transaction to IndexedDB ourselves.
           if (file.viewTx.txId) {
             console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
-            file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' })
-              .objectStore('pending')
+            const tx = file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' });
+            tx.objectStore('pending')
               .put(file.viewTx);
+            tx.commit();
           }
         }
         break;
@@ -910,9 +911,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
     // Publish the transaction via broadcast and IndexedDB.
     this.log?.(`commit transaction ${file.txActive.txId}`);
     file.broadcastChannel.postMessage(file.txActive);
-    file.idb.transaction('pending', 'readwrite')
-      .objectStore('pending')
-      .put(file.txActive);
+    tx.objectStore('pending').put(file.txActive);
+    tx.commit();
 
     // Advance our own view. Even if we received our own broadcasts (we
     // don't), we want our view to be updated synchronously.
@@ -1002,9 +1002,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
     // Publish transaction for others.
     file.broadcastChannel.postMessage(file.txActive);
-    file.idb.transaction('pending', 'readwrite')
-      .objectStore('pending')
-      .put(file.txActive);
+    const tx = file.idb.transaction('pending', 'readwrite');
+    tx.objectStore('pending').put(file.txActive);
+    tx.commit();
 
     // Incorporate the transaction into our view.
     this.#acceptTx(file, file.txActive);
