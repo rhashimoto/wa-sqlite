@@ -135,17 +135,20 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         // Load the initial page map from the database.
         const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
-        const pageData = await idbX(tx.objectStore('pages').getAll());
-        file.mapPageToOffset = new Map(pageData.map(({ i, o }) => [i, o]));
+        const pages = await idbX(tx.objectStore('pages').getAll());
         file.pageSize = this.#getPageSize(file);
-        file.fileSize = pageData.length * file.pageSize;
-        
-        // Initialize free offsets.
-        const fileSize = file.accessHandle.getSize();
-        for (let i = 0; i < fileSize; i += file.pageSize) {
-          if (!file.mapPageToOffset.has(i)) {
-            file.freeOffsets.add(i);
-          }
+        file.fileSize = pages.length * file.pageSize;
+
+        // Begin with adding all file offsets to the free list.
+        const opfsFileSize = file.accessHandle.getSize();
+        for (let i = 0; i < opfsFileSize; i += file.pageSize) {
+          file.freeOffsets.add(i);
+        }
+
+        // Incorporate the page map data.
+        for (const { i, o } of pages) {
+          file.mapPageToOffset.set(i, o);
+          file.freeOffsets.delete(o);
         }
 
         // Incorporate pending transactions.
@@ -491,12 +494,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
     switch (lockType) {
       case VFS.SQLITE_LOCK_SHARED:
         if (!file.locks.read) {
+          // Reacquire lock if it was released by a broadcast request.
           await this.#lock(file, 'read', SHARED);
-
-          // Remove free list offsets that are beyond the end of the file.
-          const opfsFileSize = file.accessHandle.getSize();
-          file.freeOffsets =
-            new Set([...file.freeOffsets].filter(offset => offset < opfsFileSize));
         }
         break;
       case VFS.SQLITE_LOCK_RESERVED:
@@ -506,7 +505,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
         // In order to write, our view of the database must be up to date.
         // This is tricky because transactions are published in two ways:
-        // via BroadcastChannel and written to IndexeDB. We must handle
+        // via BroadcastChannel and written to IndexedDB. We must handle
         // the rare cases where a transaction is in one but not the other
         // because of latency or crash.
         //
@@ -542,6 +541,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         await this.#lock(file, 'write');
+
+        // Remove free list offsets that are beyond the end of the file.
+        const opfsFileSize = file.accessHandle.getSize();
+        file.freeOffsets =
+          new Set([...file.freeOffsets].filter(offset => offset < opfsFileSize));
         break;
     }
     file.lockState = lockType;
