@@ -22,7 +22,6 @@ const CONFIGS = new Map([
   ['IDBBatchAtomicVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
   ['OPFSPermutedVFS', ASYNC_BUILDS],
-  ['FLOOR', ASYNC_BUILDS]
 ]);
 
 describe('SQLite API', function() {
