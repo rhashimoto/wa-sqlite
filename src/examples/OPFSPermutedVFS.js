@@ -373,7 +373,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
           pageOffset = 0;
           this.log?.(`write page ${pageIndex} at ${pageOffset}`);
         } else {
-          // Use the first non-zero offset within the file.
+          // Use the first unused non-zero offset within the file.
           const opfsFileSize = file.accessHandle.getSize();
           for (const maybeOffset of file.freeOffsets) {
             if (maybeOffset && maybeOffset < opfsFileSize) {
@@ -974,6 +974,19 @@ export class OPFSPermutedVFS extends FacadeVFS {
       fileSize: file.fileSize
     };
 
+    // Helper generator to provide offsets above fileSize.
+    const offsetGenerator = (function*() {
+      for (const offset of file.freeOffsets) {
+        if (offset >= file.fileSize) {
+          yield offset;
+        }
+      }
+
+      while (true) {
+        yield file.accessHandle.getSize();
+      }
+    })();
+
     const pageBuffer = new Uint8Array(file.pageSize);
     for (let offset = 0; offset < file.fileSize; offset += file.pageSize) {
       const pageIndex = offset / file.pageSize + 1;
@@ -984,14 +997,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
           throw new Error('Failed to read page');
         }
         
-        // Find a place above fileSize to copy the page.
-        let newOffset = -1;
-        while (newOffset < file.fileSize) {
-          newOffset = file.freeOffsets.values().next().value ?? file.accessHandle.getSize();
-          file.freeOffsets.delete(newOffset);
-        }
-
         // Perform the copy.
+        const newOffset = offsetGenerator.next().value;
         if (file.accessHandle.write(pageBuffer, { at: newOffset }) !== file.pageSize) {
           throw new Error('Failed to write page');
         }
@@ -1003,7 +1010,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
       }
     }
     file.accessHandle.flush();
-
+    file.freeOffsets.clear();
+    
     // Publish transaction for others.
     file.broadcastChannel.postMessage(file.txActive);
     const tx = file.idb.transaction('pending', 'readwrite');
