@@ -1,6 +1,7 @@
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
+import { WebLocksMixin } from '../WebLocksMixin.js';
 
 // Options for navigator.locks.request().
 /** @type {LockOptions} */ const SHARED = { mode: 'shared' };
@@ -47,11 +48,12 @@ class File {
   /** @type {Set<number>} */ freeOffsets;
 
   /** @type {number} */ lockState;
-  /** @type {{read?: function, write?: function, reserved?: function}} */ locks;
+  /** @type {{read?: function, write?: function, reserved?: function, hint?: function}} */ locks;
 
   /** @type {Transaction?} */ txActive; // transaction in progress
   /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
   /** @type {number} */ txFlushInterval;
+  /** @type {boolean} */ txWriteHint;
 
   constructor(pathname, flags) {
     this.path = pathname;
@@ -493,13 +495,29 @@ export class OPFSPermutedVFS extends FacadeVFS {
     if (lockType <= file.lockState) return VFS.SQLITE_OK;
     switch (lockType) {
       case VFS.SQLITE_LOCK_SHARED:
+        if (file.txWriteHint) {
+            // xFileControl() has hinted that this transaction will
+            // write. Acquire the hint lock, which is required to reach
+            // the RESERVED state.
+            if (!await this.#lock(file, 'hint')) {
+              return VFS.SQLITE_BUSY;
+            }
+        }
+
         if (!file.locks.read) {
           // Reacquire lock if it was released by a broadcast request.
           await this.#lock(file, 'read', SHARED);
         }
         break;
       case VFS.SQLITE_LOCK_RESERVED:
+        // Ideally we should already have the hint lock, but if not
+        // poll for it here.
+        if (!file.locks.hint && !await this.#lock(file, 'hint', POLL_EXCLUSIVE)) {
+          return VFS.SQLITE_BUSY;
+        }
+
         if (!await this.#lock(file, 'reserved', POLL_EXCLUSIVE)) {
+          file.locks.hint();
           return VFS.SQLITE_BUSY;
         }
 
@@ -564,12 +582,16 @@ export class OPFSPermutedVFS extends FacadeVFS {
       case VFS.SQLITE_LOCK_SHARED:
         file.locks.write?.();
         file.locks.reserved?.();
+        file.locks.hint?.();
         break;
       case VFS.SQLITE_LOCK_NONE:
         // Don't release the read lock here. It will be released on demand
         // when a broadcast notifies us that another connections wants to
         // VACUUM.
         this.#processBroadcasts(file);
+        file.locks.write?.();
+        file.locks.reserved?.();
+        file.locks.hint?.();
         break;
     }
     file.lockState = lockType;
@@ -641,7 +663,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
                 return VFS.SQLITE_OK;
               }
               break;
-          }
+            case 'write_hint':
+              return this.jFileControl(fileId, WebLocksMixin.WRITE_HINT_OP_CODE, null);
+            }
           break;
         case VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE:
           this.log?.('xFileControl', 'BEGIN_ATOMIC_WRITE', file.path);
@@ -662,6 +686,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
         case VFS.SQLITE_FCNTL_COMMIT_PHASETWO:
           this.log?.('xFileControl', 'COMMIT_PHASETWO', file.path);
           await this.#commitTx(file);
+          break;
+        case WebLocksMixin.WRITE_HINT_OP_CODE:
+          file.txWriteHint = true;
           break;
       }
     } catch (e) {
@@ -713,7 +740,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
   /**
    * @param {File} file 
-   * @param {'read'|'write'|'reserved'} name 
+   * @param {'read'|'write'|'reserved'|'hint'} name 
    * @param {LockOptions} options 
    * @returns {Promise<boolean>}
    */
