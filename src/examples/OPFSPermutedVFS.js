@@ -51,6 +51,7 @@ class File {
   /** @type {{read?: function, write?: function, reserved?: function, hint?: function}} */ locks;
 
   /** @type {Transaction?} */ txActive; // transaction in progress
+  /** @type {number} */ txRealFileSize; // physical file size
   /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
   /** @type {number} */ txFlushInterval;
   /** @type {boolean} */ txWriteHint;
@@ -376,19 +377,23 @@ export class OPFSPermutedVFS extends FacadeVFS {
           this.log?.(`write page ${pageIndex} at ${pageOffset}`);
         } else {
           // Use the first unused non-zero offset within the file.
-          const opfsFileSize = file.accessHandle.getSize();
           for (const maybeOffset of file.freeOffsets) {
-            if (maybeOffset && maybeOffset < opfsFileSize) {
-              pageOffset = maybeOffset;
-              file.freeOffsets.delete(pageOffset);
-              this.log?.(`write page ${pageIndex} at ${pageOffset}`);
-              break;
+            if (maybeOffset) {
+              if (maybeOffset < file.txRealFileSize) {
+                pageOffset = maybeOffset;
+                file.freeOffsets.delete(pageOffset);
+                this.log?.(`write page ${pageIndex} at ${pageOffset}`);
+                break;
+              } else {
+                // This offset is beyond the end of the file.
+                file.freeOffsets.delete(maybeOffset);
+              }
             }
           }
 
           if (pageOffset === undefined) {
             // Write to the end of the file.
-            pageOffset = opfsFileSize;
+            pageOffset = file.txRealFileSize;
             this.log?.(`append page ${pageIndex} at ${pageOffset}`);
           }
         }
@@ -399,6 +404,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         });
         file.accessHandle.write(pData.subarray(), { at: pageOffset });
         file.txActive.fileSize = Math.max(file.txActive.fileSize, pageIndex * file.pageSize);
+        file.txRealFileSize = Math.max(file.txRealFileSize, pageOffset + pData.byteLength);
       } else {
         // On Chrome (at least), passing pData to accessHandle.write() is
         // an error because pData is a Proxy of a Uint8Array. Calling
@@ -559,11 +565,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         await this.#lock(file, 'write');
-
-        // Remove free list offsets that are beyond the end of the file.
-        const opfsFileSize = file.accessHandle.getSize();
-        file.freeOffsets =
-          new Set([...file.freeOffsets].filter(offset => offset < opfsFileSize));
         break;
     }
     file.lockState = lockType;
@@ -893,6 +894,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       pages: new Map(),
       fileSize: file.fileSize
     };
+    file.txRealFileSize = file.accessHandle.getSize();
     this.log?.(`begin transaction ${file.txActive.txId}`);
   }
 
@@ -950,6 +952,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
     this.#acceptTx(file, file.txActive);
     this.#setView(file, file.txActive);
     file.txActive = null;
+    file.txWriteHint = false;
 
     if (file.txIsOverwrite) {
       // Wait until all connections have seen the transaction.
@@ -978,6 +981,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       file.freeOffsets.add(offset);
     }
     file.txActive = null;
+    file.txWriteHint = false;
   }
 
   /**
