@@ -8,6 +8,8 @@ import { WebLocksMixin } from '../WebLocksMixin.js';
 /** @type {LockOptions} */ const POLL_SHARED = { ifAvailable: true, mode: 'shared' };
 /** @type {LockOptions} */ const POLL_EXCLUSIVE = { ifAvailable: true, mode: 'exclusive' };
 
+const DEFAULT_FLUSH_INTERVAL = 64;
+
 // Used only for debug logging.
 const contextId = Math.random().toString(36).slice(2);
 
@@ -50,11 +52,15 @@ class File {
   /** @type {number} */ lockState;
   /** @type {{read?: function, write?: function, reserved?: function, hint?: function}} */ locks;
 
+  /** @type {AbortController} */ abortController;
+
   /** @type {Transaction?} */ txActive; // transaction in progress
   /** @type {number} */ txRealFileSize; // physical file size
   /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
-  /** @type {number} */ txFlushInterval;
   /** @type {boolean} */ txWriteHint;
+
+  /** @type {string} */ synchronous;
+  /** @type {number} */ flushInterval;
 
   constructor(pathname, flags) {
     this.path = pathname;
@@ -127,9 +133,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
         file.freeOffsets = new Set();
         file.lockState = VFS.SQLITE_LOCK_NONE;
         file.locks = {};
+        file.abortController = new AbortController();
         file.txIsOverwrite = false;
         file.txActive = null;
-        file.txFlushInterval = 1;
+        file.synchronous = 'full';
+        file.flushInterval = DEFAULT_FLUSH_INTERVAL;
 
         // Take the write lock so no other connection changes state
         // during our initialization.
@@ -137,7 +145,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
         onFinally.push(() => file.locks.write());
 
         // Load the initial page map from the database.
-        const tx = file.idb.transaction(['pages', 'pending'], 'readwrite');
+        const tx = file.idb.transaction(['pages', 'pending']);
         const pages = await idbX(tx.objectStore('pages').getAll());
         file.pageSize = this.#getPageSize(file);
         file.fileSize = pages.length * file.pageSize;
@@ -173,8 +181,15 @@ export class OPFSPermutedVFS extends FacadeVFS {
         } catch (e) {
           if (e.message === 'checksum error') {
             console.warn(`Checksum error, removing tx ${e.txId}+`)
+            const tx = file.idb.transaction('pending', 'readwrite');
+            const txCommit = new Promise((resolve, reject) => {
+              tx.oncomplete = resolve;
+              tx.onabort = () => reject(tx.error);
+            });
             const range = IDBKeyRange.lowerBound(e.txId);
-            await idbX(tx.objectStore('pending').delete(range));
+            tx.objectStore('pending').delete(range);
+            tx.commit();
+            await txCommit;
           } else {
             throw e;
           }
@@ -295,6 +310,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
       let bytesRead = 0;
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        file.abortController.signal.throwIfAborted();
+
         // Look up the page location in the file. Check the pages in
         // any active write transaction first, then the main map.
         const pageIndex = file.pageSize ?
@@ -348,6 +365,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       const file = this.#mapIdToFile.get(fileId);
 
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        file.abortController.signal.throwIfAborted();
         if (!file.pageSize) {
           this.log?.(`set page size ${pData.byteLength}`)
           file.pageSize = pData.byteLength;
@@ -427,6 +445,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
     try {
       const file = this.#mapIdToFile.get(fileId);
       if ((file.flags & VFS.SQLITE_OPEN_MAIN_DB) && !file.txIsOverwrite) {
+        file.abortController.signal.throwIfAborted();
         file.txActive.fileSize = iSize;
 
         // Remove now obsolete pages from file.txActive.pages
@@ -478,6 +497,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
       let size;
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        file.abortController.signal.throwIfAborted();
         size = file.txActive ? file.txActive.fileSize : file.fileSize;
       } else {
         size = file.accessHandle.getSize();
@@ -556,10 +576,18 @@ export class OPFSPermutedVFS extends FacadeVFS {
           // the transaction to IndexedDB ourselves.
           if (file.viewTx.txId) {
             console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
-            const tx = file.idb.transaction('pending', 'readwrite', { durability: 'relaxed' });
+            const tx = file.idb.transaction('pending', 'readwrite');
+            const txComplete = new Promise((resolve, reject) => {
+              tx.oncomplete = resolve;
+              tx.onabort = () => {
+                file.abortController.abort();
+                reject(tx.error);
+              };
+            });
             tx.objectStore('pending')
               .put(file.viewTx);
             tx.commit();
+            await txComplete;
           }
         }
         break;
@@ -644,22 +672,25 @@ export class OPFSPermutedVFS extends FacadeVFS {
                 return VFS.SQLITE_ERROR;
               }
               break;
-            case 'flush':
-              file.accessHandle.flush();
+            case 'synchronous':
+              if (value) {
+                file.synchronous = value.toLowerCase();
+              }
               break;
             case 'flush_interval':
               if (value) {
                 const interval = Number(value);
                 if (interval > 0) {
-                  file.txFlushInterval = Number(value);
+                  file.flushInterval = Number(value);
                 } else {
                   return VFS.SQLITE_ERROR;
                 }
               } else {
                 // Report current value.
-                const buffer = new TextEncoder().encode(file.txFlushInterval.toString());
+                const buffer = new TextEncoder().encode(file.flushInterval.toString());
                 const s = this._module._sqlite3_malloc64(buffer.byteLength + 1);
-                new Uint8Array(this._module.HEAPU8.buffer, s, buffer.byteLength).set(buffer);
+                new Uint8Array(this._module.HEAPU8.buffer, s, buffer.byteLength + 1).set(buffer);
+
                 pArg.setUint32(0, s, true);
                 return VFS.SQLITE_OK;
               }
@@ -685,8 +716,13 @@ export class OPFSPermutedVFS extends FacadeVFS {
           await this.#prepareOverwrite(file);
           break;
         case VFS.SQLITE_FCNTL_COMMIT_PHASETWO:
+          // Finish any transaction. Note that the transaction may not
+          // exist if there is a BEGIN IMMEDIATE...COMMIT block that
+          // does not actually call xWrite.
           this.log?.('xFileControl', 'COMMIT_PHASETWO', file.path);
-          await this.#commitTx(file);
+          if (file.txActive) {
+            await this.#commitTx(file);
+          }
           break;
         case WebLocksMixin.WRITE_HINT_OP_CODE:
           file.txWriteHint = true;
@@ -903,20 +939,24 @@ export class OPFSPermutedVFS extends FacadeVFS {
    */
   async #commitTx(file) {
     // Determine whether to finalize pending transactions, i.e. transfer
-    // them to the IndexedDB pages store. This is done every txFlushInterval
-    // transactions or when a VACUUM is requested.
-    //
-    // By default this is done on every transaction (txFlushInterval = 1)
-    // for full durability, but this can be changed with PRAGMA flush_interval
-    // to trade durability for performance.
-    if ((file.txActive.txId % file.txFlushInterval) === 0 || file.txIsOverwrite) {
+    // them to the IndexedDB pages store.
+    if (file.synchronous === 'full' ||
+        file.txIsOverwrite ||
+        (file.txActive.txId % file.flushInterval) === 0) {
       file.txActive.oldestTxId = await this.#getOldestTxInUse(file);
     }
 
     const tx = file.idb.transaction(
       ['pages', 'pending'],
       'readwrite',
-      { durability: 'relaxed' });
+      { durability: file.synchronous === 'full' ? 'strict' : 'relaxed'});
+    const txComplete = new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onabort = () => {
+        file.abortController.abort();
+        reject(tx.error);
+      };
+    });
 
     if (file.txActive.oldestTxId) {
       // Ensure that all pending data is safely on storage.
@@ -946,6 +986,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
     file.broadcastChannel.postMessage(file.txActive);
     tx.objectStore('pending').put(file.txActive);
     tx.commit();
+
+    if (file.synchronous === 'full') {
+      await txComplete;
+    }
 
     // Advance our own view. Even if we received our own broadcasts (we
     // don't), we want our view to be updated synchronously.
@@ -1046,8 +1090,13 @@ export class OPFSPermutedVFS extends FacadeVFS {
     // Publish transaction for others.
     file.broadcastChannel.postMessage(file.txActive);
     const tx = file.idb.transaction('pending', 'readwrite');
+    const txComplete = new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(tx.error);
+    });
     tx.objectStore('pending').put(file.txActive);
     tx.commit();
+    await txComplete;
 
     // Incorporate the transaction into our view.
     this.#acceptTx(file, file.txActive);
