@@ -8,6 +8,8 @@ import { WebLocksMixin } from '../WebLocksMixin.js';
 /** @type {LockOptions} */ const POLL_SHARED = { ifAvailable: true, mode: 'shared' };
 /** @type {LockOptions} */ const POLL_EXCLUSIVE = { ifAvailable: true, mode: 'exclusive' };
 
+// Default number of transactions between flushing the OPFS file and
+// reclaiming free page offsets. Used only when synchronous! = 'full'.
 const DEFAULT_FLUSH_INTERVAL = 64;
 
 // Used only for debug logging.
@@ -59,14 +61,23 @@ class File {
   /** @type {boolean} */ txIsOverwrite; // VACUUM in progress
   /** @type {boolean} */ txWriteHint;
 
-  /** @type {string} */ synchronous;
+  /** @type {'full'|'normal'} */ synchronous;
   /** @type {number} */ flushInterval;
 
+  /**
+   * @param {string} pathname 
+   * @param {number} flags 
+   */
   constructor(pathname, flags) {
     this.path = pathname;
     this.flags = flags;
   }
 
+  /**
+   * @param {string} pathname 
+   * @param {number} flags 
+   * @returns 
+   */
   static async create(pathname, flags) {
     const file = new File(pathname, flags);
 
@@ -96,10 +107,13 @@ export class OPFSPermutedVFS extends FacadeVFS {
   /** @type {Map<number, File>} */ #mapIdToFile = new Map();
   #lastError = null;
 
-  /** @type{IDBDatabase|Promise<IDBDatabase>} */ #idb;
-
   log = null; // (...args) => console.debug(contextId, ...args);
 
+  /**
+   * @param {string} name 
+   * @param {*} module 
+   * @returns 
+   */
   static async create(name, module) {
     const vfs = new OPFSPermutedVFS(name, module);
     await vfs.isReady();
@@ -378,6 +392,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
           this.#beginTx(file);
         }
 
+        // Choose the offset in the file to write this page.
         let pageOffset;
         const pageIndex = Math.trunc(iOffset / file.pageSize) + 1;
         if (file.txIsOverwrite) {
@@ -415,13 +430,16 @@ export class OPFSPermutedVFS extends FacadeVFS {
             this.log?.(`append page ${pageIndex} at ${pageOffset}`);
           }
         }
+        file.accessHandle.write(pData.subarray(), { at: pageOffset });
 
+        // Update the transaction.
         file.txActive.pages.set(pageIndex, {
           offset: pageOffset,
           digest: checksum(pData.subarray())
         });
-        file.accessHandle.write(pData.subarray(), { at: pageOffset });
         file.txActive.fileSize = Math.max(file.txActive.fileSize, pageIndex * file.pageSize);
+
+        // Track the actual file size.
         file.txRealFileSize = Math.max(file.txRealFileSize, pageOffset + pData.byteLength);
       } else {
         // On Chrome (at least), passing pData to accessHandle.write() is
@@ -498,7 +516,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       let size;
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         file.abortController.signal.throwIfAborted();
-        size = file.txActive ? file.txActive.fileSize : file.fileSize;
+        size = file.txActive?.fileSize ?? file.fileSize;
       } else {
         size = file.accessHandle.getSize();
       }
@@ -584,8 +602,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
                 reject(tx.error);
               };
             });
-            tx.objectStore('pending')
-              .put(file.viewTx);
+            tx.objectStore('pending').put(file.viewTx);
             tx.commit();
             await txComplete;
           }
@@ -673,8 +690,19 @@ export class OPFSPermutedVFS extends FacadeVFS {
               }
               break;
             case 'synchronous':
+              // This VFS only recognizes 'full' and not 'full'.
               if (value) {
-                file.synchronous = value.toLowerCase();
+                switch (value.toLowerCase()) {
+                  case 'full':
+                  case '2':
+                  case 'extra':
+                  case '3':
+                    file.synchronous = 'full';
+                    break;
+                  default:
+                    file.synchronous = 'normal';
+                    break;
+                }
               }
               break;
             case 'flush_interval':
@@ -689,7 +717,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
                 // Report current value.
                 const buffer = new TextEncoder().encode(file.flushInterval.toString());
                 const s = this._module._sqlite3_malloc64(buffer.byteLength + 1);
-                new Uint8Array(this._module.HEAPU8.buffer, s, buffer.byteLength + 1).set(buffer);
+                new Uint8Array(this._module.HEAPU8.buffer, s, buffer.byteLength + 1)
+                  .fill(0)
+                  .set(buffer);
 
                 pArg.setUint32(0, s, true);
                 return VFS.SQLITE_OK;
@@ -710,8 +740,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
           this.#rollbackTx(file);
           return VFS.SQLITE_OK;
         case VFS.SQLITE_FCNTL_OVERWRITE:
-          // This is a VACUUM. Get exclusive access to the database. Try
-          // polling first.
+          // This is a VACUUM.
           this.log?.('xFileControl', 'OVERWRITE', file.path);
           await this.#prepareOverwrite(file);
           break;
@@ -759,6 +788,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
     return VFS.SQLITE_OK
   }
 
+  /**
+   * Return the database page size, or 0 if not yet known.
+   * @param {File} file 
+   * @returns {number}
+   */
   #getPageSize(file) {
     // Offset 0 will always contain a page 1. Even if it is out of
     // date it will have a valid page size.
@@ -776,14 +810,13 @@ export class OPFSPermutedVFS extends FacadeVFS {
   }
 
   /**
+   * Acquire one of the database file internal Web Locks.
    * @param {File} file 
    * @param {'read'|'write'|'reserved'|'hint'} name 
    * @param {LockOptions} options 
    * @returns {Promise<boolean>}
    */
   #lock(file, name, options = {}) {
-    // TODO: Implement optional timeout.
-
     return new Promise(resolve => {
       const lockName = `${file.path}@@${name}`;
       navigator.locks.request(lockName, options, lock => {
@@ -829,6 +862,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
   }
 
   /**
+   * Handle prevously received messages from other connections.
    * @param {File} file 
    */
   #processBroadcasts(file) {
@@ -1032,6 +1066,8 @@ export class OPFSPermutedVFS extends FacadeVFS {
    * @param {File} file 
    */
   async #prepareOverwrite(file) {
+    // Get an exclusive read lock to prevent other connections from
+    // seeing the database in an inconsistent state.
     file.locks.read?.();
     if (!await this.#lock(file, 'read', POLL_EXCLUSIVE)) {
       // We didn't get the read lock because other connections have
@@ -1049,7 +1085,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       fileSize: file.fileSize
     };
 
-    // Helper generator to provide offsets above fileSize.
+    // This helper generator provides offsets above fileSize.
     const offsetGenerator = (function*() {
       for (const offset of file.freeOffsets) {
         if (offset >= file.fileSize) {
@@ -1103,6 +1139,11 @@ export class OPFSPermutedVFS extends FacadeVFS {
     this.#setView(file, file.txActive);
     file.txActive = null;
 
+    // Now all pages are in the file above fileSize. The VACUUM operation
+    // will now copy the pages below fileSize in the proper order. After
+    // that once all connections are up to date the file can be truncated.
+
+    // This flag tells xWrite to write pages at their canonical offset.
     file.txIsOverwrite = true;
   }
 
@@ -1111,6 +1152,10 @@ export class OPFSPermutedVFS extends FacadeVFS {
    * @returns {Promise<number>}
    */
   async #getOldestTxInUse(file) {
+    // Each connection holds a shared Web Lock with a name that encodes
+    // the latest transaction it knows about. We can find the oldest
+    // transaction by listing the those locks and extracting the earliest
+    // transaction id.
     const TX_LOCK_REGEX = /^(.*)@@\[(\d+)\]$/;
     let oldestTxId = file.viewTx.txId;
     const locks = await navigator.locks.query();
@@ -1125,6 +1170,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
 }
 
 /**
+ * Wrap IndexedDB request with a Promise.
  * @param {IDBRequest} request 
  * @returns 
  */
@@ -1136,6 +1182,7 @@ function idbX(request) {
 }
 
 /**
+ * Given a path, return the directory handle and filename.
  * @param {string} path 
  * @param {boolean} create 
  * @returns {Promise<[FileSystemDirectoryHandle, string]>}
@@ -1150,6 +1197,12 @@ async function getPathComponents(path, create) {
   return [directory, filename];
 }
 
+/**
+ * Extract a C string from WebAssembly memory.
+ * @param {DataView} dataView 
+ * @param {number} offset 
+ * @returns 
+ */
 function cvtString(dataView, offset) {
   const p = dataView.getUint32(offset, true);
   if (p) {
@@ -1160,6 +1213,7 @@ function cvtString(dataView, offset) {
 }
 
 /**
+ * Compute a page checksum.
  * @param {ArrayBufferView} data 
  * @returns {Uint32Array}
  */
