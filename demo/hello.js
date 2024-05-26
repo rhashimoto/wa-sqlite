@@ -2,69 +2,69 @@
 
 // Uncomment one of the following imports to choose which SQLite build
 // to use. Note that an asynchronous VFS requires an asynchronous build
-// (JSPI or Asyncify).
-import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
+// (Asyncify or JSPI). As of 2024-05-26, JSPI is only available behind
+// a flag on Chromium browsers.
+// import SQLiteESMFactory from '../dist/wa-sqlite.mjs';
+import SQLiteESMFactory from '../dist/wa-sqlite-async.mjs';
 // import SQLiteESMFactory from '../dist/wa-sqlite-jspi.mjs';
-// import SQLiteESMFactory from '../dist/wa-sqlite-async.mjs';
 
 // Uncomment one of the following imports to choose a VFS. Note that an
 // asynchronous VFS requires an asynchronous build, and an VFS using
 // FileSystemSyncAccessHandle (generally any OPFS VFS) will run only
 // in a Worker.
-import { MemoryVFS as MyVFS } from '../src/examples/MemoryVFS.js';
-// import { MemoryAsyncVFS as MyVFS} from '../src/examples/MemoryAsyncVFS.js';
+import { IDBBatchAtomicVFS as MyVFS } from '../src/examples/IDBBatchAtomicVFS.js';
+// import { AccessHandlePoolVFS as MyVFS } from '../src/examples/AccessHandlePoolVFS.js';
 // import { OPFSAdaptiveVFS as MyVFS } from '../src/examples/OPFSAdaptiveVFS.js';
+// import { OPFSCoopSyncVFS as MyVFS } from '../src/examples/OPFSCoopSyncVFS.js';
+// import { OPFSPermutedVFS as MyVFS } from '../src/examples/OPFSPermutedVFS.js';
 
 import * as SQLite from 'wa-sqlite';
 
-const broadcast = new BroadcastChannel('hello');
-
 Promise.resolve().then(async () => {
+  // Set up communications with the main thread.
+  const messagePort = await new Promise(resolve => {
+    addEventListener('message', function handler(event) {
+      if (event.data === 'messagePort') {
+        resolve(event.ports[0]);
+        removeEventListener('message', handler);
+      }
+    });
+  });
+
+  // Initialize SQLite.
   const module = await SQLiteESMFactory();
   const sqlite3 = SQLite.Factory(module);
 
-  const vfs = await MyVFS.create('test', module);
+  // Register a custom file system.
+  const vfs = await MyVFS.create('hello', module);
   // @ts-ignore
   sqlite3.vfs_register(vfs, true);
-  const db = await sqlite3.open_v2(
-    'file://localhost/test.db?foo=bar&baz=quux',
-    SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_URI,
-    'test');
-  await sqlite3.exec(db, `SELECT 'Hello, world!'`, (row, columns) => {
-    console.log(row);
-    broadcast.postMessage(JSON.stringify(row[0]));
-  });
 
-  await sqlite3.exec(db, `
-    CREATE TABLE IF NOT EXISTS t(x);
-    INSERT INTO t VALUES ('how'), ('now'), ('brown'), ('cow');
-    SELECT * FROM t;
-  `, (row, columns) => {
-    console.log(row);
-  });
-  await sqlite3.close(db);
-}).catch(e => {
-  broadcast.postMessage(e.toString());
-});
+  // Open the database.
+  const db = await sqlite3.open_v2('test');
 
-async function reset() {
-  // Delete all OPFS contents.
-  const root = await navigator.storage?.getDirectory();
-  if (root) {
-    // @ts-ignore
-    for await (const name of root.keys()) {
-      await root.removeEntry(name, { recursive: true });
-    }
-  }
-
-  // Delete all IndexedDB databases.
-  await indexedDB.databases().then(async databases => {
-    for (const { name } of databases) {
-      await new Promise((resolve, reject) => {
-        const request = indexedDB.deleteDatabase(name);
-        request.onsuccess = resolve;
-        request.onerror = () => reject(request.error);
+  // Handle SQL from the main thread.
+  messagePort.addEventListener('message', async event => {
+    const sql = event.data;
+    try {
+      // Query the database. Note that although sqlite3.exec() accepts
+      // multiple statements in a single call, this usage is not recommended
+      // unless the statements are idempotent (i.e. resubmitting them is
+      // harmless) or you know your VFS will never return SQLITE_BUSY.
+      // See https://github.com/rhashimoto/wa-sqlite/discussions/171
+      const results = [];
+      await sqlite3.exec(db, sql, (row, columns) => {
+        if (columns != results.at(-1)?.columns) {
+          results.push({ columns, rows: [] });
+        }
+        results.at(-1).rows.push(row);
       });
+
+      // Return the results.
+      messagePort.postMessage(results);
+    } catch (error) {
+      messagePort.postMessage({ error: error.message });
     }
   });
-}
+  messagePort.start();
+});
