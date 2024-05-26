@@ -6,23 +6,39 @@
 </head>
 <body>
   <h1></h1>
-  <script type="module">
-    new BroadcastChannel('hello').addEventListener('message', (event) => {
-      const div = document.createElement('div');
-      div.textContent = event.data;
-      document.body.appendChild(div);
-    });
+  <textarea id="input" rows="5" cols="50">CREATE TABLE IF NOT EXISTS t(x PRIMARY KEY);
+INSERT OR REPLACE INTO t VALUES ('foo'), ('bar');
+SELECT * FROM t;
+    </textarea>
+  <button id="submit">Submit query</button>
+  <pre id="output"></pre>
 
+  <script type="module">
     // Load script in the Window or in a Worker, depending on whether
-    // the URL contains a "worker" query parameter.
+    // the URL contains a "worker" query parameter. Use a MessageChannel
+    // to communicate with the script.
+    const { port1, port2 } = new MessageChannel();
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.has('worker')) {
       document.querySelector('h1').textContent = 'Running in a Worker';
-      new Worker('./hello.js', { type: 'module' });
+      const worker = new Worker('./hello.js', { type: 'module' });
+      worker.postMessage('messagePort', [port2])
     } else {
       document.querySelector('h1').textContent = 'Running in the Window';
-      import('./hello.js')
+      await import('./hello.js')
+      window.postMessage('messagePort', '*', [port2]);
     }
+
+    // Submit SQL over the MessageChannel.
+    document.getElementById('submit').addEventListener('click', () => {
+      port1.postMessage(document.getElementById('input').value);
+    });
+
+    // Handle query results.
+    port1.addEventListener('message', (event) => {
+      document.getElementById('output').textContent = JSON.stringify(event.data, null, 2);
+    });
+    port1.start();
   </script>
 </body>
 </html>

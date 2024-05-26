@@ -3,9 +3,9 @@
 # wa-sqlite
 This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems completely in Javascript. This allows alternative browser storage options such as IndexedDB and Origin Private File System. Applications can opt to use either a synchronous or asynchronous (using Asyncify or JSPI) SQLite library build (an asynchronous build is required for asynchronous extensions).
 
-[IndexedDB](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IDBMinimalVFS.js) and [Origin Private File System](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/OriginPrivateFileSystemVFS.js) virtual file systems are among the examples provided as proof of concept.
+[IndexedDB](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IDBBatchAtomicVFS.js) and [Origin Private File System](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/OPFSAdaptiveVFS.js) virtual file systems are among the examples provided as proof of concept.
 
-[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser. More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
+[Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/?build=asyncify&config=IDBBatchAtomicVFS&reset) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks/?config=asyncify,IDBBatchAtomicVFS;default,OPFSCoopSyncVFS) with a modern desktop web browser. More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
 
 ## Build
 The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the pre-built artifacts in
@@ -51,16 +51,22 @@ Javascript wrappers for core SQLITE C API functions (and some others) are provid
   hello();
 ```
 
-The [implementation of `sqlite3.exec`](https://github.com/rhashimoto/wa-sqlite/blob/b5824ac0031da81712bee42671a917b252737c45/src/sqlite-api.js#L422-L434) may be of interest to anyone wanting more fine-grained use of SQLite statement objects (e.g. for binding parameters, explicit column datatypes, etc.).
+The [implementation of `sqlite3.exec`](https://github.com/rhashimoto/wa-sqlite/blob/eb6e62584b2864d5029f51c6afe155d71ba0caa8/src/sqlite-api.js#L409-L418) may be of interest to anyone wanting more fine-grained use of SQLite statement objects (e.g. for binding parameters, explicit column datatypes, etc.).
 
 [API reference](https://rhashimoto.github.io/wa-sqlite/docs/)
 
 ## Demo
 To serve the demo directly from the source tree:
 * `yarn start`
-* Open a browser on http://localhost:8000/demo/
+* Open a browser on http://localhost:8000/demo/?build=asyncify&config=IDBBatchAtomicVFS&reset
 
-The demo page provides access to databases on multiple VFS implementations.
+The demo page provides access to databases on multiple VFS implementations. Query parameters on the demo page URL can be used to specify the configuration and initial state:
+
+| *Parameter* | *Purpose* | *Values* | *Default* |
+|----|----|----|----|
+| build | Emscripten build type | default, asyncify, jspi | default |
+| config | select VFS | MemoryVFS, MemoryAsyncVFS, IDBBatchAtomicVFS, AccessHandlePoolVFS, OPFSAdaptiveVFS, OPFSCoopSyncVFS, OPFSPermutedVFS | uses SQLite internal memory |
+| reset | clear persistent storage | | |
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
 
