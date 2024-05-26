@@ -28,7 +28,7 @@ This is a new VFS that works with the synchronous WebAssembly build but also sup
 Transactions involving more than one main (non-temporary) database are not supported.
 
 ### OPFSPermutedVFS
-This is an experimental hybrid OPFS/IndexedDB VFS that multiple-reader with single-writer concurrency (like WAL, but without using the SQLite WAL implementation). It requires the proposed "readwrite-unsafe" locking mode for OPFS access handles.
+This is a hybrid OPFS/IndexedDB VFS that allows multiple-reader with single-writer concurrency (like WAL, but without using the SQLite WAL implementation). It requires the proposed "readwrite-unsafe" locking mode for OPFS access handles.
 
 Changing the page size after the database is created is not supported. Not filesystem transparent except immediately after VACUUM.
 
