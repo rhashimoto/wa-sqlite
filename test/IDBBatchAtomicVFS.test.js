@@ -1,46 +1,27 @@
-import { IDBBatchAtomicVFS } from "../src/examples/IDBBatchAtomicVFS.js";
-import { configureTests } from "./VFSTests.js";
+import { TestContext } from "./TestContext.js";
+import { vfs_xOpen } from "./vfs_xOpen.js";
+import { vfs_xAccess } from "./vfs_xAccess.js";
+import { vfs_xClose } from "./vfs_xClose.js";
+import { vfs_xRead } from "./vfs_xRead.js";
+import { vfs_xWrite } from "./vfs_xWrite.js";
 
-const IDB_DATABASE_NAME = 'IDBBatchAtomicVFS_DB';
+const CONFIG = 'IDBBatchAtomicVFS';
+const BUILDS = ['asyncify', 'jspi'];
 
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 300_000;
+const supportsJSPI = await TestContext.supportsJSPI();
 
-class TestVFS extends IDBBatchAtomicVFS {
-  constructor(options) {
-    super(IDB_DATABASE_NAME, options);
-    TestVFS.instances.push(this);
-  }
+describe(CONFIG, function() {
+  for (const build of BUILDS) {
+    if (build === 'jspi' && !supportsJSPI) return;
 
-  static instances = [];
-
-  static async clear() {
-    // Close all IndexedDB open databases.
-    for (const vfs of TestVFS.instances) {
-      await vfs.close();
-    }
-    TestVFS.instances = [];
-
-    // Remove the IndexedDB database.
-    await new Promise((resolve, reject) => {
-      const deleteRequest = indexedDB.deleteDatabase(IDB_DATABASE_NAME);
-      deleteRequest.addEventListener('success', resolve);
-      deleteRequest.addEventListener('error', reject);
+    describe(build, function() {
+      const context = new TestContext({ build, config: CONFIG });
+    
+      vfs_xAccess(context);
+      vfs_xOpen(context);
+      vfs_xClose(context);
+      vfs_xRead(context);
+      vfs_xWrite(context);
     });
-
-    // Clear all WebLocks.
-    const locks = await navigator.locks.query();
-    await Promise.all([...locks.held, ...locks.pending].map(lock => {
-      return new Promise(resolve => {
-        navigator.locks.request(lock.name, { steal: true }, resolve);
-      });
-    }));
   }
-}
-
-describe('IDBBatchAtomicVFS strict', function() {
-  configureTests(() => new TestVFS({ durability: 'strict' }), TestVFS.clear);
-});
-
-describe('IDBBatchAtomicVFS relaxed', function() {
-  configureTests(() => new TestVFS({ durability: 'relaxed' }), TestVFS.clear);
 });

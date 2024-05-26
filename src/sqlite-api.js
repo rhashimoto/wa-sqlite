@@ -6,6 +6,8 @@ export * from './sqlite-constants.js';
 const MAX_INT64 = 0x7fffffffffffffffn;
 const MIN_INT64 = -0x8000000000000000n;
 
+const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
 export class SQLiteError extends Error {
   constructor(message, code) {
     super(message);
@@ -25,6 +27,7 @@ const async = true;
 export function Factory(Module) {
   /** @type {SQLiteAPI} */ const sqlite3 = {};
 
+  Module.retryOps = [];
   const sqliteFreeAddress = Module._getSqliteFree();
 
   // Allocate some space for 32-bit returned values.
@@ -35,9 +38,10 @@ export function Factory(Module) {
   // memory (use sqlite3_free to deallocate).
   function createUTF8(s) {
     if (typeof s !== 'string') return 0;
-    const n = Module.lengthBytesUTF8(s);
-    const zts = Module._sqlite3_malloc(n + 1);
-    Module.stringToUTF8(s, zts, n + 1);
+    const utf8 = new TextEncoder().encode(s);
+    const zts = Module._sqlite3_malloc(utf8.byteLength + 1);
+    Module.HEAPU8.set(utf8, zts);
+    Module.HEAPU8[zts + utf8.byteLength] = 0;
     return zts;
   }
 
@@ -141,7 +145,6 @@ export function Factory(Module) {
       const ptr = Module._sqlite3_malloc(byteLength);
       Module.HEAPU8.subarray(ptr).set(value);
       const result = f(stmt, i, ptr, byteLength, sqliteFreeAddress);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -152,7 +155,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -163,7 +165,6 @@ export function Factory(Module) {
     return function(stmt, i, value) {
       verifyStatement(stmt);
       const result = f(stmt, i, value);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -176,7 +177,6 @@ export function Factory(Module) {
       if (value > 0x7fffffff || value < -0x80000000) return SQLite.SQLITE_RANGE;
 
       const result = f(stmt, i, value);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -191,7 +191,6 @@ export function Factory(Module) {
       const lo32 = value & 0xffffffffn;
       const hi32 = value >> 32n;
       const result = f(stmt, i, Number(lo32), Number(hi32));
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -202,7 +201,6 @@ export function Factory(Module) {
     return function(stmt, i) {
       verifyStatement(stmt);
       const result = f(stmt, i);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -213,7 +211,6 @@ export function Factory(Module) {
     return function(stmt, i) {
       verifyStatement(stmt);
       const result = f(stmt, i);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -225,7 +222,6 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const ptr = createUTF8(value);
       const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
-      // trace(fname, result);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -236,7 +232,6 @@ export function Factory(Module) {
     return function(db) {
       verifyDatabase(db);
       const result = f(db);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -281,7 +276,6 @@ export function Factory(Module) {
       const nBytes = sqlite3.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
       const result = Module.HEAPU8.subarray(address, address + nBytes);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -292,7 +286,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -303,7 +296,6 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -314,7 +306,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -327,7 +318,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -340,7 +330,6 @@ export function Factory(Module) {
       const lo32 = f(stmt, iCol);
       const hi32 = Module.getTempRet0();
       const result = cvt32x2ToBigInt(lo32, hi32);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -351,7 +340,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -371,7 +359,6 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -382,30 +369,30 @@ export function Factory(Module) {
     return function(stmt, iCol) {
       verifyStatement(stmt);
       const result = f(stmt, iCol);
-      // trace(fname, result);
       return result;
     };
   })();
 
   sqlite3.create_function = function(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) {
     verifyDatabase(db);
-    if (xFunc && !xStep && !xFinal) {
-      const result = Module.createFunction(db, zFunctionName, nArg, eTextRep, pApp, xFunc);
-      return check('sqlite3_create_function', result, db);
+    
+    // Convert SQLite callback arguments to JavaScript-friendly arguments.
+    function adapt(f) {
+      return f instanceof AsyncFunction ?
+        (async (ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n))) :
+        ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
     }
 
-    if (!xFunc && xStep && xFinal) {
-      const result = Module.createAggregate(db, zFunctionName, nArg, eTextRep, pApp, xStep, xFinal);
-      return check('sqlite3_create_function', result, db);
-    }
-
-    throw new SQLiteError('invalid function combination', SQLite.SQLITE_MISUSE);
-  };
-
-  sqlite3.create_module = function(db, zName, module, appData) {
-    verifyDatabase(db);
-    const result = Module.createModule(db, zName, module, appData);
-    return check('sqlite3_create_module', result, db);
+    const result = Module.create_function(
+      db,
+      zFunctionName,
+      nArg,
+      eTextRep,
+      pApp,
+      xFunc && adapt(xFunc),
+      xStep && adapt(xStep),
+      xFinal);
+    return check('sqlite3_create_function', result, db);
   };
 
   sqlite3.data_count = (function() {
@@ -414,20 +401,10 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
 
-  sqlite3.declare_vtab = (function() {
-    const fname = 'sqlite3_declare_vtab';
-    const f = Module.cwrap(fname, ...decl('ns:n'));
-    return function(pVTab, zSQL) {
-      const result = f(pVTab, zSQL);
-      return check('sqlite3_declare_vtab', result);
-    }
-  })();
-    
   sqlite3.exec = async function(db, sql, callback) {
     for await (const stmt of sqlite3.statements(db, sql)) {
       let columns;
@@ -446,12 +423,7 @@ export function Factory(Module) {
     const fname = 'sqlite3_finalize';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
-      if (!mapStmtToDB.has(stmt)) {
-        return SQLite.SQLITE_MISUSE;
-      }
       const result = await f(stmt);
-
-      const db = mapStmtToDB.get(stmt);
       mapStmtToDB.delete(stmt)
 
       // Don't throw on error here. Typically the error has already been
@@ -502,37 +474,25 @@ export function Factory(Module) {
     return async function(zFilename, flags, zVfs) {
       flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
       zVfs = createUTF8(zVfs);
-      const result = await f(zFilename, tmpPtr[0], flags, zVfs);
+      try {
+        // Allow retry operations.
+        const rc = await retry(() => f(zFilename, tmpPtr[0], flags, zVfs));
 
-      const db = Module.getValue(tmpPtr[0], '*');
-      databases.add(db);
-      Module._sqlite3_free(zVfs);
+        const db = Module.getValue(tmpPtr[0], '*');
+        databases.add(db);
 
-      Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-      check(fname, result);
-      return db;
-    };
-  })();
-
-  sqlite3.prepare_v2 = (function() {
-    const fname = 'sqlite3_prepare_v2';
-    const f = Module.cwrap(fname, ...decl('nnnnn:n'), { async });
-    return async function(db, sql) {
-      const result = await f(db, sql, -1, tmpPtr[0], tmpPtr[1]);
-      check(fname, result, db);
-
-      const stmt = Module.getValue(tmpPtr[0], '*');
-      if (stmt) {
-        mapStmtToDB.set(stmt, db);
-        return { stmt, sql: Module.getValue(tmpPtr[1], '*') };
+        Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
+        check(fname, rc);
+        return db;
+      } finally {
+        Module._sqlite3_free(zVfs);
       }
-      return null;
     };
   })();
 
   sqlite3.progress_handler = function(db, nProgressOps, handler, userData) {
     verifyDatabase(db);
-    Module.progressHandler(db, nProgressOps, handler, userData);
+    Module.progress_handler(db, nProgressOps, handler, userData);
   };;
 
   sqlite3.reset = (function() {
@@ -644,9 +604,27 @@ export function Factory(Module) {
     return row;
   };
 
-  sqlite3.set_authorizer = function(db, authFunction, userData) {
+  sqlite3.set_authorizer = function(db, xAuth, pApp) {
     verifyDatabase(db);
-    const result = Module.setAuthorizer(db, authFunction, userData);
+
+    // Convert SQLite callback arguments to JavaScript-friendly arguments.
+    function cvtArgs(_, iAction, p3, p4, p5, p6) {
+      return [
+        _,
+        iAction,
+        Module.UTF8ToString(p3),
+        Module.UTF8ToString(p4),
+        Module.UTF8ToString(p5),
+        Module.UTF8ToString(p6)
+      ];
+    };
+    function adapt(f) {
+      return f instanceof AsyncFunction ?
+        (async (_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6))) :
+        ((_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6)));
+    }
+
+    const result = Module.set_authorizer(db, adapt(xAuth), pApp);
     return check('sqlite3_set_authorizer', result, db);
   };;
   
@@ -656,27 +634,80 @@ export function Factory(Module) {
     return function(stmt) {
       verifyStatement(stmt);
       const result = f(stmt);
-      // trace(fname, result);
       return result;
     };
   })();
 
-  sqlite3.statements = function(db, sql) {
+  sqlite3.statements = function(db, sql, options = {}) {
+    const prepare = Module.cwrap(
+      'sqlite3_prepare_v3',
+      'number',
+      ['number', 'number', 'number', 'number', 'number', 'number'],
+      { async: true });
+
     return (async function*() {
-      const str = sqlite3.str_new(db, sql);
-      let prepared = { stmt: null, sql: sqlite3.str_value(str) };
+      const onFinally = [];
       try {
-        while (prepared = await sqlite3.prepare_v2(db, prepared.sql)) {
-          // console.log(sqlite3.sql(prepared.stmt));
-          yield prepared.stmt;
-          sqlite3.finalize(prepared.stmt);
-          prepared.stmt = null;
+        // Encode SQL string to UTF-8.
+        const utf8 = new TextEncoder().encode(sql);
+
+        // Copy encoded string to WebAssembly memory. The SQLite docs say
+        // zero-termination is a minor optimization so add room for that.
+        // Also add space for the statement handle and SQL tail pointer.
+        const allocSize = utf8.byteLength - (utf8.byteLength % 4) + 12;
+        const pzHead = Module._sqlite3_malloc(allocSize);
+        const pzEnd = pzHead + utf8.byteLength + 1;
+        onFinally.push(() => Module._sqlite3_free(pzHead));
+        Module.HEAPU8.set(utf8, pzHead);
+        Module.HEAPU8[pzEnd - 1] = 0;
+  
+        // Use extra space for the statement handle and SQL tail pointer.
+        const pStmt = pzHead + allocSize - 8;
+        const pzTail = pzHead + allocSize - 4;
+
+        // Ensure that statement handles are not leaked.
+        let stmt;
+        function maybeFinalize() {
+          if (stmt && !options.unscoped) {
+            sqlite3.finalize(stmt);
+          }
+          stmt = 0;
         }
+        onFinally.push(maybeFinalize);
+        
+        // Loop over statements.
+        Module.setValue(pzTail, pzHead, '*');
+        do {
+          // Reclaim resources for the previous iteration.
+          maybeFinalize();
+
+          // Call sqlite3_prepare_v3() for the next statement.
+          // Allow retry operations.
+          const zTail = Module.getValue(pzTail, '*');
+          const rc = await retry(() => {
+            return prepare(
+              db,
+              zTail,
+              pzEnd - pzTail,
+              options.flags || 0,
+              pStmt,
+              pzTail);
+          });
+
+          if (rc !== SQLite.SQLITE_OK) {
+            check('sqlite3_prepare_v3', rc, db);
+          }
+          
+          stmt = Module.getValue(pStmt, '*');
+          if (stmt) {
+            mapStmtToDB.set(stmt, db);
+            yield stmt;
+          }
+        } while (stmt);
       } finally {
-        if (prepared?.stmt) {
-          sqlite3.finalize(prepared.stmt);
+        while (onFinally.length) {
+          onFinally.pop()();
         }
-        sqlite3.str_finish(str);
       }
     })();
   };
@@ -686,68 +717,13 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return async function(stmt) {
       verifyStatement(stmt);
-      const result = await f(stmt);
-      return check(fname, result, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
+
+      // Allow retry operations.
+      const rc = await retry(() => f(stmt));
+
+      return check(fname, rc, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
     };
   })();
-
-  // Duplicate some of the SQLite dynamic string API but without
-  // calling SQLite (except for memory allocation). We need some way
-  // to transfer Javascript strings and might as well use an API
-  // that mimics the SQLite API.
-  let stringId = 0;
-  const strings = new Map();
-
-  sqlite3.str_new = function(db, s = '') {
-    const sBytes = Module.lengthBytesUTF8(s);
-    const str = stringId++ & 0xffffffff;
-    const data = {
-      offset: Module._sqlite3_malloc(sBytes + 1),
-      bytes: sBytes
-    };
-    strings.set(str, data);
-    Module.stringToUTF8(s, data.offset, data.bytes + 1);
-    return str;
-  };
-
-  sqlite3.str_appendall = function(str, s) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    const data = strings.get(str);
-
-    const sBytes = Module.lengthBytesUTF8(s);
-    const newBytes = data.bytes + sBytes;
-    const newOffset = Module._sqlite3_malloc(newBytes + 1);
-    const newArray = Module.HEAPU8.subarray(newOffset, newOffset + newBytes + 1);
-    newArray.set(Module.HEAPU8.subarray(data.offset, data.offset + data.bytes));
-    Module.stringToUTF8(s, newOffset + data.bytes, sBytes + 1);
-
-    Module._sqlite3_free(data.offset);
-    data.offset = newOffset;
-    data.bytes = newBytes;
-    strings.set(str, data);
-  };
-
-  sqlite3.str_finish = function(str) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    const data = strings.get(str);
-    strings.delete(str);
-    Module._sqlite3_free(data.offset);
-  };
-
-  sqlite3.str_value = function(str) {
-    if (!strings.has(str)) {
-      throw new SQLiteError('not a string', SQLite.SQLITE_MISUSE);
-    }
-    return strings.get(str).offset;
-  };
-
-  sqlite3.user_data = function(context) {
-    return Module.getFunctionUserData(context);
-  };
 
   sqlite3.value = function(pValue) {
     const type = sqlite3.value_type(pValue);
@@ -776,7 +752,6 @@ export function Factory(Module) {
       const nBytes = sqlite3.value_bytes(pValue);
       const address = f(pValue);
       const result = Module.HEAPU8.subarray(address, address + nBytes);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -786,7 +761,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -796,7 +770,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -806,7 +779,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -818,7 +790,6 @@ export function Factory(Module) {
       const lo32 = f(pValue);
       const hi32 = Module.getTempRet0();
       const result = cvt32x2ToBigInt(lo32, hi32);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -828,7 +799,6 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:s'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
@@ -838,18 +808,16 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
       const result = f(pValue);
-      // trace(fname, result);
       return result;
     };
   })();
 
   sqlite3.vfs_register = function(vfs, makeDefault) {
-    const result = Module.registerVFS(vfs, makeDefault);
+    const result = Module.vfs_register(vfs, makeDefault);
     return check('sqlite3_vfs_register', result);
   };
 
   function check(fname, result, db = null, allowed = [SQLite.SQLITE_OK]) {
-    // trace(fname, result);
     if (allowed.includes(result)) return result;
     const message = db ?
       Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :
@@ -857,16 +825,27 @@ export function Factory(Module) {
     throw new SQLiteError(message, result);
   }
 
-  return sqlite3;
-}
+  // This function is used to automatically retry failed calls that
+  // have pending retry operations that should allow the retry to
+  // succeed.
+  async function retry(f) {
+    let rc;
+    do {
+      // Wait for all pending retry operations to complete. This is
+      // normally empty on the first loop iteration.
+      if (Module.retryOps.length) {
+        await Promise.all(Module.retryOps);
+        Module.retryOps = [];
+      }
+      
+      rc = await f();
 
-function trace(...args) {
-  // const date = new Date();
-  // const t = date.getHours().toString().padStart(2, '0') + ':' +
-  //           date.getMinutes().toString().padStart(2, '0') + ':' +
-  //           date.getSeconds().toString().padStart(2, '0') + '.' +
-  //           date.getMilliseconds().toString().padStart(3, '0');
-  // console.debug(t, ...args);
+      // Retry on failure with new pending retry operations.
+    } while (rc && Module.retryOps.length);
+    return rc;
+  }
+
+  return sqlite3;
 }
 
 // Helper function to use a more compact signature specification.

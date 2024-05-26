@@ -1,14 +1,18 @@
-// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 import { MemoryVFS } from './MemoryVFS.js';
 
-// Asynchronous memory filesystem. This filesystem requires an Asyncify
-// build. It is mainly useful for testing that the Asyncify build is
-// working.
+// Sample asynchronous in-memory filesystem. This filesystem requires an
+// asynchronous WebAssembly build (Asyncify or JSPI).
 export class MemoryAsyncVFS extends MemoryVFS {
-  name = 'memory-async';
-  
-  constructor() {
-    super();
+
+  static async create(name, module) {
+    const vfs = new MemoryVFS(name, module);
+    await vfs.isReady();
+    return vfs;
+  }
+
+  constructor(name, module) {
+    super(name, module);
   }
 
   async close() {
@@ -22,75 +26,75 @@ export class MemoryAsyncVFS extends MemoryVFS {
    * @param {number} fileId 
    * @param {number} flags 
    * @param {DataView} pOutFlags 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xOpen(name, fileId, flags, pOutFlags) {
-    return this.handleAsync(async () => super.xOpen(name, fileId, flags, pOutFlags));
+  async jOpen(name, fileId, flags, pOutFlags) {
+    return super.jOpen(name, fileId, flags, pOutFlags);
   }
 
   /**
    * @param {number} fileId 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xClose(fileId) {
-    return this.handleAsync(async () => super.xClose(fileId));
-  }
-
-  /**
-   * @param {number} fileId 
-   * @param {Uint8Array} pData 
-   * @param {number} iOffset
-   * @returns {number}
-   */
-  xRead(fileId, pData, iOffset) {
-    return this.handleAsync(async () => super.xRead(fileId, pData, iOffset));
+  async jClose(fileId) {
+    return super.jClose(fileId);
   }
 
   /**
    * @param {number} fileId 
    * @param {Uint8Array} pData 
    * @param {number} iOffset
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xWrite(fileId, pData, iOffset) {
-    return this.handleAsync(async () => super.xWrite(fileId, pData, iOffset));
+  async jRead(fileId, pData, iOffset) {
+    return super.jRead(fileId, pData, iOffset);
+  }
+
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {Promise<number>}
+   */
+  async jWrite(fileId, pData, iOffset) {
+    return super.jWrite(fileId, pData, iOffset);
   }
 
   /**
    * @param {number} fileId 
    * @param {number} iSize 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xTruncate(fileId, iSize) {
-    return this.handleAsync(async () => super.xTruncate(fileId, iSize));
+  async xTruncate(fileId, iSize) {
+    return super.jTruncate(fileId, iSize);
   }
 
   /**
    * @param {number} fileId 
    * @param {DataView} pSize64 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xFileSize(fileId, pSize64) {
-    return this.handleAsync(async () => super.xFileSize(fileId, pSize64));
+  async jFileSize(fileId, pSize64) {
+    return super.jFileSize(fileId, pSize64);
   }
 
   /**
    * 
    * @param {string} name 
    * @param {number} syncDir 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xDelete(name, syncDir) {
-    return this.handleAsync(async () => super.xDelete(name, syncDir));
+  async jDelete(name, syncDir) {
+    return super.jDelete(name, syncDir);
   }
 
   /**
    * @param {string} name 
    * @param {number} flags 
    * @param {DataView} pResOut 
-   * @returns {number}
+   * @returns {Promise<number>}
    */
-  xAccess(name, flags, pResOut) {
-    return this.handleAsync(async () => super.xAccess(name, flags, pResOut));
+  async jAccess(name, flags, pResOut) {
+    return super.jAccess(name, flags, pResOut);
   }
 }

@@ -1,4 +1,5 @@
 // Copyright 2023 Roy T. Hashimoto. All Rights Reserved.
+import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
 
 const SECTOR_SIZE = 4096;
@@ -23,17 +24,15 @@ const PERSISTENT_FILE_TYPES =
 
 const DEFAULT_CAPACITY = 6;
 
-function log(...args) {
-  // console.debug(...args);
-}
-
 /**
  * This VFS uses the updated Access Handle API with all synchronous methods
  * on FileSystemSyncAccessHandle (instead of just read and write). It will
  * work with the regular SQLite WebAssembly build, i.e. the one without
  * Asyncify.
  */
-export class AccessHandlePoolVFS extends VFS.Base {
+export class AccessHandlePoolVFS extends FacadeVFS {
+  log = null; //function(...args) { console.log(`[${contextName}]`, ...args) };
+
   // All the OPFS files the VFS uses are contained in one flat directory
   // specified in the constructor. No other files should be written here.
   #directoryPath;
@@ -52,23 +51,28 @@ export class AccessHandlePoolVFS extends VFS.Base {
 
   #mapIdToFile = new Map();
 
-  constructor(directoryPath) {
-    super();
-    this.#directoryPath = directoryPath;
-    this.isReady = this.reset().then(async () => {
-      if (this.getCapacity() === 0) {
-        await this.addCapacity(DEFAULT_CAPACITY);
-      }
-    });
+  static async create(name, module) {
+    const vfs = new AccessHandlePoolVFS(name, module);
+    await vfs.isReady();
+    return vfs;
+  }
+  
+  constructor(name, module) {
+    super(name, module);
+    this.#directoryPath = name;
   }
 
-  get name() { return 'AccessHandlePool'; }
-
-  xOpen(name, fileId, flags, pOutFlags) {
-    log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
+  /**
+   * @param {string?} zName 
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @param {DataView} pOutFlags 
+   * @returns {number}
+   */
+  jOpen(zName, fileId, flags, pOutFlags) {
     try {
       // First try to open a path that already exists in the file system.
-      const path = name ? this.#getPath(name) : Math.random().toString(36);
+      const path = zName ? this.#getPath(zName) : Math.random().toString(36);
       let accessHandle = this.#mapPathToAccessHandle.get(path);
       if (!accessHandle && (flags & VFS.SQLITE_OPEN_CREATE)) {
         // File not found so try to create it.
@@ -98,11 +102,13 @@ export class AccessHandlePoolVFS extends VFS.Base {
     }
   }
 
-  xClose(fileId) {
+  /**
+   * @param {number} fileId 
+   * @returns {number}
+   */
+  jClose(fileId) {
     const file = this.#mapIdToFile.get(fileId);
     if (file) {
-      log(`xClose ${file.path}`);
-
       file.accessHandle.flush();
       this.#mapIdToFile.delete(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
@@ -112,11 +118,17 @@ export class AccessHandlePoolVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
-  xRead(fileId, pData, iOffset) {
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
+  jRead(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xRead ${file.path} ${pData.byteLength} ${iOffset}`);
-
-    const nBytes = file.accessHandle.read(pData, { at: HEADER_OFFSET_DATA + iOffset });
+    const nBytes = file.accessHandle.read(
+      pData.subarray(),
+      { at: HEADER_OFFSET_DATA + iOffset });
     if (nBytes < pData.byteLength) {
       pData.fill(0, nBytes, pData.byteLength);
       return VFS.SQLITE_IOERR_SHORT_READ;
@@ -124,58 +136,81 @@ export class AccessHandlePoolVFS extends VFS.Base {
     return VFS.SQLITE_OK;
   }
 
-  xWrite(fileId, pData, iOffset) {
+  /**
+   * @param {number} fileId 
+   * @param {Uint8Array} pData 
+   * @param {number} iOffset
+   * @returns {number}
+   */
+  jWrite(fileId, pData, iOffset) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xWrite ${file.path} ${pData.byteLength} ${iOffset}`);
-
-    const nBytes = file.accessHandle.write(pData, { at: HEADER_OFFSET_DATA + iOffset });
+    const nBytes = file.accessHandle.write(
+      pData.subarray(),
+      { at: HEADER_OFFSET_DATA + iOffset });
     return nBytes === pData.byteLength ? VFS.SQLITE_OK : VFS.SQLITE_IOERR;
   }
 
-  xTruncate(fileId, iSize) {
+  /**
+   * @param {number} fileId 
+   * @param {number} iSize 
+   * @returns {number}
+   */
+  jTruncate(fileId, iSize) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xTruncate ${file.path} ${iSize}`);
-
     file.accessHandle.truncate(HEADER_OFFSET_DATA + iSize);
     return VFS.SQLITE_OK;
   }
 
-  xSync(fileId, flags) {
+  /**
+   * @param {number} fileId 
+   * @param {number} flags 
+   * @returns {number}
+   */
+  jSync(fileId, flags) {
     const file = this.#mapIdToFile.get(fileId);
-    log(`xSync ${file.path} ${flags}`);
-
     file.accessHandle.flush();
     return VFS.SQLITE_OK;
   }
 
-  xFileSize(fileId, pSize64) {
+  /**
+   * @param {number} fileId 
+   * @param {DataView} pSize64 
+   * @returns {number}
+   */
+  jFileSize(fileId, pSize64) {
     const file = this.#mapIdToFile.get(fileId);
     const size = file.accessHandle.getSize() - HEADER_OFFSET_DATA;
-    log(`xFileSize ${file.path} ${size}`);
     pSize64.setBigInt64(0, BigInt(size), true);
     return VFS.SQLITE_OK;
   }
 
-  xSectorSize(fileId) {
-    log('xSectorSize', SECTOR_SIZE);
+  jSectorSize(fileId) {
     return SECTOR_SIZE;
   }
 
-  xDeviceCharacteristics(fileId) {
-    log('xDeviceCharacteristics');
+  jDeviceCharacteristics(fileId) {
     return VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
   }
 
-  xAccess(name, flags, pResOut) {
-    log(`xAccess ${name} ${flags}`);
-    const path = this.#getPath(name);
+  /**
+   * @param {string} zName 
+   * @param {number} flags 
+   * @param {DataView} pResOut 
+   * @returns {number}
+   */
+  jAccess(zName, flags, pResOut) {
+    const path = this.#getPath(zName);
     pResOut.setInt32(0, this.#mapPathToAccessHandle.has(path) ? 1 : 0, true);
     return VFS.SQLITE_OK;
   }
 
-  xDelete(name, syncDir) {
-    log(`xDelete ${name} ${syncDir}`);
-    const path = this.#getPath(name);
+  /**
+   * @param {string} zName 
+   * @param {number} syncDir 
+   * @returns {number}
+   */
+  jDelete(zName, syncDir) {
+    const path = this.#getPath(zName);
     this.#deletePath(path);
     return VFS.SQLITE_OK;
   }
@@ -184,25 +219,23 @@ export class AccessHandlePoolVFS extends VFS.Base {
     await this.#releaseAccessHandles();
   }
 
-  /**
-   * Release and reacquire all OPFS access handles. This must be called
-   * and awaited before any SQLite call that uses the VFS and also before
-   * any capacity changes.
-   */
-  async reset() {
-    await this.isReady;
+  async isReady() {
+    if (!this.#directoryHandle) {
+      // All files are stored in a single directory.
+      let handle = await navigator.storage.getDirectory();
+      for (const d of this.#directoryPath.split('/')) {
+        if (d) {
+          handle = await handle.getDirectoryHandle(d, { create: true });
+        }
+      }
+      this.#directoryHandle = handle;
 
-    // All files are stored in a single directory.
-    let handle = await navigator.storage.getDirectory();
-    for (const d of this.#directoryPath.split('/')) {
-      if (d) {
-        handle = await handle.getDirectoryHandle(d, { create: true });
+      await this.#acquireAccessHandles();
+      if (this.getCapacity() === 0) {
+        await this.addCapacity(DEFAULT_CAPACITY);
       }
     }
-    this.#directoryHandle = handle;
-
-    await this.#releaseAccessHandles();
-    await this.#acquireAccessHandles();
+    return true;
   }
 
   /**

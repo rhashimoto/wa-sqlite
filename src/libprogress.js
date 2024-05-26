@@ -1,31 +1,27 @@
-const progress_methods = {
-  $progress_method_support__postset: 'progress_method_support();',
-  $progress_method_support: function() {
-    const mapDbToProgress = new Map();
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
+// This file should be included in the build with --post-js.
 
-    Module['progressHandler'] =
-      function(db, nProgressOps, f, userData) {
-        if (f) {
-          mapDbToProgress.set(db, { f, userData });
-        } else {
-          mapDbToProgress.delete(db);
-        }
-        return ccall('progress_handler', null, ['number', 'number'], [db, nProgressOps])
-      };
+(function() {
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  let pAsyncFlags = 0;
 
-    _jsProgress = function(db) {
-      if (mapDbToProgress.has(db)) {
-        const { f, userData } = mapDbToProgress.get(db);
-        return f(userData);
-      }
-      return 0;
+  Module['progress_handler'] = function(db, nOps, xProgress, pApp) {
+    if (pAsyncFlags) {
+      Module['deleteCallback'](pAsyncFlags);
+      Module['_sqlite3_free'](pAsyncFlags);
+      pAsyncFlags = 0;
     }
-  }
-};
 
-const PROGRESS_METHOD_NAMES = ["jsProgress"];
-for (const method of PROGRESS_METHOD_NAMES) {
-  progress_methods[method] = function() {};
-  progress_methods[`${method}__deps`] = ['$progress_method_support'];
-}
-mergeInto(LibraryManager.library, progress_methods);
+    pAsyncFlags = Module['_sqlite3_malloc'](4);
+    setValue(pAsyncFlags, xProgress instanceof AsyncFunction ? 1 : 0, 'i32');
+
+    ccall(
+      'libprogress_progress_handler',
+      'number',
+      ['number', 'number', 'number', 'number'],
+      [db, nOps, xProgress ? 1 : 0, pAsyncFlags]);
+    if (xProgress) {
+      Module['setCallback'](pAsyncFlags, _ => xProgress(pApp));
+    }
+  };
+})();
