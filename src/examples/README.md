@@ -23,7 +23,7 @@ If the new mode is not supported then only journaling modes "delete" (default), 
 This OPFS VFS can be used with the synchronous WebAssembly build.
 
 ### OPFSCoopSyncVFS
-This is a new VFS that works with the synchronous WebAssembly build but also supports multiple connections.
+This is a new VFS that works with the synchronous WebAssembly build but also supports multiple connections and is filesystem transparent.
 
 Transactions involving more than one main (non-temporary) database are not supported.
 
