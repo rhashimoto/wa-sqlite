@@ -18,7 +18,7 @@ import { IDBBatchAtomicVFS as MyVFS } from '../../src/examples/IDBBatchAtomicVFS
 // import { OPFSCoopSyncVFS as MyVFS } from '../src/examples/OPFSCoopSyncVFS.js';
 // import { OPFSPermutedVFS as MyVFS } from '../src/examples/OPFSPermutedVFS.js';
 
-import * as SQLite from 'wa-sqlite';
+import * as SQLite from '../../src/sqlite-api.js';
 
 Promise.resolve().then(async () => {
   // Set up communications with the main thread.
