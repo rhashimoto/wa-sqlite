@@ -1,6 +1,5 @@
 import * as VFS from "../../src/VFS.js";
 import { IDBBatchAtomicVFS } from "../../src/examples/IDBBatchAtomicVFS.js";
-import { sql_0001 } from "../../test/sql_0001.js";
 
 const SEARCH_PARAMS = new URLSearchParams(location.search);
 const IDB_NAME = SEARCH_PARAMS.get('idb') ?? 'sqlite-vfs';
