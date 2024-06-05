@@ -41,7 +41,7 @@ OPFSCoopSyncVFS uses an access handle pool for files other than the main databas
 
 To keep all the methods synchronous, when asynchronous operations are necessary (e.g. for locking) a method returns an error. The library wrapper API internally handles the error, waits for the asynchronous operation to complete, and then repeats the operation. This is not very efficient, but is only necessary when opening a database or under active multiple connection contention.
 
-Transactions that write to more than one main (non-temporary) database are not supported.
+Transactions that access more than one main (non-temporary) database are not supported.
 
 ### OPFSPermutedVFS
 This is a hybrid OPFS/IndexedDB VFS that allows high concurrency - simultaneous access by multiple readers and a single writer. It requires the proposed "readwrite-unsafe" locking mode for OPFS access handles (only on Chromium browsers as of June 2024).
