@@ -111,7 +111,7 @@ export const WebLocksMixin = superclass => class extends superclass {
           return this.#checkReservedExclusive(lockState, pResOut);
         case 'shared':
         case 'shared+hint':
-            return await this.#checkReservedShared(lockState, pResOut);
+          return await this.#checkReservedShared(lockState, pResOut);
       }
     } catch (e) {
       console.error('WebLocksMixin: check reserved lock error', e);
@@ -151,7 +151,7 @@ export const WebLocksMixin = superclass => class extends superclass {
       if (!await this.#acquire(lockState, 'access')) {
         return VFS.SQLITE_BUSY;
       }
-      console.assert(lockState.access);
+      console.assert(!!lockState.access);
     }
     lockState.type = lockType;
     return VFS.SQLITE_OK;
@@ -210,7 +210,7 @@ export const WebLocksMixin = superclass => class extends superclass {
             await this.#acquire(lockState, 'access', SHARED);
             lockState.gate();
             console.assert(!lockState.gate);
-            console.assert(lockState.access);
+            console.assert(!!lockState.access);
             console.assert(!lockState.reserved);
             break;
 
@@ -245,7 +245,7 @@ export const WebLocksMixin = superclass => class extends superclass {
             lockState.access();
             console.assert(!lockState.gate);
             console.assert(!lockState.access);
-            console.assert(lockState.reserved);
+            console.assert(!!lockState.reserved);
             break;
 
           case VFS.SQLITE_LOCK_EXCLUSIVE:
@@ -261,8 +261,8 @@ export const WebLocksMixin = superclass => class extends superclass {
               lockState.gate();
               return VFS.SQLITE_BUSY;
             }
-            console.assert(lockState.gate);
-            console.assert(lockState.access);
+            console.assert(!!lockState.gate);
+            console.assert(!!lockState.access);
             console.assert(!lockState.reserved);
             break;
 
@@ -285,9 +285,9 @@ export const WebLocksMixin = superclass => class extends superclass {
               lockState.gate();
               return VFS.SQLITE_BUSY;
             }
-            console.assert(lockState.gate);
-            console.assert(lockState.access);
-            console.assert(lockState.reserved);
+            console.assert(!!lockState.gate);
+            console.assert(!!lockState.access);
+            console.assert(!!lockState.reserved);
             break;
 
           default:
@@ -330,7 +330,7 @@ export const WebLocksMixin = superclass => class extends superclass {
           lockState.gate();
           lockState.reserved?.();
           lockState.hint?.();
-          console.assert(lockState.access);
+          console.assert(!!lockState.access);
           console.assert(!lockState.gate);
           console.assert(!lockState.reserved);
           break;
@@ -341,7 +341,7 @@ export const WebLocksMixin = superclass => class extends superclass {
           await this.#acquire(lockState, 'access', SHARED);
           lockState.reserved();
           lockState.hint?.();
-          console.assert(lockState.access);
+          console.assert(!!lockState.access);
           console.assert(!lockState.gate);
           console.assert(!lockState.reserved);
           break;
@@ -358,10 +358,11 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async #checkReservedShared(lockState, pResOut) {
     if (await this.#acquire(lockState, 'reserved', POLL_SHARED)) {
+      // We were able to get the lock so it was not reserved.
       lockState.reserved();
-      pResOut.setInt32(0, 1, true);
-    } else {
       pResOut.setInt32(0, 0, true);
+    } else {
+      pResOut.setInt32(0, 1, true);
     }
     return VFS.SQLITE_OK;
   }
