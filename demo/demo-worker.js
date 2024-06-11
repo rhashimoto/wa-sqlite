@@ -43,6 +43,11 @@ const BUILDS = new Map([
     vfsOptions: { lockPolicy: 'shared+hint' }
   },
   {
+    name: 'OPFSAnyContextVFS',
+    vfsModule: '../src/examples/OPFSAnyContextVFS.js',
+    vfsOptions: { lockPolicy: 'shared+hint' }
+  },
+  {
     name: 'OPFSCoopSyncVFS',
     vfsModule: '../src/examples/OPFSCoopSyncVFS.js',
   },

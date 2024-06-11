@@ -20,6 +20,7 @@ const CONFIGS = new Map([
   ['MemoryAsyncVFS', ASYNC_BUILDS],
   ['IDBBatchAtomicVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
+  ['OPFSAnyContextVFS', ASYNC_BUILDS],
   ['OPFSPermutedVFS', ASYNC_BUILDS],
 ]);
 

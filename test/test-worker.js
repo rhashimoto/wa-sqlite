@@ -44,6 +44,10 @@ const VFS_CONFIGS = new Map([
     vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
   },
   {
+    name: 'OPFSAnyContextVFS',
+    vfsModule: '../src/examples/OPFSAnyContextVFS.js',
+  },
+  {
     name: 'OPFSPermutedVFS',
     vfsModule: '../src/examples/OPFSPermutedVFS.js',
   },
