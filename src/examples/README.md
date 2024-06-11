@@ -16,6 +16,15 @@ IDBBatchAtomicVFS can trade durability for performance by setting `PRAGMA synchr
 
 Changing the page size after the database is created is not supported (this is a change from pre-1.0).
 
+### AccessHandlePoolVFS
+This is an OPFS VFS that has all synchronous methods, i.e. they don't return Promises. This allows it to be used with a with a synchronous WebAssembly build and that has definite performance advantages.
+
+AccessHandlePoolVFS works by pre-opening a number of access handles and associating them with SQLite open requests as needed. Operation is restricted to a single wa-sqlite instance, so multiple connections are not supported.
+
+The silver lining to not allowing multiple connections is that there is no drawback to using `PRAGMA locking_mode=exclusive`. This in turn allows `PRAGMA journal_mode=wal`, which can significantly reduce write transaction overhead.
+
+This VFS is not filesystem transparent, which means that its database files in OPFS cannot be directly imported and exported.
+
 ### OPFSAdaptiveVFS
 This VFS is fundamentally a straightforward mapping of OPFS access handles to VFS methods, but adds two different techniques to support multiple connections.
 
@@ -25,14 +34,10 @@ A proposed change to OPFS allows there to be multiple open access handles on a f
 
 If multiple open access handles are not supported then only journaling modes "delete" (default), "memory", and "off" are allowed.
 
-### AccessHandlePoolVFS
-This is an OPFS VFS that has all synchronous methods, i.e. they don't return Promises. This allows it to be used with a with a synchronous WebAssembly build and that has definite performance advantages.
+### OPFSAnyContextVFS
+This VFS uses the slower File and FileSystemWritableFileStream OPFS APIs instead of synchronous access handles. This should allow it to be used on any context, i.e. not just a dedicated Worker.
 
-AccessHandlePoolVFS works by pre-opening a number of access handles and associating them with SQLite open requests as needed. Operation is restricted to a single wa-sqlite instance, so multiple connections are not supported.
-
-The silver lining to not allowing multiple connections is that there is no drawback to using `PRAGMA locking_mode=exclusive`. This in turn allows `PRAGMA journal_mode=wal`, which can significantly reduce write transaction overhead.
-
-This VFS is not filesystem transparent, which means that its database files in OPFS cannot be directly imported and exported.
+Read performance should be only somewhat slower, and might even be better than messaging overhead to communicate with a Worker. Write performance, however, will be very bad and will be increasingly worse as the file grows. It is recommended to use it only for read-only or nearly read-only databases.
 
 ### OPFSCoopSyncVFS
 This VFS is a synchronous OPFS VFS (like AccessHandlePoolVFS) that allows multiple connections and is filesystem transparent (unlike AccessHandlePoolVFS).
@@ -54,21 +59,21 @@ Changing the page size after the database is created is not supported. Not files
 
 ## VFS Comparison
 
-||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OPFSAdaptiveVFS|AccessHandlePoolVFS|OPFSCoopSyncVFS|OPFSPermutedVFS|
-|-|-|-|-|-|-|-|-|
-|Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS|OPFS/IndexedDB|
-|Synchronous build|✅|:x:|:x:|:x:|✅|✅|:x:|
+||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OPFSAdaptiveVFS|AccessHandlePoolVFS|OPFSAnyContextVFS|OPFSCoopSyncVFS|OPFSPermutedVFS|
+|-|-|-|-|-|-|-|-|-|
+|Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS|OPFS|OPFS/IndexedDB|
+|Synchronous build|✅|:x:|:x:|:x:|✅|:x:|✅|:x:|
 |Asyncify build|✅|✅|✅|✅|✅|✅|✅|
-|JSPI build|✅|✅|✅|✅|✅|✅|✅|
-|Contexts|All|All|All|Worker|Worker|Worker|Worker|
-|Multiple connections|:x:|:x:|✅|✅|:x:|✅|✅[^1]|
-|Full durability|✅|✅|✅|✅|✅|✅|✅|
-|Relaxed durability|:x:|:x:|✅|:x:|:x:|:x:|✅|
-|Filesystem transparency|:x:|:x:|:x:|✅|:x:|✅|:x:[^2]|
-|Write-ahead logging|:x:|:x:|:x:|:x:|:x:|:x:|✅[^3]|
-|Multi-database transactions|✅|✅|✅|✅|✅|:x:|✅|
-|Change page size|✅|✅|:x:|✅|✅|✅|:x:|
-|No COOP/COEP requirements|✅|✅|✅|✅|✅|✅|✅|
+|JSPI build|✅|✅|✅|✅|✅|✅|✅|✅|
+|Contexts|All|All|All|Worker|Worker|All|Worker|Worker|
+|Multiple connections|:x:|:x:|✅|✅|:x:|✅|✅|✅[^1]|
+|Full durability|✅|✅|✅|✅|✅|✅|✅|✅|
+|Relaxed durability|:x:|:x:|✅|:x:|:x:|:x:|:x:|✅|
+|Filesystem transparency|:x:|:x:|:x:|✅|:x:|✅|✅|:x:[^2]|
+|Write-ahead logging|:x:|:x:|:x:|:x:|:x:|:x:|:x:|✅[^3]|
+|Multi-database transactions|✅|✅|✅|✅|✅|✅|:x:|✅|
+|Change page size|✅|✅|:x:|✅|✅|✅|✅|:x:|
+|No COOP/COEP requirements|✅|✅|✅|✅|✅|✅|✅|✅|
 
 [^1]: Requires FileSystemSyncAccessHandle readwrite-unsafe locking mode support.
 [^2]: Only filesystem transparent immediately after VACUUM.
