@@ -13,6 +13,7 @@ import SQLiteESMFactory from '../../dist/wa-sqlite-async.mjs';
 // FileSystemSyncAccessHandle (generally any OPFS VFS) will run only
 // in a Worker.
 import { IDBBatchAtomicVFS as MyVFS } from '../../src/examples/IDBBatchAtomicVFS.js';
+// import { OPFSAnyContextVFS as MyVFS } from '../../src/examples/OPFSAnyContextVFS.js';
 // import { AccessHandlePoolVFS as MyVFS } from '../src/examples/AccessHandlePoolVFS.js';
 // import { OPFSAdaptiveVFS as MyVFS } from '../src/examples/OPFSAdaptiveVFS.js';
 // import { OPFSCoopSyncVFS as MyVFS } from '../src/examples/OPFSCoopSyncVFS.js';
