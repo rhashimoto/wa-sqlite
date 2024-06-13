@@ -67,7 +67,7 @@ The demo page provides access to databases on multiple VFS implementations. Quer
 | *Parameter* | *Purpose* | *Values* | *Default* |
 |----|----|----|----|
 | build | Emscripten build type | default, asyncify, jspi | default |
-| config | select VFS | MemoryVFS, MemoryAsyncVFS, IDBBatchAtomicVFS, AccessHandlePoolVFS, OPFSAdaptiveVFS, OPFSCoopSyncVFS, OPFSPermutedVFS | uses SQLite internal memory |
+| config | select VFS | MemoryVFS, MemoryAsyncVFS, IDBBatchAtomicVFS, AccessHandlePoolVFS, OPFSAdaptiveVFS, OPFSAnyContextVFS, OPFSCoopSyncVFS, OPFSPermutedVFS | uses SQLite internal memory |
 | reset | clear persistent storage | | |
 
 For convenience, if any text region is selected in the editor, only that region will be executed. In addition, the editor contents are restored across page reloads using browser localStorage.
