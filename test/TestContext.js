@@ -71,6 +71,7 @@ export class TestContext {
     }
   }
 
+  // https://github.com/WebAssembly/js-promise-integration/issues/21#issuecomment-1634843621
   static async supportsJSPI() {
     try {
       const m = new Uint8Array([
