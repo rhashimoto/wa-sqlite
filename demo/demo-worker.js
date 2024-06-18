@@ -38,6 +38,10 @@ const BUILDS = new Map([
     vfsOptions: { lockPolicy: 'shared+hint' }
   },
   {
+    name: 'IDBMirrorVFS',
+    vfsModule: '../src/examples/IDBMirrorVFS.js',
+  },
+  {
     name: 'OPFSAdaptiveVFS',
     vfsModule: '../src/examples/OPFSAdaptiveVFS.js',
     vfsOptions: { lockPolicy: 'shared+hint' }

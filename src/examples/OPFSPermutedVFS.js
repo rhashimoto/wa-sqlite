@@ -134,8 +134,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
       const path = url.pathname;
 
       const file = await File.create(path, flags);
-      this.#mapIdToFile.set(fileId, file);
-
       if (flags & VFS.SQLITE_OPEN_MAIN_DB) {
         file.pageSize = 0;
         file.fileSize = 0;
@@ -230,6 +228,7 @@ export class OPFSPermutedVFS extends FacadeVFS {
       }
 
       pOutFlags.setInt32(0, flags, true);
+      this.#mapIdToFile.set(fileId, file);
       return VFS.SQLITE_OK;
     } catch (e) {
       this.#lastError = e;
