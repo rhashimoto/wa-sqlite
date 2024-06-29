@@ -23,9 +23,9 @@
   },
   "devDependencies": {
     "@types/jasmine": "^5.1.4",
-    "@web/dev-server": "^0.1.13",
-    "@web/test-runner": "^0.18.0",
-    "@web/test-runner-core": "^0.13.0",
+    "@web/dev-server": "^0.4.6",
+    "@web/test-runner": "^0.18.2",
+    "@web/test-runner-core": "^0.13.3",
     "comlink": "^4.4.1",
     "jasmine-core": "^4.5.0",
     "monaco-editor": "^0.34.1",
