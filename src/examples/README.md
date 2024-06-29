@@ -16,6 +16,15 @@ IDBBatchAtomicVFS can trade durability for performance by setting `PRAGMA synchr
 
 Changing the page size after the database is created is not supported (this is a change from pre-1.0).
 
+### IDBMirrorVFS
+This VFS keeps all files in memory, persisting database files to IndexedDB. It works on all contexts.
+
+IDBBatchAtomicVFS can trade durability for performance by setting `PRAGMA synchronous=normal`.
+
+Changing the page size after the database is created is not supported.
+
+IDBMirrorVFS has the same characteristics as IDBBatchAtomicVFS in the table below. The differences from IDBBatchAtomicVFS are (1) it is much faster both with and without contention, and (2) it can only use databases that fit in available memory.
+
 ### AccessHandlePoolVFS
 This is an OPFS VFS that has all synchronous methods, i.e. they don't return Promises. This allows it to be used with a with a synchronous WebAssembly build and that has definite performance advantages.
 
