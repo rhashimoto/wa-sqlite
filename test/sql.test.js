@@ -19,12 +19,13 @@ const CONFIGS = new Map([
   ['OPFSCoopSyncVFS', ALL_BUILDS],
   ['MemoryAsyncVFS', ASYNC_BUILDS],
   ['IDBBatchAtomicVFS', ASYNC_BUILDS],
+  ['IDBMirrorVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
   ['OPFSAnyContextVFS', ASYNC_BUILDS],
   ['OPFSPermutedVFS', ASYNC_BUILDS],
 ]);
 
-const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'OPFSPermutedVFS', 'FLOOR'];
+const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'IDBMirrorVFS', 'OPFSPermutedVFS', 'FLOOR'];
 const NOT_PERSISTENT = ['', 'MemoryVFS', 'MemoryAsyncVFS'];
 const SINGLE_CONNECTION = ['', 'MemoryVFS', 'MemoryAsyncVFS', 'AccessHandlePoolVFS'];
 
