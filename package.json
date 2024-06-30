@@ -10,7 +10,7 @@
     "src/types/*",
     "src/FacadeVFS.js",
     "src/VFS.js",
-    "src/WebLocksMixins.js",
+    "src/WebLocksMixin.js",
     "src/examples/*",
     "dist/*",
     "test/*"
