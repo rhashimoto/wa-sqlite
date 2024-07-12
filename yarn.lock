@@ -309,32 +309,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@journeyapps/wa-sqlite@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "@journeyapps/wa-sqlite@workspace:."
-  dependencies:
-    "@changesets/cli": ^2.26.2
-    "@web/dev-server": ^0.1.13
-    comlink: ^4.4.1
-    jasmine-core: ^4.5.0
-    karma: ^6.4.1
-    karma-chrome-launcher: ^3.1.1
-    karma-jasmine: ^5.1.0
-    monaco-editor: ^0.34.1
-    puppeteer: ^19.6.3
-    sinon: 15.0.1
-    typedoc: ^0.22.11
-    typescript: ^4.2.4
-  dependenciesMeta:
-    comlink@4.4.1:
-      unplugged: true
-    monaco-editor@0.34.1:
-      unplugged: true
-    sinon@15.0.1:
-      unplugged: true
-  languageName: unknown
-  linkType: soft
-
 "@manypkg/find-root@npm:^1.1.0":
   version: 1.1.0
   resolution: "@manypkg/find-root@npm:1.1.0"
@@ -416,6 +390,32 @@ __metadata:
   checksum: 6ad6a00fc4f2f2cfc6bff76fb1d88b8ee20bc0601e18ebb01b6d4be583733a860239a521a7fbca73b612e66705078809483549d2b18f370eb346c5155c8e4a0f
   languageName: node
   linkType: hard
+
+"@powersync/wa-sqlite@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@powersync/wa-sqlite@workspace:."
+  dependencies:
+    "@changesets/cli": ^2.26.2
+    "@web/dev-server": ^0.1.13
+    comlink: ^4.4.1
+    jasmine-core: ^4.5.0
+    karma: ^6.4.1
+    karma-chrome-launcher: ^3.1.1
+    karma-jasmine: ^5.1.0
+    monaco-editor: ^0.34.1
+    puppeteer: ^19.6.3
+    sinon: 15.0.1
+    typedoc: ^0.22.11
+    typescript: ^4.2.4
+  dependenciesMeta:
+    comlink@4.4.1:
+      unplugged: true
+    monaco-editor@0.34.1:
+      unplugged: true
+    sinon@15.0.1:
+      unplugged: true
+  languageName: unknown
+  linkType: soft
 
 "@puppeteer/browsers@npm:0.5.0":
   version: 0.5.0

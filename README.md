@@ -1,4 +1,4 @@
-[![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=breaking-changes)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml?branch=breaking-changes)
+[![wa-sqlite CI](https://github.com/powersync-ja/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/powersync-ja/wa-sqlite/actions/workflows/ci.yml?branch=master)
 
 # Beta
 This package is currently in a beta release.
@@ -7,13 +7,13 @@ This package is currently in a beta release.
 # wa-sqlite
 This is a WebAssembly build of SQLite with experimental support for writing SQLite virtual filesystems and virtual table modules completely in Javascript. This allows alternative browser storage options such as IndexedDB and File System Access. Applications can opt to use either a synchronous or asynchronous (using Asyncify) SQLite library build (an asynchronous build is required for asynchronous extensions).
 
-[IndexedDB](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/IDBMinimalVFS.js) and [Origin Private File System](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/OriginPrivateFileSystemVFS.js) virtual file systems and a [virtual table module that accesses Javascript arrays](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js) are among the examples provided as proof of concept.
+[IndexedDB](https://github.com/powersync-ja/wa-sqlite/blob/master/src/examples/IDBMinimalVFS.js) and [Origin Private File System](https://github.com/powersync-ja/wa-sqlite/blob/master/src/examples/OriginPrivateFileSystemVFS.js) virtual file systems and a [virtual table module that accesses Javascript arrays](https://github.com/powersync-ja/wa-sqlite/blob/master/src/examples/ArrayModule.js) are among the examples provided as proof of concept.
 
 [Try the demo](https://rhashimoto.github.io/wa-sqlite/demo/) or run [benchmarks](https://rhashimoto.github.io/wa-sqlite/demo/benchmarks.html) with a modern desktop web browser. More information is available in the [FAQ](https://github.com/rhashimoto/wa-sqlite/issues?q=is%3Aissue+label%3Afaq+), [discussion forums](https://github.com/rhashimoto/wa-sqlite/discussions), and [API reference](https://rhashimoto.github.io/wa-sqlite/docs/).
 
 ## Build
 The primary motivation for this project is to enable additions to SQLite with only Javascript. Most developers should be able to use the pre-built artifacts in
-[./dist](https://github.com/rhashimoto/wa-sqlite/tree/master/dist).
+[./dist](https://github.com/powersync-ja/wa-sqlite/tree/master/dist).
 Note that earlier versions of the project only provided pre-built artifacts in the
 "buildless" branch; that branch will no longer be maintained.
 
@@ -33,9 +33,9 @@ Here are the build steps:
 
 The default build produces ES6 modules + WASM, [synchronous and asynchronous](https://github.com/rhashimoto/wa-sqlite/issues/7) (using Asyncify) in `dist/`.
 
-## JouneyApps instructions
+## PowerSync instructions
 
-Note as per above that this is known to compile under Debian. 
+Note as per above that this is known to compile under Debian.
 
 MacOS initially complained about OpenSSL config. Compiling on MacOS may be possible with additional config, but this is currently unknown.
 
@@ -44,7 +44,6 @@ Development has been done using VSCode's [development container](https://code.vi
 ```bash
 git clone [this repo]
 ```
-
 
 ```bash
 git submodule init
@@ -56,14 +55,11 @@ git submodule update --init --recursive
 
 ```bash
 yarn install
-
 ```
 
-
-```bash 
+```bash
 make -B
 ```
-
 
 ## API
 Javascript wrappers for core SQLITE C API functions (and some others) are provided. Some convenience functions are also provided to reduce boilerplate. Here's sample code to load the library and call the API:

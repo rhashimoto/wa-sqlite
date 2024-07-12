@@ -1,4 +1,6 @@
-# @journeyapps/wa-sqlite
+# @powersync/wa-sqlite
+
+## For the following previous versions refer to `@journeyapps/wa-sqlite`
 
 ## 0.2.0
 

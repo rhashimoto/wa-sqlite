@@ -670,7 +670,7 @@ declare interface SQLiteAPI {
 
   /**
    * Registers table row on change callback
-   * 
+   *
    */
   register_table_onchange_hook(db: number, callback: (opType: number, tableName: string, rowId: number) => void): void;
 
@@ -1023,7 +1023,7 @@ declare interface SQLiteAPI {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/sqlite-constants.js' {
+declare module '@powersync/wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_OK: 0;
   export const SQLITE_ERROR: 1;
   export const SQLITE_INTERNAL: 2;
@@ -1256,8 +1256,8 @@ declare module '@journeyapps/wa-sqlite/src/sqlite-constants.js' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite' {
-  export * from '@journeyapps/wa-sqlite/src/sqlite-constants.js';
+declare module '@powersync/wa-sqlite' {
+  export * from '@powersync/wa-sqlite/src/sqlite-constants.js';
 
   /**
    * Builds a Javascript API from the Emscripten module. This API is still
@@ -1275,20 +1275,20 @@ declare module '@journeyapps/wa-sqlite' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/dist/wa-sqlite.mjs' {
+declare module '@powersync/wa-sqlite/dist/wa-sqlite.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/dist/wa-sqlite-async.mjs' {
+declare module '@powersync/wa-sqlite/dist/wa-sqlite-async.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/VFS.js' {
-  export * from '@journeyapps/wa-sqlite/src/sqlite-constants.js';
+declare module '@powersync/wa-sqlite/src/VFS.js' {
+  export * from '@powersync/wa-sqlite/src/sqlite-constants.js';
 
   export class Base {
     mxPathName: number;
@@ -1533,7 +1533,7 @@ declare module 'wa-sqlite/src/examples/ArrayModule.js' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/examples/ArrayAsyncModule.js' {
+declare module '@powersync/wa-sqlite/src/examples/ArrayAsyncModule.js' {
   import { ArrayModule } from 'wa-sqlite/src/examples/ArrayModule.js';
   export class ArrayAsyncModule extends ArrayModule {
     /**
@@ -1545,8 +1545,8 @@ declare module '@journeyapps/wa-sqlite/src/examples/ArrayAsyncModule.js' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+declare module '@powersync/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class AccessHandlePoolVFS extends VFS.Base {
     /**
      * @param {string} directoryPath Flat directory where all OPFS files are stored
@@ -1556,8 +1556,8 @@ declare module '@journeyapps/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+declare module '@powersync/wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class IDBBatchAtomicVFS extends VFS.Base {
     /**
      * @param {string} idbDatabaseName IndexDB DB name
@@ -1574,14 +1574,14 @@ declare module '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
 
 /** @ignore */
 declare module '@journeyapp/wa-sqlite/src/examples/IDBVersionedVFS.js' {
-  import {IDBBatchAtomicVFS} from '@journeyapps/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
+  import {IDBBatchAtomicVFS} from '@powersync/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
   export class IDBVersionedVFS extends IDBBatchAtomicVFS {}
 }
 
 
 /** @ignore */
 declare module '@journeyapp/wa-sqlite/src/examples/OriginPrivatefileSystemVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class OriginPrivateFileSystemVFS extends VFS.Base {
     close(): Promise<void>;
   }
@@ -1589,7 +1589,7 @@ declare module '@journeyapp/wa-sqlite/src/examples/OriginPrivatefileSystemVFS.js
 
 /** @ignore */
 declare module 'wa-sqlite/src/examples/IDBMinimalVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class IDBMinimalVFS extends VFS.Base {
     /**
      * @param {string} idbDatabaseName IndexDB DB name
@@ -1603,8 +1603,8 @@ declare module 'wa-sqlite/src/examples/IDBMinimalVFS.js' {
 }
 
 /** @ignore */
-declare module '@journeyapps/wa-sqlite/src/examples/IndexedDbVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+declare module '@powersync/wa-sqlite/src/examples/IndexedDbVFS.js' {
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class IndexedDbVFS extends VFS.Base {
     /**
      * @param {string} idbName Name of IndexedDB database.
@@ -1657,7 +1657,7 @@ declare module '@journeyapps/wa-sqlite/src/examples/IndexedDbVFS.js' {
 
 /** @ignore */
 declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
-  import * as VFS from '@journeyapps/wa-sqlite/src/VFS.js';
+  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
   export class MemoryVFS extends VFS.Base {
     name: string;
     mapNameToFile: Map<any, any>;

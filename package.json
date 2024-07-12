@@ -1,5 +1,5 @@
 {
-  "name": "@journeyapps/wa-sqlite",
+  "name": "@powersync/wa-sqlite",
   "version": "0.2.0",
   "publishConfig": {
     "access": "public"
