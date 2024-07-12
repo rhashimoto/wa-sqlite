@@ -1,5 +1,11 @@
 # @powersync/wa-sqlite
 
+## 0.2.1
+
+### Patch Changes
+
+- a220f80: Rename package to @powersync/wa-sqlite
+
 ## For the following previous versions refer to `@journeyapps/wa-sqlite`
 
 ## 0.2.0
