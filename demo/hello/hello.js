@@ -12,10 +12,16 @@ import SQLiteESMFactory from '../../dist/wa-sqlite-async.mjs';
 // asynchronous VFS requires an asynchronous build, and an VFS using
 // FileSystemSyncAccessHandle (generally any OPFS VFS) will run only
 // in a Worker.
+//
+// Note that certain VFS classes cannot read each others' databases, e.g.
+// IDBBatchAtomicVFS and IDBMirrorVFS, OPFSPermutedVFS and any other OPFS
+// VFS. If you change this demo to use a different VFS, you may need to
+// clear the appropriate storage for things to work.
 import { IDBBatchAtomicVFS as MyVFS } from '../../src/examples/IDBBatchAtomicVFS.js';
-// import { OPFSAnyContextVFS as MyVFS } from '../../src/examples/OPFSAnyContextVFS.js';
+// import { IDBMirrorVFS as MyVFS } from '../../src/examples/IDBMirrorVFS.js';
 // import { AccessHandlePoolVFS as MyVFS } from '../src/examples/AccessHandlePoolVFS.js';
 // import { OPFSAdaptiveVFS as MyVFS } from '../src/examples/OPFSAdaptiveVFS.js';
+// import { OPFSAnyContextVFS as MyVFS } from '../../src/examples/OPFSAnyContextVFS.js';
 // import { OPFSCoopSyncVFS as MyVFS } from '../src/examples/OPFSCoopSyncVFS.js';
 // import { OPFSPermutedVFS as MyVFS } from '../src/examples/OPFSPermutedVFS.js';
 
