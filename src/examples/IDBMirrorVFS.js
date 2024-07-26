@@ -437,13 +437,8 @@ export class IDBMirrorVFS extends FacadeVFS {
         }
 
         // In order to write, our view of the database must be up to date.
-        // This is tricky because transactions are published in two ways:
-        // via BroadcastChannel and written to IndexedDB. We must handle
-        // the rare cases where a transaction is in one but not the other
-        // because of latency or crash.
-        //
-        // First fetch all transactions in IndexedDB equal to or greater
-        // than our view.
+        // To check this, first fetch all transactions in IndexedDB equal to
+        // or greater than our view.
         const idbTx = this.#idb.transaction(['blocks', 'tx']);
         const range = IDBKeyRange.bound(
           [file.path, file.viewTx.txId],
@@ -451,6 +446,9 @@ export class IDBMirrorVFS extends FacadeVFS {
 
         /** @type {Transaction[]} */
         const entries = await idbX(idbTx.objectStore('tx').getAll(range));
+
+        // Ideally the fetched list of transactions should contain one
+        // entry matching our view. If not then our view is out of date.
         if (entries.length && entries.at(-1).txId > file.viewTx.txId) {
           // There are newer transactions in IndexedDB that we haven't
           // seen via broadcast. Ensure that they are incorporated on unlock,
@@ -469,29 +467,7 @@ export class IDBMirrorVFS extends FacadeVFS {
           return VFS.SQLITE_BUSY
         }
 
-        if (entries[0]?.txId !== file.viewTx.txId) {
-          // IndexedDB doesn't contain our current view transaction. This
-          // could happen if the connection that wrote the transaction
-          // crashed before it committed to IndexedDB. To fix this, add
-          // the transaction to IndexedDB ourselves.
-          if (file.viewTx.txId) {
-            console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
-            const tx = this.#idb.transaction(['blocks', 'tx'], 'readwrite');
-            const txComplete = new Promise((resolve, reject) => {
-              tx.oncomplete = resolve;
-              tx.onabort = () => {
-                file.abortController.abort();
-                reject(tx.error);
-              };
-            });
-            tx.objectStore('tx').put(file.viewTx);
-            for (const [offset, data] of file.viewTx.blocks) {
-              tx.objectStore('blocks').put({ path: file.path, offset, data });
-            }
-            tx.commit();
-            await txComplete;
-          }
-        }
+        console.assert(entries[0]?.txId === file.viewTx.txId || !file.viewTx.txId);
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         await this.#lock(file, 'write');
@@ -713,17 +689,21 @@ export class IDBMirrorVFS extends FacadeVFS {
     const txSansData = Object.assign({}, file.txActive);
     txSansData.blocks = new Map(Array.from(file.txActive.blocks, ([k]) => [k, null]));
     idbTx.objectStore('tx').put(txSansData);
-    idbTx.commit();
+
+    // Broadcast transaction once it commits.
+    const complete = new Promise((resolve, reject) => {
+      const message = file.txActive;
+      idbTx.oncomplete = () => {
+        file.broadcastChannel.postMessage(message);
+        resolve();
+      };
+      idbTx.onabort = () => reject(idbTx.error);
+      idbTx.commit();
+    });
 
     if (file.synchronous === 'full') {
-      await new Promise((resolve, reject) => {
-        idbTx.oncomplete = resolve;
-        idbTx.onabort = () => reject(idbTx.error);
-      })
+      await complete;
     }
-
-    // Broadcast the transaction.
-    file.broadcastChannel.postMessage(file.txActive);
 
     file.txActive = null;
     file.txWriteHint = false;

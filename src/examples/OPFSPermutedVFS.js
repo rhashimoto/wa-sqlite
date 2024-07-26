@@ -565,18 +565,16 @@ export class OPFSPermutedVFS extends FacadeVFS {
         }
 
         // In order to write, our view of the database must be up to date.
-        // This is tricky because transactions are published in two ways:
-        // via BroadcastChannel and written to IndexedDB. We must handle
-        // the rare cases where a transaction is in one but not the other
-        // because of latency or crash.
-        //
-        // First fetch all transactions in IndexedDB equal to or greater
-        // than our view.
+        // To check this, first fetch all transactions in IndexedDB equal to
+        // or greater than our view.
         const tx = file.idb.transaction(['pending']);
         const range = IDBKeyRange.lowerBound(file.viewTx.txId);
 
         /** @type {Transaction[]} */
         const entries = await idbX(tx.objectStore('pending').getAll(range));
+
+        // Ideally the fetched list of transactions should contain one
+        // entry matching our view. If not then our view is out of date.
         if (entries.length && entries.at(-1).txId > file.viewTx.txId) {
           // There are newer transactions in IndexedDB that we haven't
           // seen via broadcast. Ensure that they are incorporated on unlock,
@@ -584,27 +582,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
           file.broadcastReceived.push(...entries);
           file.locks.reserved();
           return VFS.SQLITE_BUSY
-        }
-
-        if (entries[0]?.txId !== file.viewTx.txId) {
-          // IndexedDB doesn't contain our current view transaction. This
-          // could happen if the connection that wrote the transaction
-          // crashed before it committed to IndexedDB. To fix this, add
-          // the transaction to IndexedDB ourselves.
-          if (file.viewTx.txId) {
-            console.warn(`adding missing tx ${file.viewTx.txId} to IndexedDB`);
-            const tx = file.idb.transaction('pending', 'readwrite');
-            const txComplete = new Promise((resolve, reject) => {
-              tx.oncomplete = resolve;
-              tx.onabort = () => {
-                file.abortController.abort();
-                reject(tx.error);
-              };
-            });
-            tx.objectStore('pending').put(file.viewTx);
-            tx.commit();
-            await txComplete;
-          }
         }
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
@@ -983,13 +960,6 @@ export class OPFSPermutedVFS extends FacadeVFS {
       ['pages', 'pending'],
       'readwrite',
       { durability: file.synchronous === 'full' ? 'strict' : 'relaxed'});
-    const txComplete = new Promise((resolve, reject) => {
-      tx.oncomplete = resolve;
-      tx.onabort = () => {
-        file.abortController.abort();
-        reject(tx.error);
-      };
-    });
 
     if (file.txActive.oldestTxId) {
       // Ensure that all pending data is safely on storage.
@@ -1016,9 +986,20 @@ export class OPFSPermutedVFS extends FacadeVFS {
 
     // Publish the transaction via broadcast and IndexedDB.
     this.log?.(`commit transaction ${file.txActive.txId}`);
-    file.broadcastChannel.postMessage(file.txActive);
     tx.objectStore('pending').put(file.txActive);
-    tx.commit();
+
+    const txComplete = new Promise((resolve, reject) => {
+      const message = file.txActive;
+      tx.oncomplete = () => {
+        file.broadcastChannel.postMessage(message);
+        resolve();
+      };
+      tx.onabort = () => {
+        file.abortController.abort();
+        reject(tx.error);
+      };
+      tx.commit();
+    });
 
     if (file.synchronous === 'full') {
       await txComplete;
