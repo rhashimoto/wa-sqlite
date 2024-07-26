@@ -64,7 +64,7 @@ To serve the demo directly from the source tree:
 
 The demo page provides access to databases on multiple VFS implementations. Query parameters on the demo page URL can be used to specify the configuration and initial state:
 
-| *Parameter* | *Purpose* | *Values* | *Default* |
+| Parameter | Purpose | Values | Default |
 |----|----|----|----|
 | build | Emscripten build type | default, asyncify, jspi | default |
 | config | select VFS | MemoryVFS, MemoryAsyncVFS, IDBBatchAtomicVFS, IDBMirrorVFS, AccessHandlePoolVFS, OPFSAdaptiveVFS, OPFSAnyContextVFS, OPFSCoopSyncVFS, OPFSPermutedVFS | uses SQLite internal memory |
