@@ -236,6 +236,16 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.clear_bindings = (function() {
+    const fname = 'sqlite3_clear_bindings';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(stmt) {
+      verifyStatement(stmt);
+      const result = f(stmt);
+      return check(fname, result, mapStmtToDB.get(stmt));
+    };
+  })();
+  
   sqlite3.close = (function() {
     const fname = 'sqlite3_close';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });

@@ -331,6 +331,14 @@ declare interface SQLiteAPI {
   changes(db): number;
 
   /**
+   * Reset all bindings on a prepared statement.
+   * @see https://www.sqlite.org/c3ref/clear_bindings.html
+   * @param stmt prepared statement pointer
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  clear_bindings(stmt: number): number;
+
+  /**
    * Close database connection
    * @see https://www.sqlite.org/c3ref/close.html
    * @param db database pointer
