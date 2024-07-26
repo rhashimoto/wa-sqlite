@@ -366,6 +366,41 @@ export function api_statements(context) {
       rc = await sqlite3.finalize(stmt);
       expect(rc).toEqual(SQLite.SQLITE_OK);
     });
+
+    it('should clear bindings', async function() {
+      let rc;
+  
+      const sql = 'SELECT ?';
+      for await (const stmt of i(sqlite3.statements(db, sql))) {
+        {
+          rc = await sqlite3.bind_int(stmt, 1, 42);
+          expect(rc).toEqual(SQLite.SQLITE_OK);
+
+          rc = await sqlite3.reset(stmt);
+          expect(rc).toEqual(SQLite.SQLITE_OK);
+
+          rc = await sqlite3.step(stmt);
+          expect(rc).toEqual(SQLite.SQLITE_ROW);
+
+          const value = await sqlite3.column(stmt, 0);
+          expect(value).toEqual(42);
+        }
+
+        {
+          rc = await sqlite3.clear_bindings(stmt);
+          expect(rc).toEqual(SQLite.SQLITE_OK);
+
+          rc = await sqlite3.reset(stmt);
+          expect(rc).toEqual(SQLite.SQLITE_OK);
+        
+          rc = await sqlite3.step(stmt);
+          expect(rc).toEqual(SQLite.SQLITE_ROW);        
+
+          const value = await sqlite3.column(stmt, 0);
+          expect(value).not.toEqual(42);
+        }
+      }
+    });
   });
 }
 
