@@ -15,6 +15,8 @@ Changes include:
 
 [![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=breaking-changes)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml?branch=breaking-changes)
 
+---
+
 # wa-sqlite
 This is a WebAssembly build of SQLite with support for writing SQLite virtual filesystems completely in Javascript. This allows alternative browser storage options such as IndexedDB and Origin Private File System. Applications can opt to use either a synchronous or asynchronous (using Asyncify or JSPI) SQLite library build (an asynchronous build is required for asynchronous extensions).
 
