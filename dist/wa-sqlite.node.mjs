@@ -6052,7 +6052,11 @@ run();
 
 
 // end include: postamble.js
+<<<<<<< HEAD
 // include: /build/wa-sqlite-livestore/src/libauthorizer.js
+=======
+// include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libauthorizer.js
+>>>>>>> 5bad635 (WIP changes for LiveStore)
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 // This file should be included in the build with --post-js.
 
@@ -6083,8 +6087,13 @@ run();
     return result;
   };
 })();
+<<<<<<< HEAD
 // end include: /build/wa-sqlite-livestore/src/libauthorizer.js
 // include: /build/wa-sqlite-livestore/src/libfunction.js
+=======
+// end include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libauthorizer.js
+// include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libfunction.js
+>>>>>>> 5bad635 (WIP changes for LiveStore)
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 // This file should be included in the build with --post-js.
 
@@ -6140,8 +6149,13 @@ run();
     return result;
   };
 })();
+<<<<<<< HEAD
 // end include: /build/wa-sqlite-livestore/src/libfunction.js
 // include: /build/wa-sqlite-livestore/src/libprogress.js
+=======
+// end include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libfunction.js
+// include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libprogress.js
+>>>>>>> 5bad635 (WIP changes for LiveStore)
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 // This file should be included in the build with --post-js.
 
@@ -6169,8 +6183,13 @@ run();
     }
   };
 })();
+<<<<<<< HEAD
 // end include: /build/wa-sqlite-livestore/src/libprogress.js
 // include: /build/wa-sqlite-livestore/src/libvfs.js
+=======
+// end include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libprogress.js
+// include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libvfs.js
+>>>>>>> 5bad635 (WIP changes for LiveStore)
 // Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
 // This file should be included in the build with --post-js.
 
@@ -6250,7 +6269,11 @@ run();
     }
   };
 })();
+<<<<<<< HEAD
 // end include: /build/wa-sqlite-livestore/src/libvfs.js
+=======
+// end include: /private/tmp/nix-build-wa-sqlite-livestore-3.46.0.drv-0/wa-sqlite-livestore/src/libvfs.js
+>>>>>>> 5bad635 (WIP changes for LiveStore)
 
 
   return moduleArg.ready
