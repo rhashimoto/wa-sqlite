@@ -33,9 +33,11 @@ type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|bigint|null;
  * @see https://sqlite.org/vfs.html
  * @see https://sqlite.org/c3ref/io_methods.html
  */
-declare interface SQLiteVFS {
+interface SQLiteVFS {
   /** Maximum length of a file path in UTF-8 bytes (default 64) */
   mxPathName?: number;
+
+  name: string;
 
   close(): void|Promise<void>;
   isReady(): boolean|Promise<boolean>;
@@ -117,11 +119,11 @@ declare interface SQLiteVFS {
 }
 
 /**
- * Options object argument for {@link SQLiteAPI.statements}
+ * Options object argument for {@link SQLiteAPI['statements']}
  */
 declare interface SQLitePrepareOptions {
   /**
-   * Statement handles prepared and yielded by {@link SQLiteAPI.statements}
+   * Statement handles prepared and yielded by {@link SQLiteAPI['statements']}
    * are normally valid only within the scope of an iteration.
    * Set `unscoped` to `true` to give iterated statements an arbitrary
    * lifetime.
@@ -151,14 +153,14 @@ declare interface SQLitePrepareOptions {
  * 
  * ```javascript
  * // Import an ES6 module factory function from one of the
- * // package builds, either 'wa-sqlite.mjs' (synchronous) or
- * // 'wa-sqlite-async.mjs' (asynchronous). You should only
+ * // package builds, either '@livestore/wa-sqlite.mjs' (synchronous) or
+ * // '@livestore/wa-sqlite-async.mjs' (asynchronous). You should only
  * // use the asynchronous build if you plan to use an
  * // asynchronous VFS or module.
- * import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
+ * import SQLiteESMFactory from '@livestore/wa-sqlite/dist/wa-sqlite.mjs';
  * 
  * // Import the Javascript API wrappers.
- * import * as SQLite from 'wa-sqlite';
+ * import * as SQLite from '@livestore/wa-sqlite';
  * 
  * // Use an async function to simplify Promise handling.
  * (async function() {
@@ -178,7 +180,7 @@ declare interface SQLitePrepareOptions {
  * 
  * @see https://sqlite.org/c3ref/funclist.html
  */
-declare interface SQLiteAPI {
+interface SQLiteAPI {
   /**
    * Bind a collection of values to a statement
    * 
@@ -329,6 +331,71 @@ declare interface SQLiteAPI {
    * @returns number of rows modified
    */
   changes(db): number;
+
+  /**
+   * https://www.sqlite.org/c3ref/deserialize.html
+   * int sqlite3_deserialize(
+   *   sqlite3 *db,            The database connection
+   *   const char *zSchema,    Which DB to reopen with the deserialization
+   *   unsigned char *pData,   The serialized database content
+   *   sqlite3_int64 szDb,     Number bytes in the deserialization
+   *   sqlite3_int64 szBuf,    Total size of buffer pData[]
+   *   unsigned mFlags         Zero or more SQLITE_DESERIALIZE_* flags
+   * );
+   */
+  deserialize(
+    db: number,
+    zSchema: string,
+    pData: Uint8Array,
+    szDb: number,
+    szBuf: number,
+    mFlags: number
+  ): number;
+
+  /**
+   * unsigned char *sqlite3_serialize(
+   *  sqlite3 *db,           The database connection
+   *  const char *zSchema,   Which DB to serialize. ex: "main", "temp", ...
+   *  sqlite3_int64 *piSize, Write size of the DB here, if not NULL
+   *  unsigned int mFlags    Zero or more SQLITE_SERIALIZE_* flags
+   * );
+   */
+  serialize(
+    db: number,
+    zSchema: string,
+    // mFlags: number
+  ): Uint8Array;
+
+  // sqlite3_backup *sqlite3_backup_init(
+  //   sqlite3 *pDest,                        /* Destination database handle */
+  //   const char *zDestName,                 /* Destination database name */
+  //   sqlite3 *pSource,                      /* Source database handle */
+  //   const char *zSourceName                /* Source database name */
+  // );
+  // int sqlite3_backup_step(sqlite3_backup *p, int nPage);
+  // int sqlite3_backup_finish(sqlite3_backup *p);
+  // int sqlite3_backup_remaining(sqlite3_backup *p);
+  // int sqlite3_backup_pagecount(sqlite3_backup *p);
+
+  backup_init(
+    pDest: number,
+    zDestName: string,
+    pSource: number,
+    zSourceName: string
+  ): number;
+
+  backup_step(p: number, nPage: number): number;
+  backup_finish(p: number): number;
+  backup_remaining(p: number): number;
+  backup_pagecount(p: number): number;
+
+  /**
+   * Combines the `backup_init`, `backup_step`, and `backup_finish` functions.
+   * destName/sourceName is usually "main" or "temp".
+   * 
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  backup(pDest: number, zDestName: string, pSource: number, zSourceName: string): number;
 
   /**
    * Reset all bindings on a prepared statement.
@@ -523,7 +590,8 @@ declare interface SQLiteAPI {
     db: number,
     zSQL: string,
     callback?: (row: Array<SQLiteCompatibleType|null>, columns: string[]) => void
-  ): Promise<number>;
+  // ): Promise<number>;
+  ): number;
 
   /**
    * Destroy a prepared statement object compiled by {@link statements}
@@ -534,7 +602,8 @@ declare interface SQLiteAPI {
    * @param stmt prepared statement pointer
    * @returns Promise resolving to `SQLITE_OK` or error status
    */
-  finalize(stmt: number): Promise<number>;
+  // finalize(stmt: number): Promise<number>;
+  finalize(stmt: number): number;
 
   /**
    * Test for autocommit mode
@@ -589,6 +658,12 @@ declare interface SQLiteAPI {
     zVfs?: string    
   ): Promise<number>;
 
+  open_v2Sync(
+    zFilename: string,
+    iFlags?: number,
+    zVfs?: string    
+  ): number;
+
   /**
    * Specify callback to be invoked between long-running queries
    * 
@@ -607,9 +682,9 @@ declare interface SQLiteAPI {
    * Reset a prepared statement object
    * @see https://www.sqlite.org/c3ref/reset.html
    * @param stmt prepared statement pointer
-   * @returns Promise-wrapped `SQLITE_OK` (rejects on error)
+   * @returns `SQLITE_OK` (rejects on error)
    */
-  reset(stmt: number): Promise<number>;
+  reset(stmt: number): number;
 
   /**
    * Convenience function to call `result_*` based of the type of `value`
@@ -735,7 +810,8 @@ declare interface SQLiteAPI {
    * @param sql 
    * @param options
    */
-  statements(db: number, sql: string, options?: SQLitePrepareOptions): AsyncIterable<number>;
+  // statements(db: number, sql: string, options?: SQLitePrepareOptions): AsyncIterable<number>;
+  statements(db: number, sql: string, options?: SQLitePrepareOptions): ReadonlyArray<number>;
 
   /**
    * Evaluate an SQL statement
@@ -744,7 +820,8 @@ declare interface SQLiteAPI {
    * @returns Promise resolving to `SQLITE_ROW` or `SQLITE_DONE`
    * (rejects on error)
    */
-  step(stmt: number): Promise<number>;
+  // step(stmt: number): Promise<number>;
+  step(stmt: number): number;
 
    /**
    * Register an update hook
@@ -849,10 +926,21 @@ declare interface SQLiteAPI {
    * @returns `SQLITE_OK` (throws exception on error)
    */
   vfs_register(vfs: SQLiteVFS, makeDefault?: boolean): number;
+
+  vfs_registered: Set<string>;
 }
 
+   type SQLiteAPI_ = SQLiteAPI;
+   type SQLiteVFS_ = SQLiteVFS
+
+declare module '@livestore/wa-sqlite' {
+  export type SQLiteVFS = SQLiteVFS_;
+  export type  SQLiteAPI =  SQLiteAPI_ 
+}
+
+
 /** @ignore */
-declare module 'wa-sqlite/src/sqlite-constants.js' {
+declare module '@livestore/wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_OK: 0;
   export const SQLITE_ERROR: 1;
   export const SQLITE_INTERNAL: 2;
@@ -1087,8 +1175,8 @@ declare module 'wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_PREPARE_NO_VTAB: 0x04;
 }
 
-declare module 'wa-sqlite' {
-  export * from 'wa-sqlite/src/sqlite-constants.js';
+declare module '@livestore/wa-sqlite' {
+  export * from '@livestore/wa-sqlite/src/sqlite-constants.js';
 
   /**
    * @ignore
@@ -1107,22 +1195,23 @@ declare module 'wa-sqlite' {
 }
 
 /** @ignore */
-declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
+declare module '@livestore/wa-sqlite/dist/wa-sqlite.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
+declare module '@livestore/wa-sqlite/dist/wa-sqlite-async.mjs' {
   function ModuleFactory(config?: object): Promise<any>;
   export = ModuleFactory;
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/VFS.js' {
-  export * from 'wa-sqlite/src/sqlite-constants.js';
+declare module '@livestore/wa-sqlite/src/VFS.js' {
+  export * from '@livestore/wa-sqlite/src/sqlite-constants.js';
 
   export class Base {
+    name: string;
     mxPathName: number;
     /**
      * @param {number} fileId
@@ -1235,8 +1324,30 @@ declare module 'wa-sqlite/src/VFS.js' {
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
-  import * as VFS from "wa-sqlite/src/VFS.js";
+declare module '@livestore/wa-sqlite/src/FacadeVFS.js' {
+  export type FacadeVFS = any
+}
+  
+
+declare module '@livestore/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
+  import * as VFS from "@livestore/wa-sqlite/src/VFS.js";
+  export class AccessHandlePoolVFS extends VFS.Base {
+    constructor(name: string, module: any)
+    static create(name: string, module: any): Promise<AccessHandlePoolVFS>;
+  }
+}
+
+declare module '@livestore/wa-sqlite/src/examples/OPFSCoopSyncVFS.js' {
+  import * as VFS from "@livestore/wa-sqlite/src/VFS.js";
+  export class OPFSCoopSyncVFS extends VFS.Base {
+    constructor(name: string, module: any)
+    static create(name: string, module: any): Promise<OPFSCoopSyncVFS>;
+  }
+}
+
+/** @ignore */
+declare module '@livestore/wa-sqlite/src/examples/IndexedDbVFS.js' {
+  import * as VFS from "@livestore/wa-sqlite/src/VFS.js";
   export class IndexedDbVFS extends VFS.Base {
     /**
      * @param {string} idbName Name of IndexedDB database.
@@ -1246,7 +1357,8 @@ declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
     mapIdToFile: Map<any, any>;
     cacheSize: number;
     db: any;
-    close(): Promise<void>;
+    // close(): Promise<void>;
+    close(): void;
     /**
      * Delete a file from IndexedDB.
      * @param {string} name
@@ -1288,8 +1400,8 @@ declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
-  import * as VFS from "wa-sqlite/src/VFS.js";
+declare module '@livestore/wa-sqlite/src/examples/MemoryVFS.js' {
+  import * as VFS from "@livestore/wa-sqlite/src/VFS.js";
   /** @ignore */
   export class MemoryVFS extends VFS.Base {
     name: string;
@@ -1299,14 +1411,14 @@ declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/examples/MemoryAsyncVFS.js' {
-  import { MemoryVFS } from "wa-sqlite/src/examples/MemoryVFS.js";
+declare module '@livestore/wa-sqlite/src/examples/MemoryAsyncVFS.js' {
+  import { MemoryVFS } from "@livestore/wa-sqlite/src/examples/MemoryVFS.js";
   export class MemoryAsyncVFS extends MemoryVFS {
   }
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/examples/tag.js' {
+declare module '@livestore/wa-sqlite/src/examples/tag.js' {
   /**
    * @ignore
    * Template tag builder. This function creates a tag with an API and
