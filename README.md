@@ -1,3 +1,18 @@
+## LiveStore fork
+
+Changes include:
+
+- `src/sqlite-api.js`:
+	- Change API to expose synchronous functions
+	- Keeps `open_v2` but additionally exposes `open_v2Sync` which is synchronous
+	- Add `serialize`, `deserialize` and `backup` functions
+- `src/types/index.d.ts`
+  - Adjust types to match the new sync API
+	- No longer `declare` `SQLiteAPI` / `SQLiteVFS` globally but export it properly
+	- Exposed more types from `src/examples`
+- `dist`
+  - Added Node.js build target (mostly used for testing)
+
 [![wa-sqlite CI](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml/badge.svg?branch=breaking-changes)](https://github.com/rhashimoto/wa-sqlite/actions/workflows/ci.yml?branch=breaking-changes)
 
 # wa-sqlite
