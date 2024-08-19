@@ -273,6 +273,8 @@ export function Factory(Module) {
     };
   })();
 
+  // https://www.sqlite.org/c3ref/backup_finish.html
+  // https://www.sqlite.org/backup.html
   sqlite3.backup = (function() {
     const fInit = Module.cwrap('sqlite3_backup_init', ...decl('nsns:n'));
     const fStep = Module.cwrap('sqlite3_backup_step', ...decl('nn:n'));
@@ -486,7 +488,7 @@ export function Factory(Module) {
   //   return SQLite.SQLITE_OK;
   // };
   sqlite3.exec = function(db, sql, callback) {
-    const stmts = sqlite3.statements(db, sql);
+    const stmts = sqlite3.statements(db, sql, { unscoped: true });
     for (const stmt of stmts) {
       let columns;
       while (sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
