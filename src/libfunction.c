@@ -7,6 +7,18 @@
 
 #include "libadapters.h"
 
+extern void onTableChangeCallback(sqlite3*, int, const char *, int);
+
+EMSCRIPTEN_KEEPALIVE
+void on_tables_changed(void *db, int opType, char const *dbName,
+                        char const *tableName, sqlite3_int64 rowId) {
+  onTableChangeCallback((sqlite3 *) db, opType, tableName, rowId);
+}
+
+void register_table_update_hook(sqlite3 *db) {
+    sqlite3_update_hook(db, on_tables_changed,
+                      (void *)(db));
+}
 enum {
   xFunc,
   xStep,
