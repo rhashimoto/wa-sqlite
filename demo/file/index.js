@@ -43,7 +43,7 @@ document.getElementById('file-fetch').addEventListener('click', async () => {
   let vfs;
   try {
     log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
-    vfs = new IDBBatchAtomicVFS(IDB_NAME);
+    vfs = await IDBBatchAtomicVFS.create(IDB_NAME, null);
 
     // @ts-ignore
     const importURL = document.getElementById('file-url').value;
@@ -69,7 +69,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
   let vfs;
   try {
     log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
-    vfs = new IDBBatchAtomicVFS(IDB_NAME);
+    vfs = await IDBBatchAtomicVFS.create(IDB_NAME, null);
     // @ts-ignore
     await importDatabase(vfs, DB_NAME, event.target.files[0].stream());
     log('Import complete');
@@ -87,7 +87,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
 });
 
 /**
- * @param {VFS.Base} vfs 
+ * @param {IDBBatchAtomicVFS} vfs 
  * @param {string} path 
  * @param {ReadableStream} stream 
  */
@@ -175,32 +175,32 @@ async function importDatabase(vfs, path, stream) {
     log(`Creating ${path}...`);
     const fileId = 1234;
     const flags = VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_CREATE | VFS.SQLITE_OPEN_READWRITE;
-    await check(vfs.xOpen(path, fileId, flags, new DataView(new ArrayBuffer(4))));
-    onFinally.push(() => vfs.xClose(fileId));
+    await check(vfs.jOpen(path, fileId, flags, new DataView(new ArrayBuffer(4))));
+    onFinally.push(() => vfs.jClose(fileId));
 
     // Open a "transaction".
-    await check(vfs.xLock(fileId, VFS.SQLITE_LOCK_SHARED));
-    onFinally.push(() => vfs.xUnlock(fileId, VFS.SQLITE_LOCK_NONE));
-    await check(vfs.xLock(fileId, VFS.SQLITE_LOCK_RESERVED));
-    onFinally.push(() => vfs.xUnlock(fileId, VFS.SQLITE_LOCK_SHARED));
-    await check(vfs.xLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE));
+    await check(vfs.jLock(fileId, VFS.SQLITE_LOCK_SHARED));
+    onFinally.push(() => vfs.jUnlock(fileId, VFS.SQLITE_LOCK_NONE));
+    await check(vfs.jLock(fileId, VFS.SQLITE_LOCK_RESERVED));
+    onFinally.push(() => vfs.jUnlock(fileId, VFS.SQLITE_LOCK_SHARED));
+    await check(vfs.jLock(fileId, VFS.SQLITE_LOCK_EXCLUSIVE));
 
     const ignored = new DataView(new ArrayBuffer(4));
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ignored);
+    await vfs.jFileControl(fileId, VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ignored);
 
     // Truncate file.
-    await check(vfs.xTruncate(fileId, 0));
+    await check(vfs.jTruncate(fileId, 0));
 
     // Write pages.
     let iOffset = 0;
     for await (const page of pagify()) {
-      await check(vfs.xWrite(fileId, page, iOffset));
+      await check(vfs.jWrite(fileId, page, iOffset));
       iOffset += page.byteLength;
     }
 
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE, ignored);
-    await vfs.xFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, ignored);
-    await vfs.xSync(fileId, VFS.SQLITE_SYNC_NORMAL);
+    await vfs.jFileControl(fileId, VFS.SQLITE_FCNTL_COMMIT_ATOMIC_WRITE, ignored);
+    await vfs.jFileControl(fileId, VFS.SQLITE_FCNTL_SYNC, ignored);
+    await vfs.jSync(fileId, VFS.SQLITE_SYNC_NORMAL);
   } finally {
     while (onFinally.length) {
       await onFinally.pop()();

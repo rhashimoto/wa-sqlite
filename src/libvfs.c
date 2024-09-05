@@ -1,128 +1,225 @@
-// Copyright 2021 Roy T. Hashimoto. All Rights Reserved.
-#include <sys/time.h>
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
+#include <stdio.h>
+#include <string.h>
+#include <strings.h>
 #include <emscripten.h>
 #include <sqlite3.h>
-#include <string.h>
 
-// sqlite3_io_methods javascript handlers
-// 64-bit integer parameters are passed by pointer.
-extern int vfsClose(sqlite3_file *file);
-extern int vfsRead(sqlite3_file *file, void *pData, int iAmt, sqlite3_int64 iOffset);
-extern int vfsWrite(sqlite3_file *file, const void *pData, int iAmt, sqlite3_int64 iOffset);
-extern int vfsTruncate(sqlite3_file *file, sqlite3_int64 size);
-extern int vfsSync(sqlite3_file *file, int flags);
-extern int vfsFileSize(sqlite3_file *file, sqlite3_int64 *pSize);
-extern int vfsLock(sqlite3_file *file, int flags);
-extern int vfsUnlock(sqlite3_file *file, int flags);
-extern int vfsCheckReservedLock(sqlite3_file *file, int *pResOut);
-extern int vfsFileControl(sqlite3_file *file, int flags, void *pOut);
-extern int vfsSectorSize(sqlite3_file *file);
-extern int vfsDeviceCharacteristics(sqlite3_file *file);
+#include "libadapters.h"
 
-extern int vfsOpen(sqlite3_vfs *vfs, const char *zName, sqlite3_file *file, int flags, int *pOutFlags);
-extern int vfsDelete(sqlite3_vfs *vfs, const char *zName, int syncDir);
-extern int vfsAccess(sqlite3_vfs *vfs, const char *zName, int flags, int *pResOut);
+// This list of methods must match exactly with libvfs.js.
+enum {
+  xOpen,
+  xDelete,
+  xAccess,
+  xFullPathname,
+  xRandomness,
+  xSleep,
+  xCurrentTime,
+  xGetLastError,
+  xCurrentTimeInt64,
 
-// This is undefined in the WASM linker step if not specified
-extern int __rust_no_alloc_shim_is_unstable = 0;
-extern int sqlite3_powersync_init(sqlite3 *db, char **pzErrMsg,
-                                  const sqlite3_api_routines *pApi);
+  xClose,
+  xRead,
+  xWrite,
+  xTruncate,
+  xSync,
+  xFileSize,
+  xLock,
+  xUnlock,
+  xCheckReservedLock,
+  xFileControl,
+  xSectorSize,
+  xDeviceCharacteristics,
+  xShmMap,
+  xShmLock,
+  xShmBarrier,
+  xShmUnmap
+};
 
-static int xOpen(sqlite3_vfs *vfs, const char *zName, sqlite3_file *file, int flags, int *pOutFlags)
-{
-  static sqlite3_io_methods io_methods = {
-      1,
-      vfsClose,
-      vfsRead,
-      vfsWrite,
-      vfsTruncate,
-      vfsSync,
-      vfsFileSize,
-      vfsLock,
-      vfsUnlock,
-      vfsCheckReservedLock,
-      vfsFileControl,
-      vfsSectorSize,
-      vfsDeviceCharacteristics};
-  file->pMethods = &io_methods;
+// Attach extra information to the VFS and file objects.
+typedef struct VFS {
+  sqlite3_vfs base;
+  int methodMask; // Bitmask of methods defined in JavaScript.
+  int asyncMask;  // Bitmask of methods that are asynchronous.
+} VFS;
 
-  return vfsOpen(vfs, zName, file, flags, pOutFlags);
+typedef struct VFSFile {
+  sqlite3_file base;
+  VFS* pVfs; // Pointer back to the VFS.
+} VFSFile;
+
+#define VFS_JS(SIGNATURE, KEY, METHOD, ...) \
+  (((VFS*)KEY)->asyncMask & (1 << METHOD) ? \
+    SIGNATURE##_async(KEY, #METHOD, __VA_ARGS__) : \
+    SIGNATURE(KEY, #METHOD, __VA_ARGS__))
+
+static int libvfs_xClose(sqlite3_file* pFile) {
+  return VFS_JS(ippp, ((VFSFile*)pFile)->pVfs, xClose, pFile);
 }
 
-static int xFullPathname(sqlite3_vfs *vfs, const char *zName, int nOut, char *zOut)
-{
-  strncpy(zOut, zName, nOut);
-  return SQLITE_OK;
+static int libvfs_xRead(sqlite3_file* pFile, void* pData, int iAmt, sqlite3_int64 iOffset) {
+  return VFS_JS(ippppij, ((VFSFile*)pFile)->pVfs, xRead, pFile, pData, iAmt, iOffset);
 }
 
-static int xCurrentTime(sqlite3_vfs *vfs, double *pJulianDay)
-{
-  // UNIX epoch 1/1/1970 is Julian day 2440587.5
-  static const sqlite3_int64 unixEpoch = 24405875 * (sqlite3_int64)8640000;
-  struct timeval sNow;
-  gettimeofday(&sNow, 0);
-  sqlite3_int64 julianMillis = unixEpoch + 1000 * (sqlite3_int64)sNow.tv_sec + sNow.tv_usec / 1000;
-  *pJulianDay = julianMillis / 86400000.0;
-  return SQLITE_OK;
+static int libvfs_xWrite(sqlite3_file* pFile, const void* pData, int iAmt, sqlite3_int64 iOffset) {
+  return VFS_JS(ippppij, ((VFSFile*)pFile)->pVfs, xWrite, pFile, pData, iAmt, iOffset);
 }
 
-const int EMSCRIPTEN_KEEPALIVE register_vfs(
-    const char *zName,
-    int mxPathName,
-    int makeDefault,
-    sqlite3_vfs **ppVFS)
-{
-  sqlite3_vfs *vfs = *ppVFS = (sqlite3_vfs *)sqlite3_malloc(sizeof(sqlite3_vfs));
-  if (!vfs)
-  {
-    return SQLITE_NOMEM;
-  }
+static int libvfs_xTruncate(sqlite3_file* pFile, sqlite3_int64 size) {
+  return VFS_JS(ipppj, ((VFSFile*)pFile)->pVfs, xTruncate, pFile, size);
+}
 
-  vfs->iVersion = 1;
-  vfs->szOsFile = sizeof(sqlite3_file);
-  vfs->mxPathname = mxPathName;
-  vfs->pNext = NULL;
-  vfs->zName = strdup(zName);
-  vfs->pAppData = NULL;
-  vfs->xOpen = xOpen;
-  vfs->xDelete = vfsDelete;
-  vfs->xAccess = vfsAccess;
-  vfs->xFullPathname = xFullPathname;
-  vfs->xCurrentTime = xCurrentTime;
+static int libvfs_xSync(sqlite3_file* pFile, int flags) {
+  return VFS_JS(ipppi, ((VFSFile*)pFile)->pVfs, xSync, pFile, flags);
+}
 
-  // Get remaining functionality from the default VFS.
-  sqlite3_vfs *defer = sqlite3_vfs_find(0);
-#define COPY_FIELD(NAME) vfs->NAME = defer->NAME
-  COPY_FIELD(xDlOpen);
-  COPY_FIELD(xDlError);
-  COPY_FIELD(xDlSym);
-  COPY_FIELD(xDlClose);
-  COPY_FIELD(xRandomness);
-  COPY_FIELD(xSleep);
-  COPY_FIELD(xGetLastError);
-#undef COPY_FIELD
+static int libvfs_xFileSize(sqlite3_file* pFile, sqlite3_int64* pSize) {
+  return VFS_JS(ipppp, ((VFSFile*)pFile)->pVfs, xFileSize, pFile, pSize);
+}
 
-  const int result = sqlite3_vfs_register(vfs, makeDefault);
-  if (result != SQLITE_OK)
-  {
-    *ppVFS = 0;
-    sqlite3_free(vfs);
-  }
+static int libvfs_xLock(sqlite3_file* pFile, int lockType) {
+  return VFS_JS(ipppi, ((VFSFile*)pFile)->pVfs, xLock, pFile, lockType);
+}
+
+static int libvfs_xUnlock(sqlite3_file* pFile, int lockType) {
+  return VFS_JS(ipppi, ((VFSFile*)pFile)->pVfs, xUnlock, pFile, lockType);
+}
+
+static int libvfs_xCheckReservedLock(sqlite3_file* pFile, int* pResOut) {
+  return VFS_JS(ipppp, ((VFSFile*)pFile)->pVfs, xCheckReservedLock, pFile, pResOut);
+}
+
+static int libvfs_xFileControl(sqlite3_file* pFile, int flags, void* pOut) {
+  return VFS_JS(ipppip, ((VFSFile*)pFile)->pVfs, xFileControl, pFile, flags, pOut);
+}
+
+static int libvfs_xSectorSize(sqlite3_file* pFile) {
+  return VFS_JS(ippp, ((VFSFile*)pFile)->pVfs, xSectorSize, pFile);
+}
+
+static int libvfs_xDeviceCharacteristics(sqlite3_file* pFile) {
+  return VFS_JS(ippp, ((VFSFile*)pFile)->pVfs, xDeviceCharacteristics, pFile);
+}
+
+static int libvfs_xShmMap(sqlite3_file* pFile, int iPg, int pgsz, int unused, void volatile** p) {
+  return VFS_JS(ipppiiip, ((VFSFile*)pFile)->pVfs, xShmMap, pFile, iPg, pgsz, unused, p);
+}
+
+static int libvfs_xShmLock(sqlite3_file* pFile, int offset, int n, int flags) {
+  return VFS_JS(ipppiii, ((VFSFile*)pFile)->pVfs, xShmLock, pFile, offset, n, flags);
+}
+
+static void libvfs_xShmBarrier(sqlite3_file* pFile) {
+  VFS_JS(vppp, ((VFSFile*)pFile)->pVfs, xShmBarrier, pFile);
+}
+
+static int libvfs_xShmUnmap(sqlite3_file* pFile, int deleteFlag) {
+  return VFS_JS(ipppi, ((VFSFile*)pFile)->pVfs, xShmUnmap, pFile, deleteFlag);
+}
+
+
+static int libvfs_xOpen(sqlite3_vfs* pVfs, const char* zName, sqlite3_file* pFile, int flags, int* pOutFlags) {
+  const int result = VFS_JS(ipppppip, pVfs, xOpen, pVfs, (void*)zName, pFile, flags, pOutFlags);
+
+  VFS* pVfsExt = (VFS*)pVfs;
+  sqlite3_io_methods* pMethods = (sqlite3_io_methods*)sqlite3_malloc(sizeof(sqlite3_io_methods));
+  pMethods->iVersion = 2;
+#define METHOD(NAME) pMethods->NAME = (pVfsExt->methodMask & (1 << NAME)) ? libvfs_##NAME : NULL
+  METHOD(xClose);
+  METHOD(xRead);
+  METHOD(xWrite);
+  METHOD(xTruncate);
+  METHOD(xSync);
+  METHOD(xFileSize);
+  METHOD(xLock);
+  METHOD(xUnlock);
+  METHOD(xCheckReservedLock);
+  METHOD(xFileControl);
+  METHOD(xSectorSize);
+  METHOD(xDeviceCharacteristics);
+  METHOD(xShmMap);
+  METHOD(xShmLock);
+  METHOD(xShmBarrier);
+  METHOD(xShmUnmap);
+#undef METHOD
+  pFile->pMethods = pMethods;
+  ((VFSFile*)pFile)->pVfs = pVfsExt;
   return result;
 }
 
-void *EMSCRIPTEN_KEEPALIVE getSqliteFree()
-{
-  return sqlite3_free;
+static int libvfs_xDelete(sqlite3_vfs* pVfs, const char* zName, int syncDir) {
+  return VFS_JS(ippppi, pVfs, xDelete, pVfs, zName, syncDir);
 }
 
-int main()
-{
-  sqlite3_initialize();
-  return 0;
+static int libvfs_xAccess(sqlite3_vfs* pVfs, const char* zName, int flags, int* pResOut) {
+  return VFS_JS(ippppip, pVfs, xAccess, pVfs, zName, flags, pResOut);
 }
 
-int setup_powersync()
-{
-  return sqlite3_auto_extension((void (*)(void)) & sqlite3_powersync_init);
+static int libvfs_xFullPathname(sqlite3_vfs* pVfs, const char* zName, int nOut, char* zOut) {
+  return VFS_JS(ippppip, pVfs, xFullPathname, pVfs, zName, nOut, zOut);
 }
+
+static int libvfs_xRandomness(sqlite3_vfs* pVfs, int nBuf, char* zBuf) {
+  return VFS_JS(ipppip, pVfs, xRandomness, pVfs, nBuf, zBuf);
+}
+
+static int libvfs_xSleep(sqlite3_vfs* pVfs, int microseconds) {
+  return VFS_JS(ipppi, pVfs, xSleep, pVfs, microseconds);
+}
+
+static int libvfs_xCurrentTime(sqlite3_vfs* pVfs, double* pJulianDay) {
+  return VFS_JS(ipppp, pVfs, xCurrentTime, pVfs, pJulianDay);
+}
+
+static int libvfs_xGetLastError(sqlite3_vfs* pVfs, int nBuf, char* zBuf) {
+  return VFS_JS(ipppip, pVfs, xGetLastError, pVfs, nBuf, zBuf);
+}
+
+static int libvfs_xCurrentTimeInt64(sqlite3_vfs* pVfs, sqlite3_int64* pTime) {
+  return VFS_JS(ipppp, pVfs, xCurrentTimeInt64, pVfs, pTime);
+}
+
+int EMSCRIPTEN_KEEPALIVE libvfs_vfs_register(
+  const char* zName,
+  int mxPathName,
+  int methodMask,
+  int asyncMask,
+  int makeDefault,
+  void** ppVfs) {
+  // Get the current default VFS to use if methods are not defined.
+  const sqlite3_vfs* backupVfs = sqlite3_vfs_find(NULL);
+
+  // Allocate and populate the new VFS.
+  VFS* vfs = (VFS*)sqlite3_malloc(sizeof(VFS));
+  if (!vfs) return SQLITE_NOMEM;
+  bzero(vfs, sizeof(VFS));
+
+  vfs->base.iVersion = 2;
+  vfs->base.szOsFile = sizeof(VFSFile);
+  vfs->base.mxPathname = mxPathName;
+  vfs->base.zName = strdup(zName);
+
+  // The VFS methods go to the adapter implementations in this file,
+  // or to the default VFS if the JavaScript method is not defined.
+#define METHOD(NAME) vfs->base.NAME = \
+  (methodMask & (1 << NAME)) ? libvfs_##NAME : backupVfs->NAME
+
+  METHOD(xOpen);
+  METHOD(xDelete);
+  METHOD(xAccess);
+  METHOD(xFullPathname);
+  METHOD(xRandomness);
+  METHOD(xSleep);
+  METHOD(xCurrentTime);
+  METHOD(xGetLastError);
+  METHOD(xCurrentTimeInt64);
+#undef METHOD
+
+  vfs->methodMask = methodMask;
+  vfs->asyncMask = asyncMask;
+
+  *ppVfs = vfs;
+  return sqlite3_vfs_register(&vfs->base, makeDefault);
+}
+

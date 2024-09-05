@@ -20,19 +20,28 @@ globalThis.addEventListener('fetch', async (/** @type {FetchEvent} */ event) => 
     return event.respondWith(new Response('OK'));
   }
 
-  // Create the VFS and streaming source using the request parameters.
-  const vfs = new IDBBatchAtomicVFS(url.searchParams.get('idb'));
-  const path = url.searchParams.get('db');
-  const source = new DatabaseSource(vfs, path);
-
   // Keep the service worker alive until the download is complete.
-  event.waitUntil(source.isDone.finally(() => vfs.close()));
-  return event.respondWith(new Response(new ReadableStream(source), {
-    headers: {
-      "Content-Type": 'application/vnd.sqlite3',
-      "Content-Disposition": `attachment; filename=${path.match(/[^/]+$/)[0]}`
-    }
-  }));
+  let releaseEvent;
+  event.waitUntil(new Promise(resolve => releaseEvent = resolve));
+
+  return event.respondWith((async () => {
+    // Create the VFS and streaming source using the request parameters.
+    const vfs = await IDBBatchAtomicVFS.create(url.searchParams.get('idb'), null);
+    const path = url.searchParams.get('db');
+    const source = new DatabaseSource(vfs, path);
+
+    source.isDone.finally(() => {
+      vfs.close();
+      releaseEvent();
+    });
+
+    return new Response(new ReadableStream(source), {
+      headers: {
+        "Content-Type": 'application/vnd.sqlite3',
+        "Content-Disposition": `attachment; filename=${path.match(/[^/]+$/)[0]}`
+      }
+    });
+  })());
 });
 
 // This is a stateful source object for a ReadableStream.
@@ -66,14 +75,14 @@ class DatabaseSource {
     try {
       // Open the file for reading.
       const flags = VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_READONLY;
-      await check(this.#vfs.xOpen(this.#path, this.#fileId, flags, {setInt32(){}}));
-      this.#onDone.push(() => this.#vfs.xClose(this.#fileId));
-      await check(this.#vfs.xLock(this.#fileId, VFS.SQLITE_LOCK_SHARED));
-      this.#onDone.push(() => this.#vfs.xUnlock(this.#fileId, VFS.SQLITE_LOCK_NONE));
+      await check(this.#vfs.jOpen(this.#path, this.#fileId, flags, {setInt32(){}}));
+      this.#onDone.push(() => this.#vfs.jClose(this.#fileId));
+      await check(this.#vfs.jLock(this.#fileId, VFS.SQLITE_LOCK_SHARED));
+      this.#onDone.push(() => this.#vfs.jUnlock(this.#fileId, VFS.SQLITE_LOCK_NONE));
 
       // Get the file size.
       const fileSize = new DataView(new ArrayBuffer(8));
-      await check(this.#vfs.xFileSize(this.#fileId, fileSize));
+      await check(this.#vfs.jFileSize(this.#fileId, fileSize));
       this.#bytesRemaining = Number(fileSize.getBigUint64(0, true));
     } catch (e) {
       controller.error(e);
@@ -84,7 +93,7 @@ class DatabaseSource {
   async pull(controller) {
     try {
       const buffer = new Uint8Array(Math.min(this.#bytesRemaining, 65536));
-      await check(this.#vfs.xRead(this.#fileId, buffer, this.#iOffset));
+      await check(this.#vfs.jRead(this.#fileId, buffer, this.#iOffset));
       controller.enqueue(buffer);
 
       this.#iOffset += buffer.byteLength;

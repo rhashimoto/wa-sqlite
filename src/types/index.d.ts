@@ -37,181 +37,102 @@ declare interface SQLiteVFS {
   /** Maximum length of a file path in UTF-8 bytes (default 64) */
   mxPathName?: number;
 
-  /** @see https://sqlite.org/c3ref/io_methods.html */
-  xClose(fileId: number): number;
+  close(): void|Promise<void>;
+  isReady(): boolean|Promise<boolean>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xRead(fileId: number, pData: Uint8Array, iOffset: number): number;
+  xClose(fileId: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xWrite(fileId: number, pData: Uint8Array, iOffset: number): number;
+  xRead(
+    fileId: number,
+    pData: number,
+    iAmt: number,
+    iOffsetLo: number,
+    iOffsetHi: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xTruncate(fileId: number, iSize: number): number;
+  xWrite(
+    fileId: number,
+    pData: number,
+    iAmt: number,
+    iOffsetLo: number,
+    iOffsetHi: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xSync(fileId: number, flags: number): number;
+  xTruncate(fileId: number, iSizeLo: number, iSizeHi): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xFileSize(fileId: number, pSize64: DataView): number;
+  xSync(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xLock(fileId: number, flags: number): number;
+  xFileSize(
+    fileId: number,
+    pSize64: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xUnlock(fileId: number, flags: number): number;
+  xLock(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xCheckReservedLock(fileId: number, pResOut: DataView): number;
+  xUnlock(fileId: number, flags: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xFileControl(fileId: number, flags: number, pOut: DataView): number;
+  xCheckReservedLock(
+    fileId: number,
+    pResOut: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/io_methods.html */
-  xDeviceCharacteristics(fileId: number): number;
+  xFileControl(
+    fileId: number,
+    flags: number,
+    pOut: number
+  ): number|Promise<number>;
+
+  /** @see https://sqlite.org/c3ref/io_methods.html */
+  xDeviceCharacteristics(fileId: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xOpen(name: string | null, fileId: number, flags: number, pOutFlags: DataView): number;
+  xOpen(
+    pVfs: number,
+    zName: number,
+    pFile: number,
+    flags: number,
+    pOutFlags: number
+  ): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xDelete(name: string, syncDir: number): number;
+  xDelete(pVfs: number, zName: number, syncDir: number): number|Promise<number>;
 
   /** @see https://sqlite.org/c3ref/vfs.html */
-  xAccess(name: string, flags: number, pResOut: DataView): number;
+  xAccess(
+    pVfs: number,
+    zName: number,
+    flags: number,
+    pResOut: number
+  ): number|Promise<number>;
 }
 
 /**
- * This object is passed by SQLite to implementations of
- * {@link SQLiteModule.xBestIndex}
- * @see https://sqlite.org/c3ref/index_info.html
+ * Options object argument for {@link SQLiteAPI.statements}
  */
-declare interface SQLiteModuleIndexInfo {
-  nConstraint: number;
-  aConstraint: Array<{
-    iColumn: number;
-    op: number;
-    usable: boolean;
-  }>;
-  nOrderBy: number;
-  aOrderBy: Array<{
-    iColumn: number;
-    desc: boolean;
-  }>;
-  aConstraintUsage: Array<{
-    argvIndex: number;
-    omit: boolean;
-  }>;
-  idxNum: number;
-  idxStr: string | null;
-  orderByConsumed: boolean;
-  estimatedCost: number;
-  estimatedRows: number;
-  idxFlags: number;
-  colUsed: number;
-}
-
-/**
- * SQLite Module object
- *
- * Objects with this interface can be passed to {@link SQLiteAPI.create_module}
- * to define a module for virtual tables.
- *
- * There is an example
- * [ArrayModule.js](https://github.com/rhashimoto/wa-sqlite/blob/master/src/examples/ArrayModule.js)
- * that allows a virtual table to reference a Javascript array.
- *
- * @see https://sqlite.org/vtab.html
- */
-declare interface SQLiteModule {
+declare interface SQLitePrepareOptions {
   /**
-   * @see https://sqlite.org/vtab.html#the_xcreate_method
+   * Statement handles prepared and yielded by {@link SQLiteAPI.statements}
+   * are normally valid only within the scope of an iteration.
+   * Set `unscoped` to `true` to give iterated statements an arbitrary
+   * lifetime.
    */
-  xCreate?(db: number, appData, argv: string[], pVTab: number, pzErr: DataView): number;
+  unscoped?: boolean;
 
   /**
-   * @see https://sqlite.org/vtab.html#the_xconnect_method
+   * SQLITE_PREPARE_* flags
+   * @see https://www.sqlite.org/c3ref/c_prepare_normalize.html#sqlitepreparepersistent
    */
-  xConnect(db: number, appData, argv: string[], pVTab: number, pzErr: DataView): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xbestindex_method
-   */
-  xBestIndex(pVTab: number, indexInfo: SQLiteModuleIndexInfo): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xdisconnect_method
-   */
-  xDisconnect(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xdestroy_method
-   */
-  xDestroy(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xopen_method
-   */
-  xOpen(pVTab: number, pCursor: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xclose_method
-   */
-  xClose(pCursor: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xfilter_method
-   */
-  xFilter(pCursor: number, idxNum: number, idxString: string | null, values: number[]): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xnext_method
-   */
-  xNext(pCursor: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xeof_method
-   */
-  xEof(pCursor: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xcolumn_method
-   */
-  xColumn(pCursor: number, pContext: number, iCol: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xrowid_method
-   */
-  xRowid(pCursor: number, pRowid: DataView): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xupdate_method
-   */
-  xUpdate?(pVTab: number, values: number[], pRowId: DataView): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xbegin_method
-   */
-  xBegin?(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xsync_method
-   */
-  xSync?(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xcommit_method
-   */
-  xCommit?(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xrollback_method
-   */
-  xRollback?(pVTab: number): number;
-
-  /**
-   * @see https://sqlite.org/vtab.html#the_xrename_method
-   */
-  xRename?(pVTab: number, zNew: string): number;
+  flags?: number;
 }
 
 /**
@@ -267,27 +188,25 @@ declare interface SQLiteAPI {
    * Array example using numbered parameters (numbering is implicit in
    * this example):
    * ```
-   * const str = sqlite3.str_new(db, `
-   *   INSERT INTO tbl VALUES (?, ?, ?);
-   * `);
-   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
-   * sqlite3.bind_collection(prepared.stmt, [42, 'hello', null]);
-   * ...
+   * const sql = 'INSERT INTO tbl VALUES (?, ?, ?)';
+   * for await (const stmt of sqlite3.statements(db, sql) {
+   *   sqlite3.bind_collection(stmt, [42, 'hello', null]);
+   *   ...
+   * }
    * ```
    *
    * Object example using named parameters (':', '@', or '$' prefixes
    * are allowed):
    * ```
-   * const str = sqlite3.str_new(db, `
-   *   INSERT INTO tbl VALUES (@foo, @bar, @baz);
-   * `);
-   * const prepared = await sqlite3.prepare_v2(db, sqlite3.str_value(str));
-   * sqlite3.bind_collection(prepared.stmt, {
-   *   '@foo': 42,
-   *   '@bar': 'hello',
-   *   '@baz': null,
-   * });
-   * ...
+   * const sql = 'INSERT INTO tbl VALUES (?, ?, ?)';
+   * for await (const stmt of sqlite3.statements(db, sql) {
+   *   sqlite3.bind_collection(stmt, {
+   *     '@foo': 42,
+   *     '@bar': 'hello',
+   *     '@baz': null,
+   *   });
+   *   ...
+   * }
    * ```
    *
    * Note that SQLite bindings are indexed beginning with 1, but when
@@ -367,7 +286,7 @@ declare interface SQLiteAPI {
    * Note that binding indices begin with 1.
    * @see https://www.sqlite.org/c3ref/bind_blob.html
    * @param stmt prepared statement pointer
-   * @param value
+   * @param i binding index
    * @returns `SQLITE_OK` (throws exception on error)
    */
   bind_null(stmt: number, i: number): number;
@@ -412,12 +331,12 @@ declare interface SQLiteAPI {
   changes(db): number;
 
   /**
-   * Get the last insert id
-   * @see https://www.sqlite.org/c3ref/changes.html
-   * @param db database pointer
-   * @returns last insert id
+   * Reset all bindings on a prepared statement.
+   * @see https://www.sqlite.org/c3ref/clear_bindings.html
+   * @param stmt prepared statement pointer
+   * @returns `SQLITE_OK` (throws exception on error)
    */
-  last_insert_id(db): number;
+  clear_bindings(stmt: number): number;
 
   /**
    * Close database connection
@@ -541,15 +460,20 @@ declare interface SQLiteAPI {
 
   /**
    * Create or redefine SQL functions
+   * 
+   * The application data passed is ignored. Use closures instead.
+   * 
+   * If any callback function returns a Promise, that function must
+   * be declared `async`, i.e. it must allow use of `await`.
    * @see https://sqlite.org/c3ref/create_function.html
    * @param db database pointer
    * @param zFunctionName
    * @param nArg number of function arguments
    * @param eTextRep text encoding (and other flags)
-   * @param pApp application data
-   * @param xFunc
-   * @param xStep
-   * @param xFinal
+   * @param pApp application data (ignored)
+   * @param xFunc 
+   * @param xStep 
+   * @param xFinal 
    * @returns `SQLITE_OK` (throws exception on error)
    */
   create_function(
@@ -558,21 +482,9 @@ declare interface SQLiteAPI {
     nArg: number,
     eTextRep: number,
     pApp: number,
-    xFunc?: (context: number, values: Uint32Array) => void,
-    xStep?: (context: number, values: Uint32Array) => void,
-    xFinal?: (context: number) => void
-  ): number;
-
-  /**
-   * Create a SQLite module for virtual tables
-   * @see https://www.sqlite.org/c3ref/create_module.html
-   * @param db database pointer
-   * @param zName
-   * @param module
-   * @param appData
-   * @returns `SQLITE_OK` (throws exception on error)
-   */
-  create_module(db: number, zName: string, module: SQLiteModule, appData?): number;
+    xFunc?: (context: number, values: Uint32Array) => void|Promise<void>,
+    xStep?: (context: number, values: Uint32Array) => void|Promise<void>,
+    xFinal?: (context: number) => void|Promise<void>): number;
 
   /**
    * Get number of columns in current row of a prepared statement
@@ -581,17 +493,6 @@ declare interface SQLiteAPI {
    * @returns number of columns
    */
   data_count(stmt: number): number;
-
-  /**
-   * Declare the schema of a virtual table in module
-   * {@link SQLiteModule.xCreate} or {@link SQLiteModule.xConnect}
-   * methods
-   * @see https://www.sqlite.org/c3ref/declare_vtab.html
-   * @param db database pointer
-   * @param zSQL schema declaration
-   * @returns `SQLITE_OK` (throws exception on error)
-   */
-  declare_vtab(db: number, zSQL: string): number;
 
   /**
    * One-step query execution interface
@@ -612,8 +513,9 @@ declare interface SQLiteAPI {
   ): Promise<number>;
 
   /**
-   * Destroy a prepared statement object compiled with {@link prepare_v2}
-   *
+   * Destroy a prepared statement object compiled by {@link statements}
+   * with the `unscoped` option set to `true`
+   * 
    * This function does *not* throw on error.
    * @see https://www.sqlite.org/c3ref/finalize.html
    * @param stmt prepared statement pointer
@@ -675,58 +577,18 @@ declare interface SQLiteAPI {
   register_table_onchange_hook(db: number, callback: (opType: number, tableName: string, rowId: number) => void): void;
 
   /**
-   * Compile an SQL statement
-   *
-   * SQL is provided as a pointer in WASM memory, so the utility functions
-   * {@link str_new} and {@link str_value} should be used. The returned
-   * Promise-wrapped object provides both the prepared statement and a
-   * pointer to the still uncompiled SQL that can be used with the next
-   * call to this function. A Promise containing `null` is returned
-   * when no statement remains.
-   *
-   * Each prepared statement should be destroyed with {@link finalize}
-   * after its usage is complete.
-   *
-   * Code using {@link prepare_v2} generally looks like this:
-   * ```javascript
-   * const str = sqlite3.str_new(db, sql);
-   * try {
-   *   // Traverse and prepare the SQL, statement by statement.
-   *   let prepared = { stmt: null, sql: sqlite3.str_value(str) };
-   *   while ((prepared = await sqlite3.prepare_v2(db, prepared.sql))) {
-   *     try {
-   *       // Step through the rows produced by the statement.
-   *       while (await sqlite3.step(prepared.stmt) === SQLite.SQLITE_ROW) {
-   *         // Do something with the row data...
-   *       }
-   *     } finally {
-   *       sqlite3.finalize(prepared.stmt);
-   *     }
-   *   }
-   * } finally {
-   *   sqlite3.str_finish(str);
-   * }
-   * ```
-   *
-   * The {@link statements} convenience function can be used to
-   * avoid the boilerplate of calling {@link prepare_v2} directly.
-   * @see https://www.sqlite.org/c3ref/prepare.html
-   * @param db database pointer
-   * @param sql SQL pointer
-   * @returns Promise-wrapped object containing the prepared statement
-   * pointer and next SQL pointer, or a Promise containing `null` when
-   * no statement remains
-   */
-  prepare_v2(db: number, sql: number): Promise<{ stmt: number; sql: number } | null>;
-
-  /**
    * Specify callback to be invoked between long-running queries
+   * 
+   * The application data passed is ignored. Use closures instead.
+   * 
+   * If any callback function returns a Promise, that function must
+   * be declared `async`, i.e. it must allow use of `await`.
    * @param db database pointer
    * @param nProgressOps target number of database operations between handler invocations
    * @param handler
    * @param userData
    */
-  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number, userData);
+  progress_handler(db: number, nProgressOps: number, handler: (userData: any) => number|Promise<number>, userData);
 
   /**
    * Reset a prepared statement object
@@ -811,17 +673,9 @@ declare interface SQLiteAPI {
    */
   set_authorizer(
     db: number,
-    authFunction: (
-      userData: any,
-      iActionCode: number,
-      param3: string | null,
-      param4: string | null,
-      param5: string | null,
-      param6: string | null
-    ) => number,
-    userData: any
-  ): number;
-
+    authFunction: (userData: any, iActionCode: number, param3: string|null, param4: string|null, param5: string|null, param6: string|null) => number|Promise<number>,
+    userData: any): number;
+  
   /**
    * Get statement SQL
    * @see https://www.sqlite.org/c3ref/expanded_sql.html
@@ -832,11 +686,11 @@ declare interface SQLiteAPI {
 
   /**
    * SQL statement iterator
-   *
-   * This is a convenience function that manages statement compilation,
-   * replacing boilerplate code associated with calling {@link prepare_v2}
-   * directly. It is typically used with a `for await` loop (in an
-   * async function), like this:
+   * 
+   * This function manages statement compilation by creating an async
+   * iterator that yields a prepared statement handle on each iteration.
+   * It is typically used with a `for await` loop (in an async function),
+   * like this:
    * ```javascript
    * // Compile one statement on each iteration of this loop.
    * for await (const stmt of sqlite3.statements(db, sql)) {
@@ -850,23 +704,25 @@ declare interface SQLiteAPI {
    *   // Change bindings, reset, and execute again if desired.
    * }
    * ```
-   *
-   * {@link finalize} should *not* be called on a statement provided
-   * by the iterator; the statement resources will be released
-   * automatically at the end of each iteration. This also means
-   * that the statement is only valid within the scope of the loop -
-   * use {@link prepare_v2} directly to compile a statement with an
-   * application-specified lifetime.
-   *
+   * 
+   * By default, the lifetime of a yielded prepared statement is managed
+   * automatically by the iterator, ending at the end of each iteration.
+   * {@link finalize} should *not* be called on a statement provided by
+   * the iterator unless the `unscoped` option is set to `true` (that
+   * option is provided for applications that wish to manage statement
+   * lifetimes manually).
+   * 
    * If using the iterator manually, i.e. by calling its `next`
    * method, be sure to call the `return` method if iteration
    * is abandoned before completion (`for await` and other implicit
    * traversals provided by Javascript do this automatically)
    * to ensure that all allocated resources are released.
+   * @see https://www.sqlite.org/c3ref/prepare.html
    * @param db database pointer
-   * @param sql
+   * @param sql 
+   * @param options
    */
-  statements(db: number, sql: string): AsyncIterable<number>;
+  statements(db: number, sql: string, options?: SQLitePrepareOptions): AsyncIterable<number>;
 
   /**
    * Evaluate an SQL statement
@@ -876,66 +732,6 @@ declare interface SQLiteAPI {
    * (rejects on error)
    */
   step(stmt: number): Promise<number>;
-
-  /**
-   * Create a new `sqlite3_str` dynamic string instance
-   *
-   * The purpose for `sqlite3_str` is to transfer a SQL string in
-   * Javascript to WebAssembly memory for use with {@link prepare_v2}.
-   *
-   * An optional initialization argument has been added for convenience
-   * which is functionally equivalent to (but slightly more efficient):
-   *  ```javascript
-   *  const str = sqlite3.str_new(db);
-   *  sqlite3.str_appendall(str, s);
-   *  ```
-   *
-   * A `sqlite3_str` instance should always be destroyed with
-   * {@link str_finish} after use to avoid a resource leak.
-   *
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param db database pointer
-   * @param s optional initialization string
-   * @returns `sqlite3_str` pointer
-   */
-  str_new(db: number, s?: string): number;
-
-  /**
-   * Add content to a `sqlite3_str` dynamic string
-   *
-   * Not recommended for building strings incrementally; prefer using
-   * Javascript and {@link str_new} with initialization.
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str `sqlite3_str` pointer
-   * @param s string to append
-   */
-  str_appendall(str: number, s: string): void;
-
-  /**
-   * Get pointer to `sqlite3_str` dynamic string data
-   *
-   * The returned pointer points to the UTF-8 encoded string in
-   * WebAssembly memory. Use as input with {@link prepare_v2}.
-   * @see https://www.sqlite.org/c3ref/str_errcode.html
-   * @param str `sqlite3_str` pointer
-   * @returns pointer to string data
-   */
-  str_value(str: number): number;
-
-  /**
-   * Finalize a `sqlite3_str` dynamic string created with {@link str_new}
-   * @see https://www.sqlite.org/c3ref/str_append.html
-   * @param str `sqlite3_str` pointer
-   */
-  str_finish(str: number): void;
-
-  /**
-   * Get application data in custom function implementation
-   * @see https://sqlite.org/c3ref/user_data.html
-   * @param context context pointer
-   * @returns application data
-   */
-  user_data(context: number): any;
 
   /**
    * Extract a value from `sqlite3_value`
@@ -1253,13 +1049,16 @@ declare module '@powersync/wa-sqlite/src/sqlite-constants.js' {
   export const SQLITE_LIMIT_VARIABLE_NUMBER: 9;
   export const SQLITE_LIMIT_TRIGGER_DEPTH: 10;
   export const SQLITE_LIMIT_WORKER_THREADS: 11;
+  export const SQLITE_PREPARE_PERSISTENT: 0x01;
+  export const SQLITE_PREPARE_NORMALIZED: 0x02;
+  export const SQLITE_PREPARE_NO_VTAB: 0x04;
 }
 
-/** @ignore */
-declare module '@powersync/wa-sqlite' {
-  export * from '@powersync/wa-sqlite/src/sqlite-constants.js';
+declare module 'wa-sqlite' {
+  export * from 'wa-sqlite/src/sqlite-constants.js';
 
   /**
+   * @ignore
    * Builds a Javascript API from the Emscripten module. This API is still
    * low-level and closely corresponds to the C API exported by the module,
    * but differs in some specifics like throwing exceptions on errors.
@@ -1405,206 +1204,8 @@ declare module '@powersync/wa-sqlite/src/VFS.js' {
 }
 
 /** @ignore */
-declare module 'wa-sqlite/src/examples/ArrayModule.js' {
-  export class ArrayModule {
-    /**
-     * @param {SQLiteAPI} sqlite3
-     * @param {number} db
-     * @param {Array<Array>} rows Table data.
-     * @param {Array<string>} columns Column names.
-     */
-    constructor(sqlite3: SQLiteAPI, db: number, rows: Array<any[]>, columns: Array<string>);
-    mapCursorToState: Map<any, any>;
-    sqlite3: any;
-    db: number;
-    rows: any[][];
-    columns: string[];
-    /**
-     * @param {number} db
-     * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
-     * @param {Array<string>} argv
-     * @param {number} pVTab
-     * @param {{ set: function(string): void}} pzErr
-     * @returns {number|Promise<number>}
-     */
-    xCreate(
-      db: number,
-      appData: any,
-      argv: Array<string>,
-      pVTab: number,
-      pzErr: {
-        set: (arg0: string) => void;
-      }
-    ): number | Promise<number>;
-    /**
-     * @param {number} db
-     * @param {*} appData Application data passed to `SQLiteAPI.create_module`.
-     * @param {Array<string>} argv
-     * @param {number} pVTab
-     * @param {{ set: function(string): void}} pzErr
-     * @returns {number|Promise<number>}
-     */
-    xConnect(
-      db: number,
-      appData: any,
-      argv: Array<string>,
-      pVTab: number,
-      pzErr: {
-        set: (arg0: string) => void;
-      }
-    ): number | Promise<number>;
-    /**
-     * @param {number} pVTab
-     * @param {SQLiteModuleIndexInfo} indexInfo
-     * @returns {number|Promise<number>}
-     */
-    xBestIndex(pVTab: number, indexInfo: any): number | Promise<number>;
-    /**
-     * @param {number} pVTab
-     * @returns {number|Promise<number>}
-     */
-    xDisconnect(pVTab: number): number | Promise<number>;
-    /**
-     * @param {number} pVTab
-     * @returns {number|Promise<number>}
-     */
-    xDestroy(pVTab: number): number | Promise<number>;
-    /**
-     * @param {number} pVTab
-     * @param {number} pCursor
-     * @returns {number|Promise<number>}
-     */
-    xOpen(pVTab: number, pCursor: number): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @returns {number|Promise<number>}
-     */
-    xClose(pCursor: number): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @param {number} idxNum
-     * @param {string?} idxStr
-     * @param {Array<number>} values
-     * @returns {number|Promise<number>}
-     */
-    xFilter(pCursor: number, idxNum: number, idxStr: string | null, values: Array<number>): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @returns {number|Promise<number>}
-     */
-    xNext(pCursor: number): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @returns {number|Promise<number>}
-     */
-    xEof(pCursor: number): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @param {number} pContext
-     * @param {number} iCol
-     * @returns {number|Promise<number>}
-     */
-    xColumn(pCursor: number, pContext: number, iCol: number): number | Promise<number>;
-    /**
-     * @param {number} pCursor
-     * @param {{ set: function(number): void}} pRowid
-     * @returns {number|Promise<number>}
-     */
-    xRowid(
-      pCursor: number,
-      pRowid: {
-        set: (arg0: number) => void;
-      }
-    ): number | Promise<number>;
-    /**
-     * @param {number} pVTab
-     * @param {Array<number>} values sqlite3_value pointers
-     * @param {{ set: function(number): void}} pRowid
-     * @returns {number|Promise<number>}
-     */
-    xUpdate(
-      pVTab: number,
-      values: Array<number>,
-      pRowid: {
-        set: (arg0: number) => void;
-      }
-    ): number | Promise<number>;
-  }
-}
-
-/** @ignore */
-declare module '@powersync/wa-sqlite/src/examples/ArrayAsyncModule.js' {
-  import { ArrayModule } from 'wa-sqlite/src/examples/ArrayModule.js';
-  export class ArrayAsyncModule extends ArrayModule {
-    /**
-     * @param {function} f
-     * @returns {Promise<number>}
-     */
-    handleAsync(f: Function): Promise<number>;
-  }
-}
-
-/** @ignore */
-declare module '@powersync/wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
-  export class AccessHandlePoolVFS extends VFS.Base {
-    /**
-     * @param {string} directoryPath Flat directory where all OPFS files are stored
-     */
-    constructor(directoryPath: string);
-  }
-}
-
-/** @ignore */
-declare module '@powersync/wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
-  export class IDBBatchAtomicVFS extends VFS.Base {
-    /**
-     * @param {string} idbDatabaseName IndexDB DB name
-     */
-    constructor(idbDatabaseName?: string, options?: Partial<{
-      durability: string,
-      purge: string,
-      purgeAtLeast: number
-    }>);
-
-    close(): Promise<void>;
-  }
-}
-
-/** @ignore */
-declare module '@journeyapp/wa-sqlite/src/examples/IDBVersionedVFS.js' {
-  import {IDBBatchAtomicVFS} from '@powersync/wa-sqlite/src/examples/IDBBatchAtomicVFS.js';
-  export class IDBVersionedVFS extends IDBBatchAtomicVFS {}
-}
-
-
-/** @ignore */
-declare module '@journeyapp/wa-sqlite/src/examples/OriginPrivatefileSystemVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
-  export class OriginPrivateFileSystemVFS extends VFS.Base {
-    close(): Promise<void>;
-  }
-}
-
-/** @ignore */
-declare module 'wa-sqlite/src/examples/IDBMinimalVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
-  export class IDBMinimalVFS extends VFS.Base {
-    /**
-     * @param {string} idbDatabaseName IndexDB DB name
-     */
-    constructor(idbDatabaseName?: string, options?: Partial<{
-      durability: string,
-    }>);
-
-    close(): Promise<void>;
-  }
-}
-
-/** @ignore */
-declare module '@powersync/wa-sqlite/src/examples/IndexedDbVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
+declare module 'wa-sqlite/src/examples/IndexedDbVFS.js' {
+  import * as VFS from "wa-sqlite/src/VFS.js";
   export class IndexedDbVFS extends VFS.Base {
     /**
      * @param {string} idbName Name of IndexedDB database.
@@ -1657,7 +1258,8 @@ declare module '@powersync/wa-sqlite/src/examples/IndexedDbVFS.js' {
 
 /** @ignore */
 declare module 'wa-sqlite/src/examples/MemoryVFS.js' {
-  import * as VFS from '@powersync/wa-sqlite/src/VFS.js';
+  import * as VFS from "wa-sqlite/src/VFS.js";
+  /** @ignore */
   export class MemoryVFS extends VFS.Base {
     name: string;
     mapNameToFile: Map<any, any>;
@@ -1674,6 +1276,7 @@ declare module 'wa-sqlite/src/examples/MemoryAsyncVFS.js' {
 /** @ignore */
 declare module 'wa-sqlite/src/examples/tag.js' {
   /**
+   * @ignore
    * Template tag builder. This function creates a tag with an API and
    * database from the same module, then the tag can be used like this:
    * ```

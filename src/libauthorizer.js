@@ -1,37 +1,30 @@
-const authorizer_methods = {
-  $authorizer_method_support__postset: 'authorizer_method_support();',
-  $authorizer_method_support: function() {
-    const mapDbToAuthorizer = new Map();
+// Copyright 2024 Roy T. Hashimoto. All Rights Reserved.
+// This file should be included in the build with --post-js.
 
-    Module['setAuthorizer'] =
-      function(db, f, userData) {
-        if (f) {
-          mapDbToAuthorizer.set(db, { f, userData });
-        } else {
-          mapDbToAuthorizer.delete(db);
-        }
-        return ccall('set_authorizer', 'number', ['number'], [db])
-      };
+(function() {
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  let pAsyncFlags = 0;
 
-    _jsAuth = function(db, iActionCode, pParam3, pParam4, pParam5, pParam6) {
-      if (mapDbToAuthorizer.has(db)) {
-        const { f, userData } = mapDbToAuthorizer.get(db);
-        return f(
-          userData,
-          iActionCode,
-          pParam3 ? UTF8ToString(pParam3) : null,
-          pParam4 ? UTF8ToString(pParam4) : null,
-          pParam5 ? UTF8ToString(pParam5) : null,
-          pParam6 ? UTF8ToString(pParam6) : null);
-      }
-      return 0;
+  Module['set_authorizer'] = function(db, xAuthorizer, pApp) {
+    if (pAsyncFlags) {
+      Module['deleteCallback'](pAsyncFlags);
+      Module['_sqlite3_free'](pAsyncFlags);
+      pAsyncFlags = 0;
     }
-  }
-};
 
-const AUTHORIZER_METHOD_NAMES = ["jsAuth"];
-for (const method of AUTHORIZER_METHOD_NAMES) {
-  authorizer_methods[method] = function() {};
-  authorizer_methods[`${method}__deps`] = ['$authorizer_method_support'];
-}
-mergeInto(LibraryManager.library, authorizer_methods);
+    pAsyncFlags = Module['_sqlite3_malloc'](4);
+    setValue(pAsyncFlags, xAuthorizer instanceof AsyncFunction ? 1 : 0, 'i32');
+
+    const result = ccall(
+      'libauthorizer_set_authorizer',
+      'number',
+      ['number', 'number', 'number'],
+      [db, xAuthorizer ? 1 : 0, pAsyncFlags]);
+    if (!result && xAuthorizer) {
+      Module['setCallback'](pAsyncFlags, (_, iAction, p3, p4, p5, p6) => {
+        return xAuthorizer(pApp, iAction, p3, p4, p5, p6);
+      });
+    }
+    return result;
+  };
+})();
