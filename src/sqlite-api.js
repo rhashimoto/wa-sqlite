@@ -735,6 +735,27 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.update_hook = function(db, xUpdateHook) {
+    verifyDatabase(db);
+
+    // Convert SQLite callback arguments to JavaScript-friendly arguments.
+    function cvtArgs(iUpdateType, dbName, tblName, lo32, hi32) {
+      return [
+        iUpdateType,
+        Module.UTF8ToString(dbName),
+        Module.UTF8ToString(tblName),
+		cvt32x2ToBigInt(lo32, hi32)
+      ];
+    };
+    function adapt(f) {
+      return f instanceof AsyncFunction ?
+        (async (iUpdateType, dbName, tblName, lo32, hi32) => f(...cvtArgs(iUpdateType, dbName, tblName, lo32, hi32))) :
+        ((iUpdateType, dbName, tblName, lo32, hi32) => f(...cvtArgs(iUpdateType, dbName, tblName, lo32, hi32)));
+    }
+
+    Module.update_hook(db, adapt(xUpdateHook));
+  };;
+
   sqlite3.value = function(pValue) {
     const type = sqlite3.value_type(pValue);
     switch (type) {

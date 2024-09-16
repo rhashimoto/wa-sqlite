@@ -31,6 +31,7 @@ DECLARE(I, ippppip, P, P, P, P, I, P);
 DECLARE(I, ippipppp, P, P, I, P, P, P, P);
 DECLARE(I, ipppppip, P, P, P, P, P, I, P);
 DECLARE(I, ipppiiip, P, P, P, I, I, I, P);
+DECLARE(void, vppippii, P, P, I, P, P, I, I);
 #undef DECLARE
 #undef P
 #undef I

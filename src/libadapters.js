@@ -15,6 +15,7 @@ const SIGNATURES = [
   'ippipppp', // xAuthorize
   'ipppppip', // xOpen
   'ipppiiip', // xShmMap
+  'vppippii', // xUpdateHook
 ];
 
 // This object will define the methods callable from WebAssembly.
