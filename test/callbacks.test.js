@@ -338,7 +338,19 @@ for (const [key, factory] of FACTORIES) {
       rc = await sqlite3.exec(db, 'CREATE TABLE t(x)');
       expect(rc).toEqual(SQLite.SQLITE_OK);
 
-      expect(authorizations.length).toBeGreaterThan(0);
+      let authCreateTable = false;
+      for (const authorization of authorizations) {
+        switch (authorization[0]) {
+          case SQLite.SQLITE_CREATE_TABLE:
+            authCreateTable = true;
+            expect(authorization[1]).toEqual('t');
+            expect(authorization[2]).toEqual('');
+            expect(authorization[3]).toEqual('main');
+            expect(authorization[4]).toEqual('');
+            break;
+        }
+      }
+      expect(authCreateTable).toBeTrue();
     });
 
     it('should deny authorization', async function() {

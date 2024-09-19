@@ -630,8 +630,8 @@ export function Factory(Module) {
     };
     function adapt(f) {
       return f instanceof AsyncFunction ?
-        (async (_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6))) :
-        ((_, iAction, p3, p4, p5, p6) => f(cvtArgs(_, iAction, p3, p4, p5, p6)));
+        (async (_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6))) :
+        ((_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6)));
     }
 
     const result = Module.set_authorizer(db, adapt(xAuth), pApp);
