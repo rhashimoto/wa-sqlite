@@ -32,7 +32,7 @@ vpath %.c deps/$(SQLITE_VERSION)
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
-ASYNCIFY_EXPORTS = src/asyncify_exports.json
+JSPI_EXPORTS = src/jspi_exports.json
 
 # intermediate files
 OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
@@ -91,9 +91,9 @@ EMFLAGS_ASYNCIFY_DIST = \
 	-s ASYNCIFY_STACK_SIZE=16384
 
 EMFLAGS_JSPI = \
-	-s ASYNCIFY=2 \
+	-s JSPI \
 	-s ASYNCIFY_IMPORTS=@src/asyncify_imports.json \
-	-s ASYNCIFY_EXPORTS=@src/asyncify_exports.json
+	-s JSPI_EXPORTS=@src/jspi_exports.json
 
 # https://www.sqlite.org/compile.html
 WASQLITE_DEFINES = \
