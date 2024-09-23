@@ -33,7 +33,7 @@ jobs:
     - uses: browser-actions/setup-chrome@v1
       id: setup-chrome
       with:
-        chrome-version: 121
+        chrome-version: 129
     - run: |
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
 
