@@ -19,7 +19,7 @@ If you do want to build yourself, here are the prerequisites:
 
 * Building on Debian Linux is known to work, compatibility with other platforms is unknown.
 * `yarn` - If you use a different package manager (e.g. `npm`) then file paths in the demo will need adjustment.
-* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 3.1.47+.
+* [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) 3.1.61+.
 * `curl`, `make`, `openssl`, `sed`, `tclsh`, `unzip`
 
 Here are the build steps:
