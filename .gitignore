@@ -9,6 +9,8 @@
 !.yarn/versions
 .pnp.*
 
+node_modules
+
 /cache
 /debug
 /deps

@@ -963,6 +963,249 @@ export function Factory(Module) {
     Module.update_hook(db, adapt(xUpdateHook));
   };;
 
+  // Session extension bindings
+  sqlite3.session_create = (function() {
+    const fname = 'sqlite3session_create';
+    const f = Module.cwrap(fname, ...decl('nsn:n'));
+    return function(db, zDb) {
+      verifyDatabase(db);
+      const ppSession = Module._malloc(4);
+      const result = f(db, zDb, ppSession);
+
+      if (result !== SQLite.SQLITE_OK) {
+        check(fname, result, db);
+      }
+
+      const pSession = Module.getValue(ppSession, 'i32');
+      return pSession;
+    };
+  })();
+
+  sqlite3.session_attach = (function() {
+    const fname = 'sqlite3session_attach';
+    const f = Module.cwrap(fname, ...decl('ns:n'));
+    return function(pSession, zTab) {
+      if (typeof pSession !== 'number') {
+        throw new SQLiteError('Invalid session object', SQLite.SQLITE_MISUSE);
+      }
+      const result = f(pSession, zTab);
+      return check(fname, result);
+    };
+  })();
+
+  sqlite3.session_enable = (function() {
+    const fname = 'sqlite3session_enable';
+    const f = Module.cwrap(fname, ...decl('nn:n'));
+    return function(pSession, enableBool) {
+      const enable = enableBool ? 1 : 0;
+      if (typeof pSession !== 'number') {
+        throw new SQLiteError('Invalid session object', SQLite.SQLITE_MISUSE);
+      }
+      const result = f(pSession, enable);
+      if (result !== enable) {
+        throw new SQLiteError('Failed to enable session', SQLite.SQLITE_MISUSE);
+      }
+    };
+  })();
+
+  sqlite3.session_changeset = (function() {
+    const fname = 'sqlite3session_changeset';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(pSession) {
+      if (typeof pSession !== 'number') {
+        throw new SQLiteError('Invalid session object', SQLite.SQLITE_MISUSE);
+      }
+      
+      // Allocate memory for the size (int) and the changeset pointer (void*)
+      const sizePtr = Module._malloc(4);
+      const changesetPtrPtr = Module._malloc(4);
+      
+      try {
+        const result = f(pSession, sizePtr, changesetPtrPtr);
+        if (result === SQLite.SQLITE_OK) {
+          // Get the size of the changeset
+          const size = Module.getValue(sizePtr, 'i32');
+          // Get the pointer to the changeset
+          const changesetPtr = Module.getValue(changesetPtrPtr, 'i32');
+          
+          // Copy the changeset data
+          const changeset = new Uint8Array(Module.HEAPU8.buffer, changesetPtr, size);
+
+          // Free the allocated changeset memory
+          Module._sqlite3_free(changesetPtr);
+          
+          // Return a copy of the changeset
+          return {
+            result: result,
+            size: size,
+            changeset: new Uint8Array(changeset)
+          };
+        }
+        return check(fname, result);
+      } finally {
+        // Free the allocated memory
+        Module._free(sizePtr);
+        Module._free(changesetPtrPtr);
+      }
+    };
+  })();
+
+  sqlite3.session_delete = (function() {
+    const fname = 'sqlite3session_delete';
+    const f = Module.cwrap(fname, ...decl('n:v'));
+    return function(pSession) {
+      if (typeof pSession !== 'number') {
+        throw new SQLiteError('Invalid session object', SQLite.SQLITE_MISUSE);
+      }
+      const result = f(pSession);
+      return result;
+    };
+  })();
+
+  sqlite3.changeset_invert = (function() {
+    const fname = 'sqlite3changeset_invert';
+    const f = Module.cwrap(fname, ...decl('nn:nn'));
+    return function(changesetData) {
+
+      const inPtr = Module._sqlite3_malloc(changesetData.length);
+      Module.HEAPU8.subarray(inPtr).set(changesetData);
+
+      const outLengthPtr = Module._malloc(4);
+      const outPtrPtr = Module._malloc(4);
+      console.log('changesetData.length', changesetData.length)
+      const result = f(changesetData.length, inPtr, outLengthPtr, outPtrPtr);
+
+      if (result !== SQLite.SQLITE_OK) {
+        check(fname, result);
+      }
+
+      // Get the size of the changeset
+      const outLength = Module.getValue(outLengthPtr, 'i32');
+      // Get the pointer to the changeset
+      const changesetOutPtr = Module.getValue(outPtrPtr, 'i32');
+      
+      // Copy the changeset data
+      const changesetOut = new Uint8Array(Module.HEAPU8.buffer, changesetOutPtr, outLength);
+
+      Module._sqlite3_free(inPtr);
+      Module._sqlite3_free(outLengthPtr);
+      Module._sqlite3_free(outPtrPtr);
+      
+      return changesetOut;
+    };
+  })();
+
+  /** 
+   * Convenience function to get an inverted changeset from a session
+   * without having to call sqlite3session_changeset() and then sqlite3changeset_invert().
+   * It's more efficient as it's reusing the same memory allocation for the changeset.
+   */
+  sqlite3.session_changeset_inverted = (function() {
+    const fnameChangeset = 'sqlite3session_changeset';
+    const fChangeset = Module.cwrap(fnameChangeset, ...decl('nnn:n'));
+    const fnameInvert = 'sqlite3changeset_invert';
+    const fInvert = Module.cwrap(fnameInvert, ...decl('nn:nn'));
+    return function(pSession) {
+      if (typeof pSession !== 'number') {
+        throw new SQLiteError('Invalid session object', SQLite.SQLITE_MISUSE);
+      }
+
+      // Allocate memory for the size (int) and the changeset pointer (void*)
+      const sizePtr = Module._malloc(4);
+      const changesetPtrPtr = Module._malloc(4);
+
+      // Allocate memory for the size (int) and the inverted changeset pointer (void*)
+      const sizePtrInvert = Module._malloc(4);
+      const changesetPtrPtrInvert = Module._malloc(4);
+      
+      try {
+        const changesetResult = fChangeset(pSession, sizePtr, changesetPtrPtr);
+        if (changesetResult !== SQLite.SQLITE_OK) {
+          return check(fnameChangeset, changesetResult);
+        }
+
+        // Get the size of the changeset
+        const size = Module.getValue(sizePtr, 'i32');
+        // Get the pointer to the changeset
+        const changesetPtr = Module.getValue(changesetPtrPtr, 'i32');
+
+        
+        const invertedResult = fInvert(size, changesetPtr, sizePtrInvert, changesetPtrPtrInvert);
+        
+        if (invertedResult !== SQLite.SQLITE_OK) {
+          return check(fnameInvert, invertedResult);
+        }
+
+        // Get the size of the changeset
+        const sizeInvert = Module.getValue(sizePtrInvert, 'i32');
+        // Get the pointer to the changeset
+        const changesetPtrInvert = Module.getValue(changesetPtrPtrInvert, 'i32');
+        
+        // Copy the changeset data
+        const changesetInvert = new Uint8Array(Module.HEAPU8.buffer, changesetPtrInvert, sizeInvert);
+
+        Module._sqlite3_free(changesetPtr);
+        Module._sqlite3_free(changesetPtrInvert)
+
+        // Return a copy of the changeset
+        return {
+          result: changesetResult,
+          size: size,
+          changeset: new Uint8Array(changesetInvert)
+        };
+      } finally {
+        // Free the allocated memory
+        Module._free(sizePtr);
+        Module._free(changesetPtrPtr);
+        Module._free(sizePtrInvert);
+        Module._free(changesetPtrPtrInvert);
+      }
+
+    };
+  })();
+
+  sqlite3.changeset_apply = (function() {
+    const fname = 'sqlite3changeset_apply';
+    const f = Module.cwrap(fname, ...decl('nnnnnn:n'));
+    return function(db, changesetData, options) {
+      /*
+        int sqlite3changeset_apply(
+          sqlite3 *db,                    Apply change to "main" db of this handle
+          int nChangeset,                 Size of changeset in bytes 
+          void *pChangeset,               Changeset blob
+          int(*xFilter)(
+            void *pCtx,                   Copy of sixth arg to _apply() 
+            const char *zTab              Table name 
+          ),
+          int(*xConflict)(
+            void *pCtx,                   Copy of sixth arg to _apply() 
+            int eConflict,                DATA, MISSING, CONFLICT, CONSTRAINT 
+            sqlite3_changeset_iter *p     Handle describing change and conflict
+          ),
+          void *pCtx                      First argument passed to xConflict
+        );
+      */
+      const inPtr = Module._sqlite3_malloc(changesetData.length);
+      Module.HEAPU8.subarray(inPtr).set(changesetData);
+
+      // https://sqlite.org/session/c_changeset_abort.html
+      const SQLITE_CHANGESET_REPLACE = 1
+      const onConflict = () => {
+        return SQLITE_CHANGESET_REPLACE;
+      }
+
+      const result = f(db, changesetData.length, inPtr, null, onConflict, null);
+
+      if (result !== SQLite.SQLITE_OK) {
+        check(fname, result);
+      }
+
+      return result;
+    }
+  })();
+
+  // Session extension bindings end
+
   sqlite3.value = function(pValue) {
     const type = sqlite3.value_type(pValue);
     switch (type) {

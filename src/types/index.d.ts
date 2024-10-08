@@ -843,6 +843,8 @@ interface SQLiteAPI {
     db: number,
     callback: (updateType: number, dbName: string|null, tblName: string|null, rowid: bigint) => void): void;
 
+
+
   /**
    * Extract a value from `sqlite3_value`
    * 
@@ -928,6 +930,77 @@ interface SQLiteAPI {
   vfs_register(vfs: SQLiteVFS, makeDefault?: boolean): number;
 
   vfs_registered: Set<string>;
+
+  /**
+   * Create a new session object for a database.
+   * 
+   * @param db database pointer
+   * @param zDb database name
+   * @returns session pointer
+   */
+  session_create(db: number, zDb: string): number;
+
+  /**
+   * Attach a database to a session.
+   * 
+   * @param pSession session pointer
+   * @param zTab table name
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  session_attach(pSession: number, zTab: string | null): number;
+
+  /**
+   * Enable or disable a session.
+   * 
+   * @param pSession session pointer
+   * @param enable 
+   */
+  session_enable(pSession: number, enable: boolean): void;
+
+  /**
+   * Get the changeset for a session.
+   * 
+   * @param pSession session pointer
+   * @returns {result: number, size: number, changeset: Uint8Array}
+   */
+  session_changeset(pSession: number): {
+    result: number;
+    size: number;
+    changeset: Uint8Array;
+  };
+
+  session_changeset_inverted(pSession: number): {
+    result: number;
+    size: number;
+    changeset: Uint8Array;
+  };
+
+  /**
+   * Delete a session object.
+   * 
+   * @param pSession session pointer
+   */
+  session_delete(pSession: number): void;
+
+  /**
+   * Invert a changeset.
+   * 
+   * @param input changeset to invert
+   * @returns inverted changeset
+   */
+  changeset_invert(input: Uint8Array): Uint8Array;
+
+  /**
+   * Apply a changeset to a database.
+   * 
+   * @param db database pointer
+   * @param changeset changeset to apply
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  changeset_apply(db: number, changeset: Uint8Array, options?: {
+    onConflict?: (conflictType: number) => 0 | 1 | 2
+  }): number;
+
 }
 
    type SQLiteAPI_ = SQLiteAPI;
