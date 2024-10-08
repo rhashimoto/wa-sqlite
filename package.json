@@ -40,6 +40,5 @@
     "web-test-runner-jasmine@0.0.6": {
       "unplugged": true
     }
-  },
-  "packageManager": "yarn@4.0.2"
+  }
 }
