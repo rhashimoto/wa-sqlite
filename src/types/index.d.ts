@@ -1315,3 +1315,18 @@ declare module 'wa-sqlite/src/examples/tag.js' {
    */
   export function tag(sqlite3: any, db: number): (arg0: TemplateStringsArray, ...args: any[]) => Promise<object[]>;
 }
+
+/** @ignore */
+declare module 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
+  import * as VFS from "wa-sqlite/src/VFS.js";
+
+  export interface VFSOptions {
+    durability?: "default" | "strict" | "relaxed";
+    purge?: "deferred" | "manual";
+    purgeAtLeast?: number;
+  }
+
+  export class IDBBatchAtomicVFS extends VFS.Base {
+    constructor(idbDatabaseName:string, options: VFSOptions)
+  }
+}
