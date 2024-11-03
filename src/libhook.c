@@ -10,6 +10,11 @@
     SIGNATURE##_async(KEY, __VA_ARGS__) : \
     SIGNATURE(KEY, __VA_ARGS__))
 
+static int libhook_xCommitHook(void* pApp) {
+  const int asyncFlags = pApp ? *(int *)pApp : 0;
+  return CALL_JS(ipp, pApp, pApp);
+}
+
 static void libhook_xUpdateHook(
   void* pApp,
   int iUpdateType,
@@ -20,6 +25,10 @@ static void libhook_xUpdateHook(
   int lo32 = (rowid & 0xFFFFFFFFLL);
   const int asyncFlags = pApp ? *(int *)pApp : 0;
   CALL_JS(vppippii, pApp, pApp, iUpdateType, dbName, tblName, lo32, hi32);
+}
+
+void EMSCRIPTEN_KEEPALIVE libhook_commit_hook(sqlite3* db, int xCommitHook, void* pApp) {
+  sqlite3_commit_hook(db, xCommitHook ? &libhook_xCommitHook : NULL, pApp);
 }
 
 void EMSCRIPTEN_KEEPALIVE libhook_update_hook(sqlite3* db, int xUpdateHook, void* pApp) {

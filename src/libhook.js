@@ -26,4 +26,26 @@
       });
     }
   };
+
+  Module['commit_hook'] = function(db, xCommitHook) {
+    if (pAsyncFlags) {
+      Module['deleteCallback'](pAsyncFlags);
+      Module['_sqlite3_free'](pAsyncFlags);
+      pAsyncFlags = 0;
+    }
+
+    pAsyncFlags = Module['_sqlite3_malloc'](4);
+    setValue(pAsyncFlags, xCommitHook instanceof AsyncFunction ? 1 : 0, 'i32');
+
+    ccall(
+      'libhook_commit_hook',
+      'void',
+      ['number', 'number', 'number'],
+      [db, xCommitHook ? 1 : 0, pAsyncFlags]);
+    if (xCommitHook) {
+      Module['setCallback'](pAsyncFlags, (_) => {
+        return xCommitHook();
+      });
+    }
+  };
 })();

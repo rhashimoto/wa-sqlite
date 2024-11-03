@@ -422,4 +422,133 @@ for (const [key, factory] of FACTORIES) {
       expect(calls).toEqual([[23, "main", "t", 1n]]);
     });
   });
+
+  describe(`${key} commit_hook`, function() {
+    let db;
+    beforeEach(async function() {
+      db = await sqlite3.open_v2(':memory:');
+    });
+  
+    afterEach(async function() {
+      await sqlite3.close(db);
+    });
+
+    it('should call commit hook', async function() {
+      let rc;
+
+      let callsCount = 0;
+      const resetCallsCount = () => callsCount = 0;
+
+      sqlite3.commit_hook(db, () => {
+        callsCount++;
+        return 0;
+      });
+      expect(callsCount).toEqual(0);
+      resetCallsCount();
+
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t(i integer primary key, x);
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(callsCount).toEqual(1);
+      resetCallsCount();
+
+      rc = await sqlite3.exec(db, `
+        SELECT * FROM t;
+      `);
+      expect(callsCount).toEqual(0);
+      resetCallsCount();
+
+      rc = await sqlite3.exec(db, `
+        BEGIN TRANSACTION;
+        INSERT INTO t VALUES (1, 'foo');
+        ROLLBACK;
+      `);
+      expect(callsCount).toEqual(0);
+      resetCallsCount();
+
+      rc = await sqlite3.exec(db, `
+        BEGIN TRANSACTION;
+        INSERT INTO t VALUES (1, 'foo');
+        INSERT INTO t VALUES (2, 'bar');
+        COMMIT;
+      `);
+      expect(callsCount).toEqual(1);
+      resetCallsCount();
+    });
+
+    it('can change commit hook', async function() {
+      let rc;
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t(i integer primary key, x);
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      let a = 0;
+      let b = 0;
+
+      // set hook to increment `a` on commit
+      sqlite3.commit_hook(db, () => {
+        a++;
+        return 0;
+      });
+      rc = await sqlite3.exec(db, `
+        INSERT INTO t VALUES (1, 'foo');
+      `);
+      expect(a).toEqual(1);
+      expect(b).toEqual(0);
+
+      // switch to increment `b`
+      sqlite3.commit_hook(db, () => {
+        b++;
+        return 0;
+      });
+
+      rc = await sqlite3.exec(db, `
+        INSERT INTO t VALUES (2, 'bar');
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(a).toEqual(1);
+      expect(b).toEqual(1);
+
+      // disable hook by passing null
+      sqlite3.commit_hook(db, null);
+
+      rc = await sqlite3.exec(db, `
+        INSERT INTO t VALUES (3, 'qux');
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(a).toEqual(1);
+      expect(b).toEqual(1);
+    });
+
+    it('can rollback based on return value', async function() {
+      let rc;
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t(i integer primary key, x);
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      // accept commit by returning 0
+      sqlite3.commit_hook(db, () => 0);
+      rc = await sqlite3.exec(db, `
+        INSERT INTO t VALUES (1, 'foo');
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      // reject commit by returning 1, causing rollback
+      sqlite3.commit_hook(db, () => 1);
+      await expectAsync(
+        sqlite3.exec(db, `INSERT INTO t VALUES (2, 'bar');`)
+      ).toBeRejected();
+
+      // double-check that the insert was rolled back
+      let hasRow = false;
+      rc = await sqlite3.exec(db, `
+        SELECT * FROM t WHERE i = 2;
+      `, () => hasRow = true);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(hasRow).toBeFalse();
+    });
+  });
 }
