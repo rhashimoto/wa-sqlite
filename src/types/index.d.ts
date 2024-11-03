@@ -458,6 +458,19 @@ declare interface SQLiteAPI {
    */
   column_type(stmt: number, i: number): number;
 
+   /**
+   * Register a commit hook
+   * 
+   * @see https://www.sqlite.org/c3ref/commit_hook.html
+   *
+   * @param db database pointer
+   * @param callback If a non-zero value is returned, commit is converted into
+   * a rollback; disables callback when null
+   */
+   commit_hook(
+    db: number,
+    callback: (() => number) | null): void;
+
   /**
    * Create or redefine SQL functions
    * 
