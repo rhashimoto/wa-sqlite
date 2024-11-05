@@ -26,6 +26,11 @@
       });
     }
   };
+})();
+
+(function() {
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  let pAsyncFlags = 0;
 
   Module['commit_hook'] = function(db, xCommitHook) {
     if (pAsyncFlags) {
