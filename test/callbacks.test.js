@@ -550,5 +550,31 @@ for (const [key, factory] of FACTORIES) {
       expect(rc).toEqual(SQLite.SQLITE_OK);
       expect(hasRow).toBeFalse();
     });
+
+    it('does not overwrite update_hook', async function() {
+      let rc;
+      rc = await sqlite3.exec(db, `
+        CREATE TABLE t(i integer primary key, x);
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      let updateHookInvocationsCount = 0;
+      sqlite3.update_hook(db, (...args) => {
+        updateHookInvocationsCount++;
+      });
+
+      let commitHookInvocationsCount = 0;
+      sqlite3.commit_hook(db, () => {
+        commitHookInvocationsCount++;
+      });
+
+      rc = await sqlite3.exec(db, `
+        INSERT INTO t VALUES (1, 'foo');
+      `);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      expect(updateHookInvocationsCount).toEqual(1);
+      expect(commitHookInvocationsCount).toEqual(1);
+    });
   });
 }
