@@ -735,6 +735,11 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.commit_hook = function(db, xCommitHook) {
+    verifyDatabase(db);
+    Module.commit_hook(db, xCommitHook);
+  };
+
   sqlite3.update_hook = function(db, xUpdateHook) {
     verifyDatabase(db);
 
