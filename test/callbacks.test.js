@@ -566,6 +566,7 @@ for (const [key, factory] of FACTORIES) {
       let commitHookInvocationsCount = 0;
       sqlite3.commit_hook(db, () => {
         commitHookInvocationsCount++;
+        return 0;
       });
 
       rc = await sqlite3.exec(db, `
