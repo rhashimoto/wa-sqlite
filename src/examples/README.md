@@ -19,7 +19,7 @@ Changing the page size after the database is created is not supported (this is a
 ### IDBMirrorVFS
 This VFS keeps all files in memory, persisting database files to IndexedDB. It works on all contexts.
 
-IDBBatchAtomicVFS can trade durability for performance by setting `PRAGMA synchronous=normal`.
+IDBMirrorVFS can trade durability for performance by setting `PRAGMA synchronous=normal`.
 
 Changing the page size after the database is created is not supported.
 
