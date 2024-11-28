@@ -77,6 +77,7 @@ window.addEventListener('DOMContentLoaded', async function() {
     let time = performance.now();
     worker.postMessage(queries);
     worker.addEventListener('message', async function(event) {
+      timestamp.textContent += ` ${(performance.now() - time).toFixed(1)} milliseconds`;
       if (event.data.results) {
         // Format the results as tables.
         event.data.results
@@ -85,7 +86,6 @@ window.addEventListener('DOMContentLoaded', async function() {
       } else {
         output.innerHTML = `<pre>${event.data.error.message}</pre>`;
       }
-      timestamp.textContent += ` ${Math.trunc(performance.now() - time) / 1000} seconds`;
       button.disabled = false;
     }, { once: true });
   });
