@@ -211,6 +211,8 @@
   "_sqlite3_trace_v2",
   "_sqlite3_txn_state",
   "_sqlite3_update_hook",
+  "_sqlite3changeset_start",
+  "_sqlite3changeset_finalize",
   "_sqlite3session_create",
   "_sqlite3session_attach",
   "_sqlite3session_enable",

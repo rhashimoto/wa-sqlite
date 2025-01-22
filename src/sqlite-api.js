@@ -350,8 +350,11 @@ export function Factory(Module) {
       verifyStatement(stmt);
       const nBytes = sqlite3.column_bytes(stmt, iCol);
       const address = f(stmt, iCol);
+      if (address === 0) {
+        return null; // Handle NULL BLOBs
+      }
       const result = Module.HEAPU8.subarray(address, address + nBytes);
-      return result;
+      return new Uint8Array(result); // Ensure a copy is returned
     };
   })();
 
@@ -1028,8 +1031,17 @@ export function Factory(Module) {
           // Get the pointer to the changeset
           const changesetPtr = Module.getValue(changesetPtrPtr, 'i32');
           
+          // Ensure the pointer is valid before accessing memory
+          if (changesetPtr === 0) {
+            return {
+              result: result,
+              size: 0,
+              changeset: null
+            }
+          }
+
           // Copy the changeset data
-          const changeset = new Uint8Array(Module.HEAPU8.buffer, changesetPtr, size);
+          const changeset = new Uint8Array(Module.HEAPU8.subarray(changesetPtr, changesetPtr + size));
 
           // Free the allocated changeset memory
           Module._sqlite3_free(changesetPtr);
@@ -1038,7 +1050,7 @@ export function Factory(Module) {
           return {
             result: result,
             size: size,
-            changeset: new Uint8Array(changeset)
+            changeset: changeset
           };
         }
         return check(fname, result);
@@ -1062,35 +1074,84 @@ export function Factory(Module) {
     };
   })();
 
+  sqlite3.changeset_start = (function() {
+    const fname = 'sqlite3changeset_start';
+    const f = Module.cwrap(fname, ...decl('nnn:n'));
+    return function(changesetData) {
+      // Allocate memory for the input changeset data
+      const inPtr = Module._sqlite3_malloc(changesetData.length);
+      Module.HEAPU8.subarray(inPtr).set(changesetData);
+
+      // Allocate memory for the changeset iterator pointer
+      const ppIter = Module._malloc(4);
+
+      try {
+        // Call the wrapped C function
+        const result = f(ppIter, changesetData.length, inPtr);
+
+        if (result !== SQLite.SQLITE_OK) {
+          check(fname, result); // Handle errors appropriately
+        }
+
+        // Retrieve the changeset iterator handle
+        const pIter = Module.getValue(ppIter, 'i32');
+
+        return pIter;
+      } finally {
+        // Free allocated memory
+        Module._sqlite3_free(inPtr);
+        Module._free(ppIter);
+      }
+    };
+  })();
+
+  sqlite3.changeset_finalize = (function() {
+    const fname = 'sqlite3changeset_finalize';
+    const f = Module.cwrap(fname, ...decl('n:n'));
+    return function(pIter) {
+      const result = f(pIter);
+      return result;
+    };
+  })();
+
   sqlite3.changeset_invert = (function() {
     const fname = 'sqlite3changeset_invert';
     const f = Module.cwrap(fname, ...decl('nn:nn'));
     return function(changesetData) {
-
+      // Allocate memory for the input changeset data
       const inPtr = Module._sqlite3_malloc(changesetData.length);
       Module.HEAPU8.subarray(inPtr).set(changesetData);
 
+      // Allocate memory for the output changeset length and pointer
       const outLengthPtr = Module._malloc(4);
       const outPtrPtr = Module._malloc(4);
-      console.log('changesetData.length', changesetData.length)
+
+      // Call the wrapped C function
       const result = f(changesetData.length, inPtr, outLengthPtr, outPtrPtr);
 
       if (result !== SQLite.SQLITE_OK) {
-        check(fname, result);
+        check(fname, result); // Handle errors appropriately
       }
 
-      // Get the size of the changeset
+      // Retrieve the size and pointer of the inverted changeset
       const outLength = Module.getValue(outLengthPtr, 'i32');
-      // Get the pointer to the changeset
       const changesetOutPtr = Module.getValue(outPtrPtr, 'i32');
-      
-      // Copy the changeset data
-      const changesetOut = new Uint8Array(Module.HEAPU8.buffer, changesetOutPtr, outLength);
 
+      // Copy the inverted changeset data
+      const changesetOut = new Uint8Array(Module.HEAPU8.buffer, changesetOutPtr, outLength).slice();
+
+      // Free allocated memory
       Module._sqlite3_free(inPtr);
-      Module._sqlite3_free(outLengthPtr);
-      Module._sqlite3_free(outPtrPtr);
-      
+
+      // TODO investigate why freeing these pointers causes a crash
+      // RuntimeError: Out of bounds memory access (evaluating 'Module._sqlite3_free(outLengthPtr)')
+      // Repro: https://gist.github.com/schickling/08b10b6fda8583601e586cb0bea333ce
+
+      // Module._sqlite3_free(outLengthPtr);
+      // Module._sqlite3_free(outPtrPtr);
+
+      Module._sqlite3_free(changesetOutPtr);
+
       return changesetOut;
     };
   })();

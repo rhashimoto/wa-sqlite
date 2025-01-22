@@ -966,7 +966,7 @@ interface SQLiteAPI {
   session_changeset(pSession: number): {
     result: number;
     size: number;
-    changeset: Uint8Array;
+    changeset: Uint8Array | null;
   };
 
   session_changeset_inverted(pSession: number): {
@@ -981,6 +981,22 @@ interface SQLiteAPI {
    * @param pSession session pointer
    */
   session_delete(pSession: number): void;
+
+  /**
+   * Start a changeset.
+   * 
+   * @param changeset changeset blob to import from
+   * @returns changeset iterator pointer
+   */
+  changeset_start(changesetBlob: Uint8Array): number;
+
+  /**
+   * Finalize a changeset iterator.
+   * 
+   * @param pIter changeset iterator pointer
+   * @returns `SQLITE_OK` (throws exception on error)
+   */
+  changeset_finalize(pIter: number): number;
 
   /**
    * Invert a changeset.
