@@ -82,8 +82,10 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async jUnlock(fileId, lockType) {
     try {
+      // SQLite can call xUnlock() without ever calling xLock() so
+      // the state may not exist.
       const lockState = this.#mapIdToState.get(fileId);
-      if (lockType >= lockState.type) return VFS.SQLITE_OK;
+      if (!(lockType < lockState?.type)) return VFS.SQLITE_OK;
   
       switch (this.#options.lockPolicy) {
         case 'exclusive':
@@ -122,17 +124,17 @@ export const WebLocksMixin = superclass => class extends superclass {
   }
 
   /**
-   * @param {number} pFile
+   * @param {number} fileId
    * @param {number} op
    * @param {DataView} pArg
    * @returns {number|Promise<number>}
    */
-  jFileControl(pFile, op, pArg) {
-    const lockState = this.#mapIdToState.get(pFile) ??
+  jFileControl(fileId, op, pArg) {
+    const lockState = this.#mapIdToState.get(fileId) ??
       (() => {
         // Call jLock() to create the lock state.
-        this.jLock(pFile, VFS.SQLITE_LOCK_NONE);
-        return this.#mapIdToState.get(pFile);
+        this.jLock(fileId, VFS.SQLITE_LOCK_NONE);
+        return this.#mapIdToState.get(fileId);
       })();
     if (op === WebLocksMixin.WRITE_HINT_OP_CODE &&
         this.#options.lockPolicy === 'shared+hint'){
