@@ -463,6 +463,9 @@ export class OPFSPermutedVFS extends FacadeVFS {
       const file = this.#mapIdToFile.get(fileId);
       if ((file.flags & VFS.SQLITE_OPEN_MAIN_DB) && !file.txIsOverwrite) {
         file.abortController.signal.throwIfAborted();
+        if (!file.txActive) {
+          this.#beginTx(file);
+        }
         file.txActive.fileSize = iSize;
 
         // Remove now obsolete pages from file.txActive.pages
