@@ -1,5 +1,6 @@
 import * as VFS from "../../src/VFS.js";
-import { IDBBatchAtomicVFS } from "../../src/examples/IDBBatchAtomicVFS.js";
+import { IDBBatchAtomicVFS as MyVFS } from "../../src/examples/IDBBatchAtomicVFS.js";
+// import { IDBMirrorVFS as MyVFS } from "../../src/examples/IDBMirrorVFS.js";
 
 const SEARCH_PARAMS = new URLSearchParams(location.search);
 const IDB_NAME = SEARCH_PARAMS.get('idb') ?? 'sqlite-vfs';
@@ -43,7 +44,7 @@ document.getElementById('file-fetch').addEventListener('click', async () => {
   let vfs;
   try {
     log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
-    vfs = await IDBBatchAtomicVFS.create(IDB_NAME, null);
+    vfs = await MyVFS.create(IDB_NAME, null);
 
     // @ts-ignore
     const importURL = document.getElementById('file-url').value;
@@ -69,7 +70,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
   let vfs;
   try {
     log(`Importing to IndexedDB ${IDB_NAME}, path ${DB_NAME}`);
-    vfs = await IDBBatchAtomicVFS.create(IDB_NAME, null);
+    vfs = await MyVFS.create(IDB_NAME, null);
     // @ts-ignore
     await importDatabase(vfs, DB_NAME, event.target.files[0].stream());
     log('Import complete');
@@ -87,7 +88,7 @@ document.getElementById('file-import').addEventListener('change', async event =>
 });
 
 /**
- * @param {IDBBatchAtomicVFS} vfs 
+ * @param {MyVFS} vfs 
  * @param {string} path 
  * @param {ReadableStream} stream 
  */

@@ -1,5 +1,6 @@
 import * as VFS from "../../src/VFS.js";
-import { IDBBatchAtomicVFS } from "../../src/examples/IDBBatchAtomicVFS.js";
+import { IDBBatchAtomicVFS as MyVFS } from "../../src/examples/IDBBatchAtomicVFS.js";
+// import { IDBMirrorVFS as MyVFS } from "../../src/examples/IDBMirrorVFS.js";
 
 // Install the service worker as soon as possible.
 globalThis.addEventListener('install', (/** @type {ExtendableEvent} */ event) => {
@@ -26,7 +27,7 @@ globalThis.addEventListener('fetch', async (/** @type {FetchEvent} */ event) => 
 
   return event.respondWith((async () => {
     // Create the VFS and streaming source using the request parameters.
-    const vfs = await IDBBatchAtomicVFS.create(url.searchParams.get('idb'), null);
+    const vfs = await MyVFS.create(url.searchParams.get('idb'), null);
     const path = url.searchParams.get('db');
     const source = new DatabaseSource(vfs, path);
 
