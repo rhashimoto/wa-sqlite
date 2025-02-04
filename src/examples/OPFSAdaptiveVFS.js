@@ -124,6 +124,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [zName, fileId, flags] });
       return VFS.SQLITE_CANTOPEN;
     }
   }
@@ -145,6 +146,8 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       }
       return VFS.SQLITE_OK;
     } catch (e) {
+      this.lastError = e;
+      this.#postError(zName, e, { arguments: [zName, syncDir] });
       return VFS.SQLITE_IOERR_DELETE;
     }
   }
@@ -170,6 +173,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
         return VFS.SQLITE_OK;
       }
       this.lastError = e;
+      this.#postError(zName, e, { arguments: [zName, flags] });
       return VFS.SQLITE_IOERR_ACCESS;
     }
   }
@@ -182,7 +186,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     try {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
-      await file?.accessHandle?.close();
+      file?.accessHandle?.close();
 
       if (file?.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const [directoryHandle, name] = await getPathComponents(file.pathname, false);
@@ -190,6 +194,8 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       }
       return VFS.SQLITE_OK;
     } catch (e) {
+      this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId] });
       return VFS.SQLITE_IOERR_DELETE;
     }
   }
@@ -224,6 +230,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, pData.subarray(), iOffset] });
       return VFS.SQLITE_IOERR_READ;
     }
   }
@@ -245,6 +252,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, pData.subarray(), iOffset] });
       return VFS.SQLITE_IOERR_WRITE;
     }
   }
@@ -261,6 +269,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, iSize] });
       return VFS.SQLITE_IOERR_TRUNCATE;
     }
   }
@@ -277,6 +286,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, flags] });
       return VFS.SQLITE_IOERR_FSYNC;
     }
   }
@@ -294,6 +304,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId] });
       return VFS.SQLITE_IOERR_FSTAT;
     }
   }
@@ -304,56 +315,61 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
    * @returns {Promise<number>}
    */
   async jLock(fileId, lockType) {
-    if (hasUnsafeAccessHandle) return super.jLock(fileId, lockType);
+    try {
+      if (hasUnsafeAccessHandle) return super.jLock(fileId, lockType);
 
-    const file = this.mapIdToFile.get(fileId);
-    if (!file.isFileLocked) {
-      file.isFileLocked = true;
-      if (!file.handleLockReleaser) {
-        // Listen for other connections wanting the access handle.
-        file.handleRequestChannel.onmessage = event => {
-          if(!file.isFileLocked) {
-            // We have the access handle but the file is not locked.
-            // Release the access handle for the requester.
-            file.accessHandle.close();
-            file.accessHandle = null;
-            file.handleLockReleaser();
-            file.handleLockReleaser = null;
-            this.log?.('access handle requested and released');
-          } else {
-            // We're still using the access handle, so mark it to be
-            // released when we're done.
-            file.isHandleRequested = true;
-            this.log?.('access handle requested');
-          }
-          file.handleRequestChannel.onmessage = null;
-        };
+      const file = this.mapIdToFile.get(fileId);
+      if (!file.isFileLocked) {
+        file.isFileLocked = true;
+        if (!file.handleLockReleaser) {
+          // Listen for other connections wanting the access handle.
+          file.handleRequestChannel.onmessage = event => {
+            if(!file.isFileLocked) {
+              // We have the access handle but the file is not locked.
+              // Release the access handle for the requester.
+              file.accessHandle.close();
+              file.accessHandle = null;
+              file.handleLockReleaser();
+              file.handleLockReleaser = null;
+              this.log?.('access handle requested and released');
+            } else {
+              // We're still using the access handle, so mark it to be
+              // released when we're done.
+              file.isHandleRequested = true;
+              this.log?.('access handle requested');
+            }
+            file.handleRequestChannel.onmessage = null;
+          };
 
-        // We don't have the access handle. First acquire the lock.
-        file.handleLockReleaser = await new Promise((resolve, reject) => {
-          // Tell everyone we want the access handle.
-          function notify() {
-            file.handleRequestChannel.postMessage(null);
-          }
-          const notifyId = setInterval(notify, LOCK_NOTIFY_INTERVAL);
-          setTimeout(notify);
+          // We don't have the access handle. First acquire the lock.
+          file.handleLockReleaser = await new Promise((resolve, reject) => {
+            // Tell everyone we want the access handle.
+            function notify() {
+              file.handleRequestChannel.postMessage(null);
+            }
+            const notifyId = setInterval(notify, LOCK_NOTIFY_INTERVAL);
+            setTimeout(notify);
 
-          navigator.locks.request(this.getFilename(fileId), lock => {
-            clearInterval(notifyId);
-            if (!lock) return reject();
-            return new Promise(release => {
-              resolve(release);
+            navigator.locks.request(this.getFilename(fileId), lock => {
+              clearInterval(notifyId);
+              if (!lock) return reject();
+              return new Promise(release => {
+                resolve(release);
+              });
             });
           });
-        });
 
-        // The access handle should now be available.
-        file.accessHandle = await file.fileHandle.createSyncAccessHandle();
-        this.log?.('access handle acquired');
+          // The access handle should now be available.
+          file.accessHandle = await file.fileHandle.createSyncAccessHandle();
+          this.log?.('access handle acquired');
+        }
       }
-
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, lockType] });
+      return VFS.SQLITE_BUSY;
     }
-    return VFS.SQLITE_OK;
   }
 
   /**
@@ -362,24 +378,30 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
    * @returns {Promise<number>}
    */
   async jUnlock(fileId, lockType) {
-    if (hasUnsafeAccessHandle) return super.jUnlock(fileId, lockType);
+    try {
+      if (hasUnsafeAccessHandle) return super.jUnlock(fileId, lockType);
 
-    if (lockType === VFS.SQLITE_LOCK_NONE) {
-      const file = this.mapIdToFile.get(fileId);
-      if (file.isHandleRequested) {
-        if (file.handleLockReleaser) {
-          // Another connection wants the access handle.
-          file.accessHandle.close();
-          file.accessHandle = null;
-          file.handleLockReleaser();
-          file.handleLockReleaser = null;
-          this.log?.('access handle released');
+      if (lockType === VFS.SQLITE_LOCK_NONE) {
+        const file = this.mapIdToFile.get(fileId);
+        if (file.isHandleRequested) {
+          if (file.handleLockReleaser) {
+            // Another connection wants the access handle.
+            file.accessHandle.close();
+            file.accessHandle = null;
+            file.handleLockReleaser();
+            file.handleLockReleaser = null;
+            this.log?.('access handle released');
+          }
+          file.isHandleRequested = false;
         }
-        file.isHandleRequested = false;
+        file.isFileLocked = false;
       }
-      file.isFileLocked = false;
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, lockType] });
+      return VFS.SQLITE_IOERR_UNLOCK;
     }
-    return VFS.SQLITE_OK;
   }
 
   /**
@@ -411,9 +433,10 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       }
     } catch (e) {
       this.lastError = e;
+      this.#postError(fileId, e, { arguments: [fileId, op] });
       return VFS.SQLITE_IOERR;
     }
-    return VFS.SQLITE_NOTFOUND;
+    return super.jFileControl(fileId, op, pArg);
   }
 
   jGetLastError(zBuf) {
@@ -424,6 +447,31 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       zBuf[written] = 0;
     }
     return VFS.SQLITE_OK
+  }
+
+  /**
+   * @param {string|number} fileId
+   * @param {Error} error 
+   * @param {any} contextExtras 
+   */
+  #postError(fileId, error, contextExtras = {}) {
+    try {
+      const pathname = typeof fileId === 'string' ?
+        fileId :
+        this.mapIdToFile.get(fileId)?.pathname;
+      globalThis.dispatchEvent(new CustomEvent('wa-sqlite.log', {
+        detail: {
+          level: 'error',
+          message: `OPFSAdaptiveVFS: ${error.message}`,
+          data: Object.assign({
+            pathname,
+            stack: error.stack,
+          }, contextExtras)
+        }
+      }));
+    } catch (e) {
+      console.error('Error handler failed', e, error);
+    }
   }
 }
 
