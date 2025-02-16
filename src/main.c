@@ -2,6 +2,8 @@
 #include <emscripten.h>
 #include <sqlite3.h>
 
+extern void sqlite3_vec_init(void);
+
 // Some SQLite API functions take a pointer to a function that frees
 // memory. Although we could add a C binding to a JavaScript function
 // that calls sqlite3_free(), it is more efficient to pass the sqlite3_free
@@ -13,5 +15,6 @@ void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
 
 int main() {
   sqlite3_initialize();
+  sqlite3_auto_extension(&sqlite3_vec_init);
   return 0;
 }
