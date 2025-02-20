@@ -11,7 +11,7 @@ EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd48
 EXTENSION_VEC=sqlite-vec.c
 EXTENSION_VEC_VERSION=0.1.6
 EXTENSION_VEC_DIR=sqlite-vec-v${EXTENSION_VEC_VERSION}
-EXTENSION_VEC_URL=https://github.com/asg017/sqlite-vec/releases/download/v${EXTENSION_VEC_VERSION}/sqlite-vec-${EXTENSION_VEC_VERSION}-amalgamation.tar.gz
+EXTENSION_VEC_URL=https://github.com/team-reflect/sqlite-vec/releases/download/v${EXTENSION_VEC_VERSION}/sqlite-vec-${EXTENSION_VEC_VERSION}-amalgamation.tar.gz
 
 # source files
 CFILES = \
@@ -53,6 +53,7 @@ EMCC ?= emcc
 CFLAGS_COMMON = \
 	-I'deps/$(SQLITE_VERSION)' \
 	-Wno-non-literal-null-conversion \
+	-DSQLITE_VEC_ENABLE_WASM_SIMD -msimd128 \
 	$(CFLAGS_EXTRA)
 CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
 CFLAGS_DIST =  -Oz -flto $(CFLAGS_COMMON)
