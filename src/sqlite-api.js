@@ -310,11 +310,7 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     // return async function(db) {
     return function(db) {
-    // return async function(db) {
-    return function(db) {
       verifyDatabase(db);
-      // const result = await f(db);
-      const result = f(db);
       // const result = await f(db);
       const result = f(db);
       databases.delete(db);
@@ -460,10 +456,6 @@ export function Factory(Module) {
       //   (async (ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n))) :
       //   ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
       return ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
-      // return f instanceof AsyncFunction ?
-      //   (async (ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n))) :
-      //   ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
-      return ((ctx, n, values) => f(ctx, Module.HEAP32.subarray(values / 4, values / 4 + n)));
     }
 
     const result = Module.create_function(
@@ -506,7 +498,6 @@ export function Factory(Module) {
     for (const stmt of stmts) {
       let columns;
       while (sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
-      while (sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
         if (callback) {
           columns = columns ?? sqlite3.column_names(stmt);
           const row = sqlite3.row(stmt);
@@ -518,19 +509,12 @@ export function Factory(Module) {
     for (const stmt of stmts) {
       sqlite3.finalize(stmt);
     }
-    for (const stmt of stmts) {
-      sqlite3.finalize(stmt);
-    }
     return SQLite.SQLITE_OK;
   };
 
   sqlite3.finalize = (function() {
     const fname = 'sqlite3_finalize';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
-    // return async function(stmt) {
-    //   const result = await f(stmt);
-    return function(stmt) {
-      const result = f(stmt);
     // return async function(stmt) {
     //   const result = await f(stmt);
     return function(stmt) {
@@ -594,37 +578,12 @@ export function Factory(Module) {
 
         Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
         check(fname, rc, db);
-        check(fname, rc, db);
         return db;
       } finally {
         Module._sqlite3_free(zVfs);
       }
     };
   })();
-
-  sqlite3.open_v2Sync = (function() {
-    const fname = 'sqlite3_open_v2';
-    const f = Module.cwrap(fname, ...decl('snnn:n'), { async });
-    return function(zFilename, flags, zVfs) {
-      flags = flags || SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_READWRITE;
-      zVfs = createUTF8(zVfs);
-      try {
-        // Allow retry operations.
-        // const rc = await retry(() => f(zFilename, tmpPtr[0], flags, zVfs));
-        const rc = f(zFilename, tmpPtr[0], flags, zVfs);
-
-        const db = Module.getValue(tmpPtr[0], '*');
-        databases.add(db);
-
-        Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-        check(fname, rc, db);
-        return db;
-      } finally {
-        Module._sqlite3_free(zVfs);
-      }
-    };
-  })();
-
 
   sqlite3.open_v2Sync = (function() {
     const fname = 'sqlite3_open_v2';
@@ -659,9 +618,7 @@ export function Factory(Module) {
     const fname = 'sqlite3_reset';
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     return function(stmt) {
-    return function(stmt) {
       verifyStatement(stmt);
-      const result = f(stmt);
       const result = f(stmt);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
@@ -785,10 +742,6 @@ export function Factory(Module) {
       //   (async (_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6))) :
       //   ((_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6)));
       return ((_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6)));
-      // return f instanceof AsyncFunction ?
-      //   (async (_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6))) :
-      //   ((_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6)));
-      return ((_, iAction, p3, p4, p5, p6) => f(...cvtArgs(_, iAction, p3, p4, p5, p6)));
     }
 
     const result = Module.set_authorizer(db, adapt(xAuth), pApp);
@@ -812,10 +765,6 @@ export function Factory(Module) {
       ['number', 'number', 'number', 'number', 'number', 'number'],
       // { async: true });
       { async: false });
-      // { async: true });
-      { async: false });
-
-      const stmts = [];
 
       const stmts = [];
 
@@ -858,31 +807,6 @@ export function Factory(Module) {
           // Call sqlite3_prepare_v3() for the next statement.
           // Allow retry operations.
           const zTail = Module.getValue(pzTail, '*');
-          // const rc = await retry(() => {
-          //   return prepare(
-          //     db,
-          //     zTail,
-          //     pzEnd - pzTail,
-          //     options.flags || 0,
-          //     pStmt,
-          //     pzTail);
-          // });
-          const rc = prepare(
-            db,
-            zTail,
-            pzEnd - pzTail,
-            options.flags || 0,
-            pStmt,
-            pzTail);
-          // const rc = await retry(() => {
-          //   return prepare(
-          //     db,
-          //     zTail,
-          //     pzEnd - pzTail,
-          //     options.flags || 0,
-          //     pStmt,
-          //     pzTail);
-          // });
           const rc = prepare(
             db,
             zTail,
@@ -900,17 +824,8 @@ export function Factory(Module) {
             mapStmtToDB.set(stmt, db);
             // yield stmt;
             stmts.push(stmt);
-            // yield stmt;
-            stmts.push(stmt);
           }
         } while (stmt);
-      // } finally {
-      //   while (onFinally.length) {
-      //     onFinally.pop()();
-      //   }
-      // }
-
-      return stmts;
       // } finally {
       //   while (onFinally.length) {
       //     onFinally.pop()();
@@ -925,13 +840,9 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('n:n'), { async });
     // return async function(stmt) {
     return function(stmt) {
-    // return async function(stmt) {
-    return function(stmt) {
       verifyStatement(stmt);
 
       // Allow retry operations.
-      // const rc = await retry(() => f(stmt));
-      const rc = f(stmt);
       // const rc = await retry(() => f(stmt));
       const rc = f(stmt);
 
@@ -1356,8 +1267,6 @@ export function Factory(Module) {
 
   const registeredVfs = new Set();
 
-  const registeredVfs = new Set();
-
   sqlite3.vfs_register = function(vfs, makeDefault) {
     if (registeredVfs.has(vfs.name)) return
     if (registeredVfs.has(vfs.name)) return
@@ -1365,12 +1274,7 @@ export function Factory(Module) {
     const res = check('sqlite3_vfs_register', result);
     registeredVfs.add(vfs.name);
     return res
-    const res = check('sqlite3_vfs_register', result);
-    registeredVfs.add(vfs.name);
-    return res
   };
-
-  sqlite3.vfs_registered = registeredVfs;
 
   sqlite3.vfs_registered = registeredVfs;
 
