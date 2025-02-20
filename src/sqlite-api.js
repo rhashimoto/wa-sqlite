@@ -768,8 +768,8 @@ export function Factory(Module) {
 
       const stmts = [];
 
+      // return (async function*() {
       const onFinally = [];
-      // try {
       // try {
         // Encode SQL string to UTF-8.
         const utf8 = textEncoder.encode(sql);
@@ -1268,7 +1268,6 @@ export function Factory(Module) {
   const registeredVfs = new Set();
 
   sqlite3.vfs_register = function(vfs, makeDefault) {
-    if (registeredVfs.has(vfs.name)) return
     if (registeredVfs.has(vfs.name)) return
     const result = Module.vfs_register(vfs, makeDefault);
     const res = check('sqlite3_vfs_register', result);
