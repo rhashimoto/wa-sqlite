@@ -6,6 +6,7 @@ Changes include:
 	- Change API to expose synchronous functions
 	- Keeps `open_v2` but additionally exposes `open_v2Sync` which is synchronous
 	- Add `serialize`, `deserialize` and `backup` functions
+  - Add `session_` extension functions
 - `src/types/index.d.ts`
   - Adjust types to match the new sync API
 	- No longer `declare` `SQLiteAPI` / `SQLiteVFS` globally but export it properly
