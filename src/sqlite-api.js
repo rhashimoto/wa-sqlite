@@ -1168,6 +1168,8 @@ export function Factory(Module) {
 
       const result = f(db, changesetData.length, inPtr, null, onConflict, null);
 
+      Module._sqlite3_free(inPtr);
+
       if (result !== SQLite.SQLITE_OK) {
         check(fname, result);
       }
