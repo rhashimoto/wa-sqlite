@@ -139,6 +139,9 @@ cache/$(EXTENSION_FUNCTIONS):
 clean-deps:
 	rm -rf deps
 
+.PHONY: deps
+deps: deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS)
+
 deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
 	mkdir -p cache/$(SQLITE_VERSION)
 	curl -LsS $(SQLITE_TARBALL_URL) | tar -xzf - -C cache/$(SQLITE_VERSION)/ --strip-components=1
