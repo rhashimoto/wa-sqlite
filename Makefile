@@ -1,5 +1,5 @@
 # dependencies
-SQLITE_VERSION = version-3.47.0
+SQLITE_VERSION = version-3.49.1
 SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=${SQLITE_VERSION}
 
 EXTENSION_FUNCTIONS = extension-functions.c
@@ -138,6 +138,9 @@ cache/$(EXTENSION_FUNCTIONS):
 .PHONY: clean-deps
 clean-deps:
 	rm -rf deps
+
+.PHONY: deps
+deps: deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c deps/$(EXTENSION_FUNCTIONS)
 
 deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
 	mkdir -p cache/$(SQLITE_VERSION)
