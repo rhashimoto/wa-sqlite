@@ -266,6 +266,20 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           data: pData.slice()
         };
         this.#idb.q(({ blocks }) => {
+          // If this write is past the end of the file, insert blocks
+          // for the skipped space.
+          for (let skipOffset = file.metadata.fileSize;
+               skipOffset < iOffset; skipOffset += data.byteLength) {
+            console.warn(`Filling skipped space ${file.path} ${skipOffset}`);
+            blocks.put({
+              path: file.path,
+              offset: -skipOffset,
+              version: version,
+              data: new Uint8Array(data.byteLength)
+            });
+            file.changedPages.add(skipOffset);
+          }
+
           blocks.put(block);
           file.changedPages.add(iOffset);
         }, 'rw', file.txOptions);
@@ -454,6 +468,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
               if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
                 // Don't allow changing the page size.
                 if (value && file.metadata.fileSize) {
+                  console.error('IDBBatchAtomicVFS page size cannot be changed.');
                   return VFS.SQLITE_ERROR;
                 }
               }
