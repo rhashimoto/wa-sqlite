@@ -333,6 +333,12 @@ export class IDBMirrorVFS extends FacadeVFS {
 
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
         this.#requireTxActive(file);
+        // SQLite is not necessarily written sequentially, so fill in the
+        // unwritten blocks here.
+        for (let fillOffset = file.txActive.fileSize;
+             fillOffset < iOffset; fillOffset += pData.byteLength) {
+          file.txActive.blocks.set(fillOffset, new Uint8Array(pData.byteLength));
+        }
         file.txActive.blocks.set(iOffset, pData.slice());
         file.txActive.fileSize = Math.max(file.txActive.fileSize, iOffset + pData.byteLength);
         file.blockSize = pData.byteLength;
