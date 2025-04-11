@@ -21,9 +21,8 @@ class File {
   /** @type {number} */ flags;
 
   /** @type {Metadata} */ metadata;
-  /** @type {number} */ fileSize = 0;
-
   /** @type {boolean} */ needsMetadataSync = false;
+
   /** @type {Metadata} */ rollback = null;
   /** @type {Set<number>} */ changedPages = new Set();
 
@@ -259,27 +258,30 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       if (!isOverwrite ||
           file.flags & VFS.SQLITE_OPEN_MAIN_DB ||
           file.flags & VFS.SQLITE_OPEN_TEMP_DB) {
+        const snapshotFileSize = file.metadata.fileSize;
         const block = {
           path: file.path,
           offset: -iOffset,
           version: version,
-          data: pData.slice()
+          data
         };
         this.#idb.q(({ blocks }) => {
-          // If this write is past the end of the file, insert blocks
-          // for the skipped space.
-          for (let skipOffset = file.metadata.fileSize;
-               skipOffset < iOffset; skipOffset += data.byteLength) {
-            console.warn(`Filling skipped space ${file.path} ${skipOffset}`);
-            blocks.put({
-              path: file.path,
-              offset: -skipOffset,
-              version: version,
-              data: new Uint8Array(data.byteLength)
-            });
-            file.changedPages.add(skipOffset);
+          if (file.flags & (VFS.SQLITE_OPEN_MAIN_DB | VFS.SQLITE_OPEN_TEMP_DB)) {
+            // If this write is past the end of the file, insert blocks
+            // for the skipped space. Note that we can't test against
+            // file.metadata.fileSize because that will have changed
+            // by the time this lambda is executed.
+            for (let skipOffset = snapshotFileSize;
+                 skipOffset < iOffset; skipOffset += data.byteLength) {
+              blocks.put({
+                path: file.path,
+                offset: -skipOffset,
+                version: version,
+                data: new Uint8Array(data.byteLength)
+              });
+              file.changedPages.add(skipOffset);
+            }
           }
-
           blocks.put(block);
           file.changedPages.add(iOffset);
         }, 'rw', file.txOptions);
@@ -298,7 +300,6 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           // Write back.
           blocks.put(block);
         }, 'rw', file.txOptions);
-
       }
 
       if (file.metadata.fileSize < iOffset + pData.length) {
