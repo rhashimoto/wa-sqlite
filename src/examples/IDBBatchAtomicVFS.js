@@ -3,6 +3,11 @@ import { FacadeVFS } from '../FacadeVFS.js';
 import * as VFS from '../VFS.js';
 import { WebLocksMixin } from '../WebLocksMixin.js';
 
+const RETRYABLE_ERRORS = new Set([
+  'TransactionInactiveError',
+  'InvalidStateError'
+]);
+
 /**
  * @typedef Metadata
  * @property {string} name
@@ -717,21 +722,21 @@ export class IDBContext {
         });
       }
 
-      // @ts-ignore
-      // Create object store proxies.
-      const objectStores = [...tx.objectStoreNames].map(name => {
-        return [name, this.proxyStoreOrIndex(tx.objectStore(name))];
-      });
-
       try {
+        // @ts-ignore
+        // Create object store proxies.
+        const objectStores = [...tx.objectStoreNames].map(name => {
+          return [name, this.proxyStoreOrIndex(tx.objectStore(name))];
+        });
+
         // Execute the function.
         return await f(Object.fromEntries(objectStores));
       } catch (e) {
         // Use a new transaction if this one was inactive. This will
         // happen if the last request in the transaction completed
         // in a previous task but the transaction has not yet committed.
-        if (!i && e.name === 'TransactionInactiveError') {
-          this.log?.('TransactionInactiveError, retrying');
+        if (!i && RETRYABLE_ERRORS.has(e.name)) {
+          this.log?.(`${e.name}, retrying`);
           tx = null;
           continue;
         }

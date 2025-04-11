@@ -8,9 +8,12 @@ export default /** @type {import("@web/test-runner").TestRunnerConfig} */ ({
       defaultTimeoutInterval: 5 * 60 * 1000
     },
   },
+  browserLogs: true,
+  browserStartTimeout: 60_000,
   nodeResolve: true,
   files: ['./test/*.test.js'],
   concurrency: 1,
+  concurrentBrowsers: 1,
   browsers: [
     chromeLauncher({
       launchOptions: {
