@@ -487,25 +487,27 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
           break;
         case VFS.SQLITE_FCNTL_SYNC:
           this.log?.('xFileControl', file.path, 'SYNC');
-          const commitMetadata = Object.assign({}, file.metadata);
-          const prevFileSize = file.rollback.fileSize
-          this.#idb.q(({ metadata, blocks }) => {
-            metadata.put(commitMetadata);
+          if (file.rollback) {
+            const commitMetadata = Object.assign({}, file.metadata);
+            const prevFileSize = file.rollback.fileSize
+            this.#idb.q(({ metadata, blocks }) => {
+              metadata.put(commitMetadata);
 
-            // Remove old page versions.
-            for (const offset of file.changedPages) {
-              if (offset < prevFileSize) {
-                const range = IDBKeyRange.bound(
-                  [file.path, -offset, commitMetadata.version],
-                  [file.path, -offset, Infinity],
-                  true);
-                blocks.delete(range);
+              // Remove old page versions.
+              for (const offset of file.changedPages) {
+                if (offset < prevFileSize) {
+                  const range = IDBKeyRange.bound(
+                    [file.path, -offset, commitMetadata.version],
+                    [file.path, -offset, Infinity],
+                    true);
+                  blocks.delete(range);
+                }
               }
-            }
-            file.changedPages.clear();
-          }, 'rw', file.txOptions);
-          file.needsMetadataSync = false;
-          file.rollback = null;
+              file.changedPages.clear();
+            }, 'rw', file.txOptions);
+            file.needsMetadataSync = false;
+            file.rollback = null;
+          }
           break;
         case VFS.SQLITE_FCNTL_BEGIN_ATOMIC_WRITE:
           // Every write transaction is atomic, so this is a no-op.
