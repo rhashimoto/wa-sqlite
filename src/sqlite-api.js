@@ -118,6 +118,8 @@ export function Factory(Module) {
         }
       case 'string':
         return sqlite3.bind_text(stmt, i, value);
+      case "boolean":
+        return sqlite3.bind_int(stmt, i, value ? 1 : 0);
       default:
         if (value instanceof Uint8Array || Array.isArray(value)) {
           return sqlite3.bind_blob(stmt, i, value);
