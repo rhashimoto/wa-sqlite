@@ -173,4 +173,14 @@ export class MemoryVFS extends FacadeVFS {
     pResOut.setInt32(0, file ? 1 : 0, true);
     return VFS.SQLITE_OK;
   }
+
+  /**
+   * Override the base makeDataArray to not watch for WebAssembly memory resize.
+   * as we always use the memory immediately.
+   * @param {number} byteOffset 
+   * @param {number} byteLength 
+   */
+  makeDataArray(byteOffset, byteLength) {
+    return this._module.HEAPU8.subarray(byteOffset, byteOffset + byteLength);
+  }
 }

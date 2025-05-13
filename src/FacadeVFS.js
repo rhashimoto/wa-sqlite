@@ -285,7 +285,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xRead(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
-    const pDataArray = this.#makeDataArray(pData, iAmt);
+    const pDataArray = this.makeDataArray(pData, iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
     this['log']?.('jRead', pFile, iAmt, iOffset);
     return this.jRead(pFile, pDataArray, iOffset);
@@ -300,7 +300,7 @@ export class FacadeVFS extends VFS.Base {
    * @returns {number|Promise<number>}
    */
   xWrite(pFile, pData, iAmt, iOffsetLo, iOffsetHi) {
-    const pDataArray = this.#makeDataArray(pData, iAmt);
+    const pDataArray = this.makeDataArray(pData, iAmt);
     const iOffset = delegalize(iOffsetLo, iOffsetHi);
     this['log']?.('jWrite', pFile, pDataArray, iOffset);
     return this.jWrite(pFile, pDataArray, iOffset);
@@ -451,7 +451,7 @@ export class FacadeVFS extends VFS.Base {
    * @param {number} byteOffset 
    * @param {number} byteLength 
    */
-  #makeDataArray(byteOffset, byteLength) {
+  makeDataArray(byteOffset, byteLength) {
     let target = this._module.HEAPU8.subarray(byteOffset, byteOffset + byteLength);
     return new Proxy(target, {
       get: (_, prop, receiver) => {
