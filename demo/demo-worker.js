@@ -132,20 +132,33 @@ maybeReset().then(async () => {
   // Handle SQL queries.
   addEventListener('message', async (event) => {
     try {
-      const query = event.data;
+      let queries = [];
+      if (typeof event.data === 'string') {
+        queries = [{
+          sql: event.data,
+          params: null
+        }];
+      } else if (Array.isArray(event.data)) {
+        queries = event.data;
+      }
 
       const start = performance.now();
       const results = [];
-      for await (const stmt of sqlite3.statements(db, query)) {
-        const rows = [];
-        while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
-          const row = sqlite3.row(stmt);
-          rows.push(row);
-        }
-  
-        const columns = sqlite3.column_names(stmt)
-        if (columns.length) {
-          results.push({ columns, rows });
+      for (const { sql, params } of queries) {
+        for await (const stmt of sqlite3.statements(db, sql)) {
+          if (params) {
+            sqlite3.bind_collection(stmt, params);
+          }
+          const rows = [];
+          while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+            const row = sqlite3.row(stmt);
+            rows.push(row);
+          }
+    
+          const columns = sqlite3.column_names(stmt)
+          if (columns.length) {
+            results.push({ columns, rows });
+          }
         }
       }
       const end = performance.now();

@@ -2,11 +2,26 @@
 
 const searchParams = new URLSearchParams(location.search);
 
-// Load benchmark SQL from files.
-const benchmarksReady = Promise.all(Array.from(new Array(16), (_, i) => {
-  const filename = `./benchmark${i + 1}.sql`;
-  return fetch(filename).then(response => response.text());
-}));
+const benchmark100kSelectsWithParams = () => {
+  return Array.from(new Array(100000), (_, i) => {
+    return {
+      sql: "SELECT ?, ?, ?, ?;", 
+      args: ["fourteen", "thousand", "three hundred", "seventy-two"]
+    };
+  })
+}
+
+// Load benchmarks
+const benchmarksReady = Promise.all([
+  // Load all the benchmark SQL files
+  ...Array.from(new Array(16), (_, i) => {
+    const filename = `./benchmark${i + 1}.sql`;
+    return fetch(filename).then(response => response.text());
+  }),
+  // And some benchmarks with bound parameters
+  benchmark100kSelectsWithParams()
+]);
+
 
 // Parse configurations from the URL and add table columns.
 const CONFIGURATIONS = (searchParams.get('config') ?? 'default,')
@@ -92,8 +107,8 @@ function addEntry(parent, text) {
   parent.appendChild(child);
 }
 
-async function query(worker, sql) {
-  worker.postMessage(sql);
+async function query(worker, query) {
+  worker.postMessage(query);
   return new Promise((resolve, reject) => {
     worker.addEventListener('message', event => {
       if (event.data?.error) {
