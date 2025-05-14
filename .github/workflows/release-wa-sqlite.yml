@@ -22,7 +22,7 @@ on:
         type: string
       em_version:
         description: 'EMSDK version'
-        default: 'latest'
+        default: '4.0.6'
         required: false
         type: string
 
