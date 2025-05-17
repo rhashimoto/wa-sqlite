@@ -238,6 +238,27 @@ export function api_statements(context) {
       }
     });
 
+    it('should bind boolean', async function() {
+      let rc;
+      const sql = 'SELECT ?';
+      const storeValue = true;
+      const expectedRetrievedValue = 1;
+
+      for await (const stmt of i(sqlite3.statements(db, sql))) {
+        // Comlink intercepts the 'bind' property so use an alias.
+        rc = await sqlite3.bind$(stmt, 1, storeValue);
+        expect(rc).toEqual(SQLite.SQLITE_OK);
+
+        while ((rc = await sqlite3.step(stmt)) !== SQLite.SQLITE_DONE) {
+          expect(rc).toEqual(SQLite.SQLITE_ROW);
+
+          expect(await sqlite3.column_count(stmt)).toEqual(1);
+          expect(await sqlite3.column_type(stmt, 0)).toEqual(SQLite.SQLITE_INTEGER);
+          expect(await sqlite3.column_int(stmt, 0)).toEqual(expectedRetrievedValue);
+        }
+      }
+    });
+
     it('should bind collection array', async function() {
       let rc;
       const sql = 'VALUES (?, ?, ?, ?, ?)';
