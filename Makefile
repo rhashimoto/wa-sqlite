@@ -1,6 +1,6 @@
 # dependencies
-SQLITE_VERSION = version-3.47.0
-SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=${SQLITE_VERSION}
+LIBSQL_VERSION = v0.24.31
+LIBSQL_TARBALL_URL = https://github.com/tursodatabase/libsql/archive/refs/tags/libsql-server-${LIBSQL_VERSION}.tar.gz
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
@@ -27,7 +27,7 @@ JSFILES = \
 
 vpath %.c src
 vpath %.c deps
-vpath %.c deps/$(SQLITE_VERSION)
+vpath %.c deps/$(LIBSQL_VERSION)
 
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
@@ -42,7 +42,7 @@ OBJ_FILES_DIST = $(patsubst %.c,tmp/obj/dist/%.o,$(CFILES))
 EMCC ?= emcc
 
 CFLAGS_COMMON = \
-	-I'deps/$(SQLITE_VERSION)' \
+	-I'deps/$(LIBSQL_VERSION)' \
 	-Wno-non-literal-null-conversion \
 	$(CFLAGS_EXTRA)
 CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
@@ -139,11 +139,12 @@ cache/$(EXTENSION_FUNCTIONS):
 clean-deps:
 	rm -rf deps
 
-deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
-	mkdir -p cache/$(SQLITE_VERSION)
-	curl -LsS $(SQLITE_TARBALL_URL) | tar -xzf - -C cache/$(SQLITE_VERSION)/ --strip-components=1
-	mkdir -p deps/$(SQLITE_VERSION)
-	(cd deps/$(SQLITE_VERSION); ../../cache/$(SQLITE_VERSION)/configure --enable-all && make sqlite3.c)
+deps/$(LIBSQL_VERSION)/sqlite3.h deps/$(LIBSQL_VERSION)/sqlite3.c:
+	mkdir -p cache/$(LIBSQL_VERSION)
+	curl -LsS $(LIBSQL_TARBALL_URL) \
+    | tar -xzf - -C cache/$(LIBSQL_VERSION)/ --strip-components=2 libsql-libsql-server-${LIBSQL_VERSION}/libsql-sqlite3/
+	mkdir -p deps/$(LIBSQL_VERSION)
+	(cd deps/$(LIBSQL_VERSION); ../../cache/$(LIBSQL_VERSION)/configure --enable-all && make sqlite3.c)
 
 deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 	mkdir -p deps
