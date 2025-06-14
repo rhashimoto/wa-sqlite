@@ -405,49 +405,23 @@ export class FacadeVFS extends VFS.Base {
 
   /**
    * Wrapped DataView for pointer arguments.
-   * Pointers to a single value are passed using DataView. A Proxy
-   * wrapper prevents use of incorrect type or endianness.
+   * Pointers to a single value are passed using a DataView-like class.
+   * This wrapper class prevents use of incorrect type or endianness, and
+   * reacquires the underlying buffer when the WebAssembly memory is resized.
    * @param {'Int32'|'BigInt64'} type 
    * @param {number} byteOffset 
    * @returns {DataView}
    */
   #makeTypedDataView(type, byteOffset) {
-    const byteLength = type === 'Int32' ? 4 : 8;
-    const getter = `get${type}`;
-    const setter = `set${type}`;
-    const makeDataView = () => new DataView(
-      this._module.HEAPU8.buffer,
-      this._module.HEAPU8.byteOffset + byteOffset,
-      byteLength);
-    let dataView = makeDataView();
-    return new Proxy(dataView, {
-      get(_, prop) {
-        if (dataView.buffer.byteLength === 0) {
-          // WebAssembly memory resize detached the buffer.
-          dataView = makeDataView();
-        }
-        if (prop === getter) {
-          return function(byteOffset, littleEndian) {
-            if (!littleEndian) throw new Error('must be little endian');
-            return dataView[prop](byteOffset, littleEndian);
-          }
-        }
-        if (prop === setter) {
-          return function(byteOffset, value, littleEndian) {
-            if (!littleEndian) throw new Error('must be little endian');
-            return dataView[prop](byteOffset, value, littleEndian);
-          }
-        }
-        if (typeof prop === 'string' && (prop.match(/^(get)|(set)/))) {
-          throw new Error('invalid type');
-        }
-        const result = dataView[prop];
-        return typeof result === 'function' ? result.bind(dataView) : result;
-      }
-    });
+    // @ts-ignore
+    return new DataViewProxy(this._module, byteOffset, type);
   }
 
   /**
+   * Wrapped Uint8Array for buffer arguments.
+   * Memory blocks are passed as a Uint8Array-like class. This wrapper
+   * class reacquires the underlying buffer when the WebAssembly memory
+   * is resized.
    * @param {number} byteOffset 
    * @param {number} byteLength 
    * @returns {Uint8Array}
@@ -499,6 +473,16 @@ function delegalize(lo32, hi32) {
   return (hi32 * 0x100000000) + lo32 + (lo32 < 0 ? 2**32 : 0);
 }
 
+// This class provides a Uint8Array-like interface for a WebAssembly memory
+// buffer. It is used to access memory blocks passed as arguments to
+// xRead, xWrite, etc. The class reacquires the underlying buffer when the
+// WebAssembly memory is resized, which can happen when the memory is
+// detached and resized by the WebAssembly module.
+//
+// Note that although this class implements the same methods as Uint8Array,
+// it is not a real Uint8Array and passing it to functions that expect
+// a Uint8Array may not work. Use subarray() to get a real Uint8Array
+// if needed.
 class Uint8ArrayProxy {
   #module;
 
@@ -625,5 +609,73 @@ class Uint8ArrayProxy {
   }
   [Symbol.iterator]() {
     return this.#array[Symbol.iterator]();
+  }
+}
+
+// This class provides a DataView-like interface for a WebAssembly memory
+// buffer, restricted to either Int32 or BigInt64 types. It also reacquires
+// the underlying buffer when the WebAssembly memory is resized, which can
+// happen when the memory is detached and resized by the WebAssembly module.
+class DataViewProxy {
+  #module;
+  #type;
+
+  #_view = new DataView(new ArrayBuffer(0));
+  get #view() {
+    if (this.#_view.buffer.byteLength === 0) {
+      // WebAssembly memory resize detached the buffer so re-create the
+      // view with the new buffer.
+      this.#_view = new DataView(
+        this.#module.HEAPU8.buffer,
+        this.#module.HEAPU8.byteOffset + this.byteOffset);
+    }
+    return this.#_view;
+  }
+
+  /**
+   * @param {*} module
+   * @param {number} byteOffset 
+   * @param {'Int32'|'BigInt64'} type
+   */
+  constructor(module, byteOffset, type) {
+    this.#module = module;
+    this.byteOffset = byteOffset;
+    this.#type = type;
+  }
+
+  get buffer() {
+    return this.#view.buffer;
+  }
+  get byteLength() {
+    return this.#type === 'Int32' ? 4 : 8;
+  }
+
+  getInt32(byteOffset, littleEndian) {
+    if (this.#type !== 'Int32') {
+      throw new Error('invalid type');
+    }
+    if (!littleEndian) throw new Error('must be little endian');
+    return this.#view.getInt32(byteOffset, littleEndian);
+  }
+  setInt32(byteOffset, value, littleEndian) {
+    if (this.#type !== 'Int32') {
+      throw new Error('invalid type');
+    }
+    if (!littleEndian) throw new Error('must be little endian');
+    this.#view.setInt32(byteOffset, value, littleEndian);
+  }
+  getBigInt64(byteOffset, littleEndian) {
+    if (this.#type !== 'BigInt64') {
+      throw new Error('invalid type');
+    }
+    if (!littleEndian) throw new Error('must be little endian');
+    return this.#view.getBigInt64(byteOffset, littleEndian);
+  }
+  setBigInt64(byteOffset, value, littleEndian) {
+    if (this.#type !== 'BigInt64') {
+      throw new Error('invalid type');
+    }
+    if (!littleEndian) throw new Error('must be little endian');
+    this.#view.setBigInt64(byteOffset, value, littleEndian);
   }
 }
