@@ -1,6 +1,14 @@
 ## LiveStore fork
 
-Changes include:
+This fork adds synchronous APIs and session extensions needed for LiveStore's real-time collaborative database features. **This fork is intended for LiveStore use only** - external users should use [upstream wa-sqlite](https://github.com/rhashimoto/wa-sqlite).
+
+### Why this fork?
+
+- **Synchronous API**: LiveStore requires synchronous database operations for performance-critical paths
+- **Session extensions**: Enables change tracking and replication for collaborative features  
+- **Node.js compatibility**: Additional build targets for server-side testing
+
+### Changes include:
 
 - `src/sqlite-api.js`:
 	- Change API to expose synchronous functions
@@ -13,6 +21,9 @@ Changes include:
 	- Exposed more types from `src/examples`
 - `dist`
   - Added Node.js build target (mostly used for testing)
+
+### Staying current
+This fork is regularly rebased against [upstream wa-sqlite](https://github.com/rhashimoto/wa-sqlite) to incorporate latest improvements and security fixes.
 
 ---
 
