@@ -502,7 +502,6 @@ export function Factory(Module) {
           columns = columns ?? sqlite3.column_names(stmt);
           const row = sqlite3.row(stmt);
           callback(row, columns);
-          callback(row, columns);
         }
       }
     }
