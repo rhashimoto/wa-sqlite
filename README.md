@@ -7,6 +7,9 @@ This fork adds synchronous APIs and session extensions needed for LiveStore's re
 - **Synchronous API**: LiveStore requires synchronous database operations for performance-critical paths
 - **Session extensions**: Enables change tracking and replication for collaborative features  
 - **Node.js compatibility**: Additional build targets for server-side testing
+
+## Future work
+
 - **Async build investigation**: Some VFS implementations (e.g., IndexedDB) require async APIs ([#131](https://github.com/livestorejs/livestore/issues/131)). We're investigating whether to support this through a unified hybrid build or separate builds.
 
 ### Changes include:

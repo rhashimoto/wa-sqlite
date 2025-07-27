@@ -1,6 +1,6 @@
 {
   "name": "@livestore/wa-sqlite",
-  "version": "1.0.8-dev.1",
+  "version": "1.0.8-dev.2",
   "type": "module",
   "main": "src/sqlite-api.js",
   "types": "src/types/index.d.ts",
