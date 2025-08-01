@@ -260,18 +260,21 @@ export function Factory(Module) {
     return function(db, schema) {
       verifyDatabase(db);
       const piSize = tmpPtr[0];
-      let address = f(db, schema, piSize, 0);
+      let address = f(db, schema, piSize, 0); // 0 means no flags
       if (address === 0) {
         address = f(db, schema, piSize, SQLITE_SERIALIZE_NOCOPY);
         const size = Module.getValue(piSize, '*');
         const result = Module.HEAPU8.subarray(address, address + size);
         // NOTE Given that the memory is owned by SQLite, we must copy it.
+        // Warning: We're not super confident yet about this code path. There might be dragons.
         return new Uint8Array(result.slice());
       } else {
         const size = Module.getValue(piSize, '*');
         const result = Module.HEAPU8.subarray(address, address + size);
-        // Here we're getting a copy of the memory, so we can return it directly.
-        return new Uint8Array(result);
+        // Copy the data immediately, then free the SQLite buffer to prevent ref-count issues
+        const copy = new Uint8Array(result);
+        Module._sqlite3_free(address); 
+        return copy;
       }
     };
   })();
@@ -290,10 +293,15 @@ export function Factory(Module) {
         const errMsg = Module.ccall('sqlite3_errmsg', 'string', ['number'], [dest]);
         throw new SQLiteError(`backup failed: ${errMsg}`, SQLite.SQLITE_ERROR);
       }
-      fStep(backup, -1);
+      // TODO also allow run in chunks with some yielding mechanism
+      fStep(backup, -1); // -1 means do it in one go
       return fFinish(backup);
     };
   })();
+  
+
+  // TODO implement this at some point
+  // sqlite3.backup_step = (function() {
 
   sqlite3.clear_bindings = (function() {
     const fname = 'sqlite3_clear_bindings';
