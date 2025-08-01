@@ -11,11 +11,11 @@
  *  Javascript types that SQLite can use
  * 
  * C integer and floating-point types both map to/from Javascript `number`.
- * Blob data can be provided to SQLite as `Uint8Array` or `number[]` (with
+ * Blob data can be provided to SQLite as `Uint8Array<ArrayBuffer>` or `number[]` (with
  * each element converted to a byte); SQLite always returns blob data as
- * `Uint8Array`
+ * `Uint8Array<ArrayBuffer>`
  */
-type SQLiteCompatibleType = number|string|Uint8Array|Array<number>|bigint|null;
+type SQLiteCompatibleType = number|string|Uint8Array<ArrayBuffer>|Array<number>|bigint|null;
 
 /**
  * SQLite Virtual File System object
@@ -244,7 +244,7 @@ interface SQLiteAPI {
    * @param value 
    * @returns `SQLITE_OK` (throws exception on error)
    */
-  bind_blob(stmt: number, i: number, value: Uint8Array|Array<number>): number;
+  bind_blob(stmt: number, i: number, value: Uint8Array<ArrayBuffer>|Array<number>): number;
 
   /**
    * Bind number to prepared statement parameter
@@ -346,7 +346,7 @@ interface SQLiteAPI {
   deserialize(
     db: number,
     zSchema: string,
-    pData: Uint8Array,
+    pData: Uint8Array<ArrayBuffer>,
     szDb: number,
     szBuf: number,
     mFlags: number
@@ -364,7 +364,7 @@ interface SQLiteAPI {
     db: number,
     zSchema: string,
     // mFlags: number
-  ): Uint8Array;
+  ): Uint8Array<ArrayBuffer>;
 
   // sqlite3_backup *sqlite3_backup_init(
   //   sqlite3 *pDest,                        /* Destination database handle */
@@ -440,7 +440,7 @@ interface SQLiteAPI {
    * @param i column index
    * @returns column value
    */
-  column_blob(stmt: number, i: number): Uint8Array;
+  column_blob(stmt: number, i: number): Uint8Array<ArrayBuffer>;
 
   /**
    * Get storage size for column text or blob
@@ -699,7 +699,7 @@ interface SQLiteAPI {
    * @param context context pointer
    * @param value 
    */
-  result_blob(context: number, value: Uint8Array|number[]): void;
+  result_blob(context: number, value: Uint8Array<ArrayBuffer>|number[]): void;
 
   /**
    * Set the result of a function or vtable column
@@ -869,7 +869,7 @@ interface SQLiteAPI {
    * @param pValue `sqlite3_value` pointer
    * @returns value
    */
-  value_blob(pValue: number): Uint8Array;
+  value_blob(pValue: number): Uint8Array<ArrayBuffer>;
 
   /**
    * Get blob or text size for value
@@ -961,18 +961,18 @@ interface SQLiteAPI {
    * Get the changeset for a session.
    * 
    * @param pSession session pointer
-   * @returns {result: number, size: number, changeset: Uint8Array}
+   * @returns {result: number, size: number, changeset: Uint8Array<ArrayBuffer>}
    */
   session_changeset(pSession: number): {
     result: number;
     size: number;
-    changeset: Uint8Array | null;
+    changeset: Uint8Array<ArrayBuffer> | null;
   };
 
   session_changeset_inverted(pSession: number): {
     result: number;
     size: number;
-    changeset: Uint8Array;
+    changeset: Uint8Array<ArrayBuffer>;
   };
 
   /**
@@ -988,7 +988,7 @@ interface SQLiteAPI {
    * @param changeset changeset blob to import from
    * @returns changeset iterator pointer
    */
-  changeset_start(changesetBlob: Uint8Array): number;
+  changeset_start(changesetBlob: Uint8Array<ArrayBuffer>): number;
 
   /**
    * Finalize a changeset iterator.
@@ -1004,7 +1004,7 @@ interface SQLiteAPI {
    * @param input changeset to invert
    * @returns inverted changeset
    */
-  changeset_invert(input: Uint8Array): Uint8Array;
+  changeset_invert(input: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer>;
 
   /**
    * Apply a changeset to a database.
@@ -1013,7 +1013,7 @@ interface SQLiteAPI {
    * @param changeset changeset to apply
    * @returns `SQLITE_OK` (throws exception on error)
    */
-  changeset_apply(db: number, changeset: Uint8Array, options?: {
+  changeset_apply(db: number, changeset: Uint8Array<ArrayBuffer>, options?: {
     onConflict?: (conflictType: number) => 0 | 1 | 2
   }): number;
 
@@ -1309,23 +1309,23 @@ declare module '@livestore/wa-sqlite/src/VFS.js' {
     xClose(fileId: number): number;
     /**
      * @param {number} fileId
-     * @param {Uint8Array} pData
+     * @param {Uint8Array<ArrayBuffer>} pData
      * @param {number} iOffset
      * @returns {number}
      */
     xRead(fileId: number, pData: {
         size: number;
-        value: Uint8Array;
+        value: Uint8Array<ArrayBuffer>;
     }, iOffset: number): number;
     /**
      * @param {number} fileId
-     * @param {Uint8Array} pData
+     * @param {Uint8Array<ArrayBuffer>} pData
      * @param {number} iOffset
      * @returns {number}
      */
     xWrite(fileId: number, pData: {
         size: number;
-        value: Uint8Array;
+        value: Uint8Array<ArrayBuffer>;
     }, iOffset: number): number;
     /**
      * @param {number} fileId
