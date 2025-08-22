@@ -1,6 +1,6 @@
 # dependencies
 SQLITE_VERSION = version-3.50.1
-SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/${SQLITE_VERSION}/sqlite.tar.gz
+SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/$(SQLITE_VERSION)/sqlite.tar.gz
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
