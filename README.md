@@ -26,6 +26,12 @@ This fork adds synchronous APIs and session extensions needed for LiveStore's re
 - `dist`
   - Added Node.js build target (mostly used for testing)
 
+### Building LiveStore fork
+Use Nix to build the LiveStore variant with session and FTS5 support:
+```bash
+nix run .#build  # Builds and updates dist/
+```
+
 ### Staying current
 This fork is regularly rebased against [upstream wa-sqlite](https://github.com/rhashimoto/wa-sqlite) to incorporate latest improvements and security fixes.
 
