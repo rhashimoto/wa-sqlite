@@ -3,10 +3,10 @@
 This dist directory was built with the following configuration:
 
 ## Build Environment
-- **Built on:** 2025-08-27 08:23:17 UTC
+- **Built on:** 2025-08-28 07:48:15 UTC
 - **Emscripten:** emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.12-git
-- **SQLite Version:** 3.50.1
-- **SQLite Commit:** 979a07af38c8fb1d344253f59736cbfa91bd0a66
+- **SQLite Version:** 3.50.4
+- **SQLite Commit:** 8ed5e7365e6f12f427910188bbf6b254daad2ef6
 
 ## SQLite Features Enabled
 - Session extension (changesets/sync)
@@ -48,16 +48,16 @@ Generated via: `nix build .#wa-sqlite-livestore`
 - **wa-sqlite-jspi.mjs**: 115K (gzip: 27.0K, brotli: 23.5K)
 - **wa-sqlite.mjs**: 107K (gzip: 25.9K, brotli: 22.6K)
 - **wa-sqlite.node.mjs**: 108K (gzip: 26.0K, brotli: 22.7K)
-- **wa-sqlite-async.wasm**: 1.3M (gzip: 453.0K, brotli: 358.2K)
-- **wa-sqlite-jspi.wasm**: 611K (gzip: 298.0K, brotli: 256.3K)
-- **wa-sqlite.node.wasm**: 605K (gzip: 296.4K, brotli: 254.9K)
-- **wa-sqlite.wasm**: 605K (gzip: 296.4K, brotli: 254.9K)
+- **wa-sqlite-async.wasm**: 1.3M (gzip: 453.3K, brotli: 358.4K)
+- **wa-sqlite-jspi.wasm**: 611K (gzip: 298.0K, brotli: 256.4K)
+- **wa-sqlite.node.wasm**: 605K (gzip: 296.5K, brotli: 254.8K)
+- **wa-sqlite.wasm**: 605K (gzip: 296.5K, brotli: 254.8K)
 
 ### FTS5 Variant Sizes
 - **fts5/wa-sqlite.mjs**: 107K (gzip: 25.9K, brotli: 22.6K)
 - **fts5/wa-sqlite.node.mjs**: 108K (gzip: 26.0K, brotli: 22.8K)
-- **fts5/wa-sqlite.node.wasm**: 719K (gzip: 352.9K, brotli: 303.4K)
-- **fts5/wa-sqlite.wasm**: 719K (gzip: 352.9K, brotli: 303.4K)
+- **fts5/wa-sqlite.node.wasm**: 719K (gzip: 353.0K, brotli: 303.6K)
+- **fts5/wa-sqlite.wasm**: 719K (gzip: 353.0K, brotli: 303.6K)
 
 ## Notes
 - All builds include session extension for data synchronization

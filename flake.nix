@@ -12,16 +12,16 @@
         pkgsUnstable = import nixpkgsUnstable { inherit system; };
 
         # https://www.sqlite.org/chronology.html
-        sqliteVersion = "3.50.1";
+        sqliteVersion = "3.50.4";
 
-        sqliteCommit = "979a07af38c8fb1d344253f59736cbfa91bd0a66";
+        sqliteCommit = "8ed5e7365e6f12f427910188bbf6b254daad2ef6";
         
         # SQLite source from exact same commit as original
         sqliteSrc = pkgs.fetchFromGitHub {
           owner = "sqlite";
           repo = "sqlite";
           rev = sqliteCommit;
-          sha256 = "sha256-pFp1JMHYcb1YN/mG6+Ru2QETRtqzh/EheKVkjvCpnLo=";
+          sha256 = "sha256-YXzEu1/BC41mv08wm67kziRkQsSEmd/N00pY7IwF3rc=";
           name = "sqlite-src";
         };
 
@@ -100,6 +100,9 @@
             # comment out all `curl` commands in `Makefile` of wa-sqlite
             chmod u+w Makefile # Ensure we have write permissions for the Makefile
             sed -i 's/curl/#curl/g' Makefile
+            
+            # Update the SQLITE_VERSION in the Makefile to match our version
+            sed -i 's/SQLITE_VERSION = version-.*/SQLITE_VERSION = version-${version}/g' Makefile
 
             # Add `dist/wa-sqlite.node.mjs` to end of `Makefile` of wa-sqlite
             # Note: We use EMFLAGS_DIST to ensure memory growth is enabled (via EMFLAGS_COMMON)
@@ -294,8 +297,8 @@ EOF
           '');
         };
 
-        # Default app for convenience
-        apps.default = self.outputs.${system}.apps.build;
+        # Default app for convenience  
+        apps.default = self.apps.${system}.build;
 
         # Development shell
         devShells.default = pkgs.mkShell {
