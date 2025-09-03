@@ -77,7 +77,7 @@ jobs:
       working-directory: ./wa-sqlite
       shell: bash
       run: |
-        make clean dist/wa-sqlite-async.mjs clean-deps clean-tmp clean-cache "EMFLAGS_EXTRA=-s ENVIRONMENT=web,worker,node"
+        make clean dist/wa-sqlite-async.mjs dist/wa-sqlite.mjs clean-deps clean-tmp clean-cache "EMFLAGS_EXTRA=-s ENVIRONMENT=web,worker,node"
 
     # Commit dist
     - name: Commit dist
