@@ -332,13 +332,12 @@ export class IDBMirrorVFS extends FacadeVFS {
       const file = this.#mapIdToFile.get(fileId);
 
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
-        if (!file.txActive) {
-          file.txActive = {
-            path: file.path,
-            txId: file.viewTx.txId + 1,
-            blocks: new Map(),
-            fileSize: file.blockSize * file.blocks.size,
-          };
+        this.#requireTxActive(file);
+        // SQLite is not necessarily written sequentially, so fill in the
+        // unwritten blocks here.
+        for (let fillOffset = file.txActive.fileSize;
+             fillOffset < iOffset; fillOffset += pData.byteLength) {
+          file.txActive.blocks.set(fillOffset, new Uint8Array(pData.byteLength));
         }
         file.txActive.blocks.set(iOffset, pData.slice());
         file.txActive.fileSize = Math.max(file.txActive.fileSize, iOffset + pData.byteLength);
@@ -375,6 +374,7 @@ export class IDBMirrorVFS extends FacadeVFS {
       const file = this.#mapIdToFile.get(fileId);
 
       if (file.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        this.#requireTxActive(file);
         file.txActive.fileSize = iSize;
       } else {
         // All files that are not main databases are stored in a single
@@ -715,6 +715,20 @@ export class IDBMirrorVFS extends FacadeVFS {
   #dropTx(file) {
     file.txActive = null;
     file.txWriteHint = false;
+  }
+
+  /**
+   * @param {File} file 
+   */
+  #requireTxActive(file) {
+    if (!file.txActive) {
+      file.txActive = {
+        path: file.path,
+        txId: file.viewTx.txId + 1,
+        blocks: new Map(),
+        fileSize: file.blockSize * file.blocks.size,
+      };
+    }
   }
 
   /**

@@ -48,18 +48,7 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async jLock(fileId, lockType) {
     try {
-      // Create state on first lock.
-      if (!this.#mapIdToState.has(fileId)) {
-        const name = this.getFilename(fileId);
-        const state = {
-          baseName: name,
-          type: VFS.SQLITE_LOCK_NONE,
-          writeHint: false
-        };
-        this.#mapIdToState.set(fileId, state);
-      }
-
-      const lockState = this.#mapIdToState.get(fileId);
+      const lockState = this.#getLockState(fileId);
       if (lockType <= lockState.type) return VFS.SQLITE_OK;
   
       switch (this.#options.lockPolicy) {
@@ -82,8 +71,8 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async jUnlock(fileId, lockType) {
     try {
-      const lockState = this.#mapIdToState.get(fileId);
-      if (lockType >= lockState.type) return VFS.SQLITE_OK;
+      const lockState = this.#getLockState(fileId);
+      if (!(lockType < lockState.type)) return VFS.SQLITE_OK;
   
       switch (this.#options.lockPolicy) {
         case 'exclusive':
@@ -105,7 +94,7 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async jCheckReservedLock(fileId, pResOut) {
     try {
-      const lockState = this.#mapIdToState.get(fileId);
+      const lockState = this.#getLockState(fileId);
       switch (this.#options.lockPolicy) {
         case 'exclusive':
           return this.#checkReservedExclusive(lockState, pResOut);
@@ -122,23 +111,33 @@ export const WebLocksMixin = superclass => class extends superclass {
   }
 
   /**
-   * @param {number} pFile
+   * @param {number} fileId
    * @param {number} op
    * @param {DataView} pArg
    * @returns {number|Promise<number>}
    */
-  jFileControl(pFile, op, pArg) {
-    const lockState = this.#mapIdToState.get(pFile) ??
-      (() => {
-        // Call jLock() to create the lock state.
-        this.jLock(pFile, VFS.SQLITE_LOCK_NONE);
-        return this.#mapIdToState.get(pFile);
-      })();
+  jFileControl(fileId, op, pArg) {
     if (op === WebLocksMixin.WRITE_HINT_OP_CODE &&
         this.#options.lockPolicy === 'shared+hint'){
+      const lockState = this.#getLockState(fileId);
       lockState.writeHint = true;
     }
     return VFS.SQLITE_NOTFOUND;
+  }
+
+  #getLockState(fileId) {
+    let lockState = this.#mapIdToState.get(fileId);
+    if (!lockState) {
+      // The state doesn't exist yet so create it.
+      const name = this.getFilename(fileId);
+      lockState = {
+        baseName: name,
+        type: VFS.SQLITE_LOCK_NONE,
+        writeHint: false
+      };
+      this.#mapIdToState.set(fileId, lockState);
+    }
+    return lockState
   }
 
   /**

@@ -437,7 +437,7 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
         if (file.persistentFile.isHandleRequested) {
             // Another connection wants the access handle.
           this.#releaseAccessHandle(file);
-          this.isHandleRequested = false;
+          file.persistentFile.isHandleRequested = false;
         }
         file.persistentFile.isFileLocked = false;
       }
