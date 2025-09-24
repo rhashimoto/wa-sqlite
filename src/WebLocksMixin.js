@@ -119,9 +119,9 @@ export const WebLocksMixin = superclass => class extends superclass {
    * @returns {number|Promise<number>}
    */
   jFileControl(fileId, op, pArg) {
-    const lockState = this.#getLockState(fileId);
     if (op === WebLocksMixin.WRITE_HINT_OP_CODE &&
         this.#options.lockPolicy === 'shared+hint'){
+      const lockState = this.#getLockState(fileId);
       lockState.writeHint = true;
     }
     return VFS.SQLITE_NOTFOUND;
