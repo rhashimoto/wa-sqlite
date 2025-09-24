@@ -71,10 +71,8 @@ export const WebLocksMixin = superclass => class extends superclass {
    */
   async jUnlock(fileId, lockType) {
     try {
-      // SQLite can call xUnlock() without ever calling xLock() so
-      // the state may not exist.
       const lockState = this.#getLockState(fileId);
-      if (!(lockType < lockState?.type)) return VFS.SQLITE_OK;
+      if (!(lockType < lockState.type)) return VFS.SQLITE_OK;
   
       switch (this.#options.lockPolicy) {
         case 'exclusive':
