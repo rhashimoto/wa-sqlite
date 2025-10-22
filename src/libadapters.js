@@ -6,6 +6,7 @@ const SIGNATURES = [
   'ipppj', // xTruncate
   'ipppi', // xSleep, xSync, xLock, xUnlock, xShmUnmap
   'ipppp', // xFileSize, xCheckReservedLock, xCurrentTime, xCurrentTimeInt64
+  'ippipp', // xTrace
   'ipppip', // xFileControl, xRandomness, xGetLastError
   'vpppip', // xFunc, xStep
   'ippppi', // xDelete
