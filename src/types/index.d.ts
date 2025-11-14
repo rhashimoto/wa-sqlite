@@ -849,6 +849,11 @@ declare interface SQLiteAPI {
    * @returns `SQLITE_OK` (throws exception on error)
    */
   vfs_register(vfs: SQLiteVFS, makeDefault?: boolean): number;
+
+  trace(
+    db: number, mTrace: 1 | 2 | 3 | 4,
+    xTrace: (opCode: 1 | 2 | 3 | 4, opStr: string, sql?: string) => number
+  ): void
 }
 
 /** @ignore */

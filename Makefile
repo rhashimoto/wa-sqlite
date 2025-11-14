@@ -7,6 +7,7 @@ EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-func
 EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd4814807faabfa
 
 # source files
+# TODO: maybe use libtrace only in debug mode
 CFILES = \
 	sqlite3.c \
 	extension-functions.c \
@@ -16,6 +17,7 @@ CFILES = \
 	libhook.c \
 	libprogress.c \
 	libvfs.c \
+	libtrace.c \
 	$(CFILES_EXTRA)
 
 JSFILES = \
@@ -23,7 +25,8 @@ JSFILES = \
 	src/libfunction.js \
 	src/libhook.js \
 	src/libprogress.js \
-	src/libvfs.js
+	src/libvfs.js \
+	src/libtrace.js
 
 vpath %.c src
 vpath %.c deps
@@ -77,7 +80,8 @@ EMFLAGS_LIBRARIES = \
 	--post-js src/libfunction.js \
 	--post-js src/libhook.js \
 	--post-js src/libprogress.js \
-	--post-js src/libvfs.js
+	--post-js src/libvfs.js \
+	--post-js src/libtrace.js
 
 EMFLAGS_ASYNCIFY_COMMON = \
 	-s ASYNCIFY \
