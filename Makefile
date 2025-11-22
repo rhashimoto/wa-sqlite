@@ -1,5 +1,5 @@
 # dependencies
-SQLITE_VERSION = version-3.50.1
+SQLITE_VERSION = trunk
 SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/$(SQLITE_VERSION)/sqlite.tar.gz
 
 EXTENSION_FUNCTIONS = extension-functions.c
@@ -44,6 +44,7 @@ EMCC ?= emcc
 CFLAGS_COMMON = \
 	-I'deps/$(SQLITE_VERSION)' \
 	-Wno-non-literal-null-conversion \
+	-DSQLITE_EXPERIMENTAL_PRAGMA_20251114 \
 	$(CFLAGS_EXTRA)
 CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
 CFLAGS_DIST =  -Oz -flto $(CFLAGS_COMMON)
