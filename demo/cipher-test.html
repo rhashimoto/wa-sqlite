@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cipher Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+    pre { background: #2d2d2d; padding: 10px; border-radius: 4px; overflow: auto; }
+    .success { color: #4ec9b0; }
+    .error { color: #f44747; }
+    .info { color: #569cd6; }
+    h2 { color: #ce9178; }
+  </style>
+</head>
+<body>
+  <h1>SQLite Multiple Ciphers Test</h1>
+  <div id="output"></div>
+  <script type="module">
+    const output = document.getElementById('output');
+    
+    function log(message, className = '') {
+      const pre = document.createElement('pre');
+      pre.className = className;
+      pre.textContent = message;
+      output.appendChild(pre);
+    }
+
+    async function runTests() {
+      log('Loading SQLite with Multiple Ciphers...', 'info');
+      
+      try {
+        const SQLite = await import('../src/sqlite-api.js');
+        const cacheBuster = Date.now();
+        const { default: moduleFactory } = await import(`../dist/mc-wa-sqlite-async.mjs?t=${cacheBuster}`);
+        
+        const module = await moduleFactory({
+          locateFile(path) {
+            return `../dist/${path}?t=${cacheBuster}`;
+          }
+        });
+        
+        const sqlite3 = SQLite.Factory(module);
+        
+        // Check version
+        const version = module.ccall('sqlite3_libversion', 'string', [], []);
+        log(`SQLite version: ${version}`, 'info');
+        
+        const mcVersion = module.ccall('sqlite3mc_version', 'string', [], []);
+        log(`SQLite3MC version: ${mcVersion}`, 'success');
+        
+        // Check URL params for VFS selection
+        const params = new URLSearchParams(location.search);
+        const vfsType = params.get('vfs');
+        
+        if (vfsType === 'idb') {
+          log('\n--- Using IDBBatchAtomicVFS with Cipher VFS ---', 'info');
+          const { IDBBatchAtomicVFS } = await import('../src/examples/IDBBatchAtomicVFS.js');
+          const vfsName = 'idb-cipher-vfs';
+          const vfs = await IDBBatchAtomicVFS.create(vfsName, module);
+          
+          // Register IDB VFS but NOT as default
+          sqlite3.vfs_register(vfs, false);
+          log(`IDBBatchAtomicVFS registered as "${vfsName}"`, 'success');
+          
+          // Now create a cipher VFS wrapping the IDB VFS and make it default
+          const cipherResult = module.ccall('sqlite3mc_vfs_create', 'number', ['string', 'number'], [vfsName, 1]);
+          log(`sqlite3mc_vfs_create("${vfsName}", 1) result: ${cipherResult}`, cipherResult === 0 ? 'success' : 'error');
+          
+          if (cipherResult === 0) {
+            log('Cipher VFS wrapping IDBBatchAtomicVFS is now default', 'success');
+          } else {
+            log(`Failed to create cipher VFS. Error code: ${cipherResult}`, 'error');
+          }
+        } else {
+          log('\n--- Using default MemoryVFS ---', 'info');
+        }
+        
+        // Open a file-based database
+        log('\n--- Test 1: Cipher with file-based database ---', 'info');
+        const dbName = vfsType === 'idb' ? 'idb-encrypted.db' : 'memory-encrypted.db';
+        const db = await sqlite3.open_v2(dbName);
+        log(`Database opened: ${db} (${dbName})`, 'info');
+        
+        // Test cipher pragma
+        let result = await sqlite3.exec(db, "PRAGMA cipher='chacha20';");
+        log(`PRAGMA cipher='chacha20': OK`, 'success');
+        
+        // Get cipher value
+        const rows = [];
+        await sqlite3.exec(db, "PRAGMA cipher;", (row, columns) => {
+          rows.push(Object.fromEntries(columns.map((c, i) => [c, row[i]])));
+        });
+        log(`Current cipher: ${JSON.stringify(rows)}`, 'info');
+        
+        // Test key pragma
+        result = await sqlite3.exec(db, "PRAGMA key='testpassword';");
+        log(`PRAGMA key='testpassword': OK`, 'success');
+        
+        // Create table and insert data
+        await sqlite3.exec(db, `
+          CREATE TABLE secret (id INTEGER PRIMARY KEY, data TEXT);
+          INSERT INTO secret (data) VALUES ('This is encrypted data!');
+        `);
+        log('Created table and inserted data', 'success');
+        
+        // Query data
+        const selectRows = [];
+        await sqlite3.exec(db, "SELECT * FROM secret;", (row, columns) => {
+          selectRows.push(Object.fromEntries(columns.map((c, i) => [c, row[i]])));
+        });
+        log(`SELECT * FROM secret: ${JSON.stringify(selectRows)}`, 'success');
+        
+        await sqlite3.close(db);
+        log('Database closed', 'info');
+        
+        log('\n=== All tests passed! ===', 'success');
+        
+      } catch (error) {
+        log(`ERROR: ${error.message}`, 'error');
+        console.error(error);
+      }
+    }
+    
+    runTests();
+  </script>
+</body>
+</html>

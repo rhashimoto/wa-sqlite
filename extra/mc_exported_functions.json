@@ -4,5 +4,6 @@
   "_sqlite3mc_cipher_index",
   "_sqlite3mc_config_cipher",
   "_sqlite3mc_cipher_count",
-  "_sqlite3mc_cipher_name"
+  "_sqlite3mc_cipher_name",
+  "_sqlite3mc_version"
 ]

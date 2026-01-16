@@ -42,7 +42,12 @@ window.addEventListener('DOMContentLoaded', async function() {
   // Start the Worker.
   // Propagate the main page search parameters to the Worker URL.
   const workerURL = new URL('./demo-worker.js', import.meta.url);
-  workerURL.search = location.search;
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.forEach((value, key) => {
+    workerURL.searchParams.append(key, value);
+  });
+  // Add timestamp to avoid caching issues with builds
+  workerURL.searchParams.append('_t', Date.now());
   const worker = new Worker(workerURL, { type: 'module' });
   worker.addEventListener('message', function(event) {
     // The Worker will response with null on successful start, or with

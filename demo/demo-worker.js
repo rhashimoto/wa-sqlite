@@ -85,16 +85,43 @@ maybeReset().then(async () => {
   const vfsName = searchParams.get('vfsName') ?? config.vfsName ?? 'demo';
 
   // Instantiate SQLite.
-  const { default: moduleFactory } = await import(BUILDS.get(buildName));
-  const module = await moduleFactory();
+  // Add cache-busting to ensure we get the latest build
+  const buildPath = BUILDS.get(buildName);
+  const cacheBuster = Date.now();
+  const { default: moduleFactory } = await import(`${buildPath}?t=${cacheBuster}`);
+  
+  const module = await moduleFactory({
+    locateFile(path) {
+      // Add cache-busting to WASM file to avoid stale cached versions
+      return `../dist/${path}?t=${cacheBuster}`;
+    },
+  });
   const sqlite3 = SQLite.Factory(module);
 
+  // For multiple ciphers builds, check if cipher support is available
+  const buildFile = BUILDS.get(buildName);
+  const isMultipleCiphersBuild = buildFile && buildFile.includes('/mc-');
+
   if (config.vfsModule) {
-    // Create the VFS and register it as the default file system.
+    // Create the custom VFS
     const namespace = await import(config.vfsModule);
     const className = config.vfsClassName ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
     const vfs = await namespace[className].create(vfsName, module, config.vfsOptions);
-    sqlite3.vfs_register(vfs, true);
+    
+    if (isMultipleCiphersBuild) {
+      // For cipher builds: register VFS but NOT as default, then wrap with cipher VFS
+      sqlite3.vfs_register(vfs, false);
+      
+      // Create cipher VFS wrapping the custom VFS and make it default
+      const cipherResult = module.ccall('sqlite3mc_vfs_create', 'number', ['string', 'number'], [vfsName, 1]);
+      if (cipherResult !== 0) {
+        console.warn('Failed to create cipher VFS (error:', cipherResult, '), falling back to non-encrypted VFS');
+        sqlite3.vfs_register(vfs, true);
+      }
+    } else {
+      // For non-cipher builds: just register VFS as default
+      sqlite3.vfs_register(vfs, true);
+    }
   }
 
   // Open the database.
