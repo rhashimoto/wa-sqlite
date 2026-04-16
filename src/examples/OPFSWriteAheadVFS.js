@@ -811,7 +811,7 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
   async #pendingCheckpoint(file, mode) {
     const onFinally = [];
     try {
-      if (mode !== 'passive') {
+      if (mode !== 'passive' && file.lockState === VFS.SQLITE_LOCK_NONE) {
         await file.writeLock.acquire('exclusive');
         onFinally.push(() => file.writeLock.release());
 
