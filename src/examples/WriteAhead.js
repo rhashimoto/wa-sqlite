@@ -676,7 +676,7 @@ export class WriteAhead {
 
   /**
    * Get all txId locks for this database.
-   * @returns {Promise<{name: string, minTxId: number, maxTxId: number}[]>}
+   * @returns {Promise<{name: string, minTxId: number, maxTxId: number, encoded: string}[]>}
    */
   async #getTxIdLocks() {
     const { held } = await navigator.locks.query();
@@ -703,7 +703,7 @@ export class WriteAhead {
 
   /**
    * @param {string} lockName
-   * @returns {{name: string, minTxId: number, maxTxId: number}}
+   * @returns {{name: string, minTxId: number, maxTxId: number, encoded: string}?}
    */
   #decodeTxIdLockName(lockName) {
     const match = lockName.match(/^(.*)-txId<([0-9a-z]+):([0-9a-z]+)>$/);
@@ -713,6 +713,7 @@ export class WriteAhead {
         name: match[1],
         minTxId: parseInt(match[2], 36),
         maxTxId: parseInt(match[3], 36),
+        encoded: lockName
       };
     }
     return null;
@@ -726,14 +727,16 @@ export class WriteAhead {
     /** @type {string[]} */ let failingLockNames = [];
     do {
       // Wait for all connections that fail the predicate.
-      await Promise.all(
-        failingLockNames.map(name => navigator.locks.request(name, async () => {}))
-      );
+      if (failingLockNames.length > 0) {
+        await Promise.all(
+          failingLockNames.map(name => navigator.locks.request(name, async () => {}))
+        );
+      }
 
       // Refresh the list of failing locks.
       failingLockNames = (await this.#getTxIdLocks())
         .filter(value => !predicate(value))
-        .map(value => value.name);
+        .map(value => value.encoded);
     } while (failingLockNames.length > 0);
   }
 
