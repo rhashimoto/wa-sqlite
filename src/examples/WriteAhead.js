@@ -277,7 +277,7 @@ export class WriteAhead {
   truncate(newSize) {
     // Ignore truncation that happens outside of a transaction. That
     // only happens (e.g. post-VACUUM) to ensure the file size matches
-    // the database header which we already track in #writePage().
+    // the database header.
     if (this.#txInProgress) {
       // Remove any pages past the truncation point.
       for (const offset of this.#txInProgress.pages.keys()) {
@@ -285,7 +285,6 @@ export class WriteAhead {
           this.#txInProgress.pages.delete(offset);
         }
       }
-      this.#txInProgress.dbFileSize = newSize;
     }
   }
 
@@ -318,6 +317,18 @@ export class WriteAhead {
         // Write back as a frame.
         this.#writePage(i * tx.newPageSize, pageData);
       }
+    }
+
+    const page1 = this.#txInProgress.pages.get(0)?.pageData;
+    if (page1) {
+      const page1View = new DataView(page1.buffer, page1.byteOffset, page1.byteLength);
+      const pageCount = page1View.getUint32(28);
+      this.#txInProgress.dbFileSize = pageCount * page1.byteLength;
+    } else {
+      // The transaction doesn't include page 1, so this must be a
+      // non-batch-atomic rollback.
+      this.rollback();
+      return;
     }
 
     // Persist the final pending transaction page with the database size.
@@ -665,7 +676,7 @@ export class WriteAhead {
 
   /**
    * Get all txId locks for this database.
-   * @returns {Promise<{name: string, minTxId: number, maxTxId: number}[]>}
+   * @returns {Promise<{name: string, minTxId: number, maxTxId: number, encoded: string}[]>}
    */
   async #getTxIdLocks() {
     const { held } = await navigator.locks.query();
@@ -692,7 +703,7 @@ export class WriteAhead {
 
   /**
    * @param {string} lockName
-   * @returns {{name: string, minTxId: number, maxTxId: number}}
+   * @returns {{name: string, minTxId: number, maxTxId: number, encoded: string}?}
    */
   #decodeTxIdLockName(lockName) {
     const match = lockName.match(/^(.*)-txId<([0-9a-z]+):([0-9a-z]+)>$/);
@@ -702,6 +713,7 @@ export class WriteAhead {
         name: match[1],
         minTxId: parseInt(match[2], 36),
         maxTxId: parseInt(match[3], 36),
+        encoded: lockName
       };
     }
     return null;
@@ -715,14 +727,16 @@ export class WriteAhead {
     /** @type {string[]} */ let failingLockNames = [];
     do {
       // Wait for all connections that fail the predicate.
-      await Promise.all(
-        failingLockNames.map(name => navigator.locks.request(name, async () => {}))
-      );
+      if (failingLockNames.length > 0) {
+        await Promise.all(
+          failingLockNames.map(name => navigator.locks.request(name, async () => {}))
+        );
+      }
 
       // Refresh the list of failing locks.
       failingLockNames = (await this.#getTxIdLocks())
         .filter(value => !predicate(value))
-        .map(value => value.name);
+        .map(value => value.encoded);
     } while (failingLockNames.length > 0);
   }
 
@@ -867,25 +881,14 @@ export class WriteAhead {
       throw new Error('write failed');
     }
 
+    // Add the page to the transaction map. Cache page 1 as a performance
+    // optimization and to exercise the cache code path.
     const pageEntry = {
       pageSize: pageData.byteLength,
       waOffset: this.#txInProgress.waOffsetEnd + FRAME_HEADER_SIZE,
       waSalt1: this.#activeHeader.salt1,
+      pageData: pageOffset === 0 ? pageData : undefined
     };
-    if (pageOffset === 0) {
-      // This is page 1, which contains the database header.
-      const dataView = new DataView(pageData.buffer, pageData.byteOffset, pageData.byteLength);
-      const pageCount = dataView.getUint32(28);
-      this.#txInProgress.dbFileSize = pageCount * pageData.byteLength;
-
-      // Cache page 1 as a performance optimization and to exercise the
-      // cache code path.
-      pageEntry.pageData = pageData;
-    } else {
-      this.#txInProgress.dbFileSize =
-        Math.max(this.#dbFileSize, pageOffset + pageData.byteLength);
-    }
-
     this.#txInProgress.pages.set(pageOffset, pageEntry);
     this.#txInProgress.waOffsetEnd += bytesWritten;
 
@@ -927,6 +930,7 @@ export class WriteAhead {
 
   #abortTx() {
     this.#txInProgress = null;
+    this.#activeHandle.truncate(this.#activeOffset);
   }
 
   /**
