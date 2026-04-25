@@ -811,7 +811,12 @@ export class WriteAhead {
       } else if (frame.frameType === FRAME_TYPE_END) {
         // No more transactions on the current WAL file. Switch to the
         // other file.
-        this.#followFileChange(frame.fileHeader);
+        if (!this.#followFileChange(frame.fileHeader)) {
+          // Reading the end frame and the next file header must be atomic
+          // to the caller. If the file change failed it is treated as
+          // though there was no end frame.
+          return null;
+        }
         offset = this.#activeOffset;
         continue;
       }
@@ -1009,13 +1014,18 @@ export class WriteAhead {
     const accessHandle = this.#getInactiveHandle();
     if (!fileHeader) {
       fileHeader = this.#readFileHeader(accessHandle);
-      if (fileHeader?.salt1 !== ((this.#activeHeader.salt1 + 1) >>> 0)) return null;
+      if (fileHeader?.salt1 !== ((this.#activeHeader.salt1 + 1) >>> 0)) {
+        // This could happen if the last writer wrote an end frame but
+        // crashed before successfully writing the new file header, or
+        // if the header was written but did not reach persistent storage.
+        return false;
+      }
     }
 
     this.#activeHandle = accessHandle;
     this.#activeHeader = fileHeader;
     this.#activeOffset = FILE_HEADER_SIZE;
-    return fileHeader;
+    return true;
   }
 
   #getInactiveHandle() {
