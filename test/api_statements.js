@@ -238,6 +238,39 @@ export function api_statements(context) {
       }
     });
 
+    it('should bind text with NUL bytes', async function() {
+      let rc;
+      const sql = 'SELECT hex(?)';
+      const value = 'Before\0After';
+
+      for await (const stmt of i(sqlite3.statements(db, sql))) {
+        rc = await sqlite3.bind_text(stmt, 1, value);
+        expect(rc).toEqual(SQLite.SQLITE_OK);
+
+        while ((rc = await sqlite3.step(stmt)) !== SQLite.SQLITE_DONE) {
+          expect(rc).toEqual(SQLite.SQLITE_ROW);
+          expect(await sqlite3.column_text(stmt, 0)).toEqual(
+            '4265666F7265004166746572'
+          );
+        }
+      }
+    });
+
+    it('should read text with NUL bytes', async function() {
+      let rc;
+      const sql = "SELECT char(65279) || 'Before' || char(0) || 'After'";
+      const value = '\uFEFFBefore\0After';
+
+      for await (const stmt of i(sqlite3.statements(db, sql))) {
+        while ((rc = await sqlite3.step(stmt)) !== SQLite.SQLITE_DONE) {
+          expect(rc).toEqual(SQLite.SQLITE_ROW);
+          expect(await sqlite3.column_bytes(stmt, 0)).toEqual(15);
+          expect(await sqlite3.column_text(stmt, 0)).toEqual(value);
+          expect(await sqlite3.column(stmt, 0)).toEqual(value);
+        }
+      }
+    });
+
     it('should bind boolean', async function() {
       let rc;
       const sql = 'SELECT ?';
