@@ -29,7 +29,7 @@
     "comlink": "^4.4.1",
     "jasmine-core": "^4.5.0",
     "monaco-editor": "^0.34.1",
-    "typedoc": "^0.25.7",
+    "typedoc": "^0.28.20",
     "typescript": "^5.3.3",
     "web-test-runner-jasmine": "^0.0.6"
   },
@@ -41,5 +41,5 @@
       "unplugged": true
     }
   },
-  "packageManager": "yarn@4.0.2"
+  "packageManager": "yarn@4.17.1"
 }
