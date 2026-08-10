@@ -64,7 +64,19 @@ export class WriteAhead {
   /** @type {Map<number, PageEntry>} */ #waOverlay = new Map();
   /** @type {Map<number, Transaction>} */ #mapIdToTx = new Map();
   /** @type {Map<number, Transaction>} */ #mapIdToPendingTx = new Map();
+
+  // This is the total number of pages in #mapIdToTx, i.e. the number
+  // of pages in transactions that have not been checkpointed. This may
+  // not exactly match the number of pages in the WAL files because a
+  // page can be written multiple times in a transaction but will only
+  // be counted once here.
   #approxPageCount = 0;
+
+  // The sum across this array tracks the number of pages in the active
+  // WAL file. The element corresponding to the inactive WAL file will
+  // always be zero; it will *not* contain the number of pages in the
+  // inactive WAL file.
+  #activeHandlePageCounts = [0, 0];
 
   /** @type {BroadcastChannel} */ #broadcastChannel;
 
@@ -342,13 +354,19 @@ export class WriteAhead {
     const payload = { type: 'tx', tx };
     this.#broadcastChannel.postMessage(payload);
 
-    // Check whether to move to the other WAL file.
-    const nPageThreshold = this.options.journalSizeLimit > 0 ?
-      this.options.journalSizeLimit :
-      DEFAULT_JOURNAL_SIZE_LIMIT;
-    if (this.#approxPageCount >= nPageThreshold && this.#isInactiveFileEmpty()) {
-      this.log?.(`%cchange WAL file at ${this.#approxPageCount} pages`, 'background-color: lightskyblue;');
-      this.#swapActiveFile();
+    // Check whether to move to the other WAL file. The other WAL file must
+    // be empty, and the active WAL file size (in pages) must exceed the
+    // configured threshold.
+    if (this.#isInactiveFileEmpty()) {
+      const walFilePageCount =
+        this.#activeHandlePageCounts[0] + this.#activeHandlePageCounts[1];
+      const nPageThreshold = this.options.journalSizeLimit > 0 ?
+        this.options.journalSizeLimit :
+        DEFAULT_JOURNAL_SIZE_LIMIT;
+      if (walFilePageCount >= nPageThreshold) {
+        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'background-color: lightskyblue;');
+        this.#swapActiveFile();
+      }
     }
 
     this.#autoCheckpoint();
@@ -504,6 +522,13 @@ export class WriteAhead {
   #activateTx(tx) {
     // Transfer to the active collection of transactions.
     this.#mapIdToTx.set(tx.id, tx);
+
+    // Track the number of pages in the active WAL file.
+    const page1 = tx.pages.get(0);
+    const activeIndex = page1.waSalt1 & 0x1;
+    this.#activeHandlePageCounts[activeIndex] += tx.pages.size;
+    this.#activeHandlePageCounts[1 - activeIndex] = 0;
+
     this.#approxPageCount += tx.pages.size;
 
     // Add transaction pages to the write-ahead overlay.
