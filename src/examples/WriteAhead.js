@@ -230,16 +230,6 @@ export class WriteAhead {
     }
 
     if (!this.#txInProgress) {
-      // There is no active transaction so we need to create one. But
-      // first check whether to move to the other WAL file.
-      const nPageThreshold = this.options.journalSizeLimit > 0 ?
-        this.options.journalSizeLimit :
-        DEFAULT_JOURNAL_SIZE_LIMIT;
-      if (this.#approxPageCount >= nPageThreshold && this.#isInactiveFileEmpty()) {
-        this.log?.(`%cchange WAL file at ${this.#approxPageCount} pages`, 'background-color: lightskyblue;');
-        this.#swapActiveFile();
-      }
-
       this.#beginTx();
       if (options.dstPageSize !== data.byteLength) {
         // This is a VACUUM to a new page size. The incoming writes are at
@@ -351,6 +341,15 @@ export class WriteAhead {
     // Send the transaction to other connections.
     const payload = { type: 'tx', tx };
     this.#broadcastChannel.postMessage(payload);
+
+    // Check whether to move to the other WAL file.
+    const nPageThreshold = this.options.journalSizeLimit > 0 ?
+      this.options.journalSizeLimit :
+      DEFAULT_JOURNAL_SIZE_LIMIT;
+    if (this.#approxPageCount >= nPageThreshold && this.#isInactiveFileEmpty()) {
+      this.log?.(`%cchange WAL file at ${this.#approxPageCount} pages`, 'background-color: lightskyblue;');
+      this.#swapActiveFile();
+    }
 
     this.#autoCheckpoint();
     this.#backstopTimestamp = performance.now();
