@@ -64,7 +64,19 @@ export class WriteAhead {
   /** @type {Map<number, PageEntry>} */ #waOverlay = new Map();
   /** @type {Map<number, Transaction>} */ #mapIdToTx = new Map();
   /** @type {Map<number, Transaction>} */ #mapIdToPendingTx = new Map();
+
+  // This is the total number of pages in #mapIdToTx, i.e. the number
+  // of pages in transactions that have not been checkpointed. This may
+  // not exactly match the number of pages in the WAL files because a
+  // page can be written multiple times in a transaction but will only
+  // be counted once here.
   #approxPageCount = 0;
+
+  // The sum across this array tracks the number of pages in the active
+  // WAL file. The element corresponding to the inactive WAL file will
+  // always be zero; it will *not* contain the number of pages in the
+  // inactive WAL file.
+  #activeHandlePageCounts = [0, 0];
 
   /** @type {BroadcastChannel} */ #broadcastChannel;
 
@@ -87,23 +99,33 @@ export class WriteAhead {
 
     // All the asynchronous initialization is done here.
     this.#ready = (async () => {
-      // Set our advertised txId to zero until we know the proper value.
-      await this.#updateTxIdLock();
+      // Acquire the checkpoint lock in case the database is newly created
+      // and we have to initialize a WAL file.
+      const { fileHeader } =
+        await navigator.locks.request(`${this.#zName}#ckpt`, async () => {
+        // Set our advertised txId to zero until we know the proper value.
+        // This will also prevent other connections from checkpointing
+        // after we release the #ckpt lock.
+        await this.#updateTxIdLock();
 
-      // Listen for transactions and checkpoints from other connections.
-      this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
-      this.#broadcastChannel.onmessage = (event) => {
-        this.#handleMessage(event);
-      };
+        // Listen for transactions and checkpoints from other connections.
+        this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
+        this.#broadcastChannel.onmessage = (event) => {
+          this.#handleMessage(event);
+        };
 
-      // Read headers from both WAL files and use the one with the
-      // lower nextTxId. If neither header is valid, create a new header.
-      const fileHeader = this.#waHandles
-        .map(handle => this.#readFileHeader(handle))
-        .filter(h => h)
-        .sort((a, b) => a.nextTxId - b.nextTxId)[0]
-        ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
+        // Read headers from both WAL files and use the one with the
+        // lower nextTxId. If neither header is valid, create a new header.
+        const fileHeader = this.#waHandles
+          .map(handle => this.#readFileHeader(handle))
+          .filter(h => h)
+          .sort((a, b) => a.nextTxId - b.nextTxId)[0]
+          ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
+        return { fileHeader };
+      });
 
+      // The checkpoint lock has been released, but checkpointing will not
+      // happen until read the WAL files and advance our txId.
       this.#activeHeader = fileHeader;
       this.#activeHandle = this.#waHandles[fileHeader.salt1 & 1];
       this.#activeOffset = FILE_HEADER_SIZE;
@@ -220,16 +242,6 @@ export class WriteAhead {
     }
 
     if (!this.#txInProgress) {
-      // There is no active transaction so we need to create one. But
-      // first check whether to move to the other WAL file.
-      const nPageThreshold = this.options.journalSizeLimit > 0 ?
-        this.options.journalSizeLimit :
-        DEFAULT_JOURNAL_SIZE_LIMIT;
-      if (this.#approxPageCount >= nPageThreshold && this.#isInactiveFileEmpty()) {
-        this.log?.(`%cchange WAL file at ${this.#approxPageCount} pages`, 'background-color: lightskyblue;');
-        this.#swapActiveFile();
-      }
-
       this.#beginTx();
       if (options.dstPageSize !== data.byteLength) {
         // This is a VACUUM to a new page size. The incoming writes are at
@@ -341,6 +353,21 @@ export class WriteAhead {
     // Send the transaction to other connections.
     const payload = { type: 'tx', tx };
     this.#broadcastChannel.postMessage(payload);
+
+    // Check whether to move to the other WAL file. The other WAL file must
+    // be empty, and the active WAL file size (in pages) must exceed the
+    // configured threshold.
+    if (this.#isInactiveFileEmpty()) {
+      const walFilePageCount =
+        this.#activeHandlePageCounts[0] + this.#activeHandlePageCounts[1];
+      const nPageThreshold = this.options.journalSizeLimit > 0 ?
+        this.options.journalSizeLimit :
+        DEFAULT_JOURNAL_SIZE_LIMIT;
+      if (walFilePageCount >= nPageThreshold) {
+        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'background-color: lightskyblue;');
+        this.#swapActiveFile();
+      }
+    }
 
     this.#autoCheckpoint();
     this.#backstopTimestamp = performance.now();
@@ -495,6 +522,13 @@ export class WriteAhead {
   #activateTx(tx) {
     // Transfer to the active collection of transactions.
     this.#mapIdToTx.set(tx.id, tx);
+
+    // Track the number of pages in the active WAL file.
+    const page1 = tx.pages.get(0);
+    const activeIndex = page1.waSalt1 & 0x1;
+    this.#activeHandlePageCounts[activeIndex] += tx.pages.size;
+    this.#activeHandlePageCounts[1 - activeIndex] = 0;
+
     this.#approxPageCount += tx.pages.size;
 
     // Add transaction pages to the write-ahead overlay.

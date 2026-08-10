@@ -889,7 +889,8 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
     /** @type {(() => void)[]} */ const onError = [];
     const file = this.mapPathToFile.get(zName);
     try {
-      await navigator.locks.request(`${zName}#ckpt`, async lock => {
+      const { accessHandle, waHandles } =
+        await navigator.locks.request(`${zName}#open`, async lock => {
         // Parse the path components.
         const directoryNames = zName.split('/').filter(d => d);
         const dbName = directoryNames.pop();
@@ -943,13 +944,14 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
           }
           return waHandle;
         }));
-
-        // Create the write-ahead manager.
-        const writeAhead = new WriteAhead(zName, accessHandle, waHandles);
-        await writeAhead.ready();
-
-        file.retryResult = { accessHandle, waHandles, writeAhead };
+        return { accessHandle, waHandles };
       });
+
+      // Create the write-ahead manager.
+      const writeAhead = new WriteAhead(zName, accessHandle, waHandles);
+      await writeAhead.ready();
+
+      file.retryResult = { accessHandle, waHandles, writeAhead };
     } catch (e) {
       while (onError.length) {
         onError.pop()();
