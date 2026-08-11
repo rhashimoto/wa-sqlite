@@ -224,8 +224,16 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      const ptr = createUTF8(value);
-      const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
+      let ptr = 0;
+      let nBytes = -1;
+      if (typeof value === 'string') {
+        const utf8 = textEncoder.encode(value);
+        ptr = Module._sqlite3_malloc(utf8.byteLength + 1);
+        Module.HEAPU8.set(utf8, ptr);
+        Module.HEAPU8[ptr + utf8.byteLength] = 0;
+        nBytes = utf8.byteLength;
+      }
+      const result = f(stmt, i, ptr, nBytes, sqliteFreeAddress);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -369,11 +377,26 @@ export function Factory(Module) {
 
   sqlite3.column_text = (function() {
     const fname = 'sqlite3_column_text';
-    const f = Module.cwrap(fname, ...decl('nn:s'));
+    const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
       verifyStatement(stmt);
-      const result = f(stmt, iCol);
-      return result;
+      const address = f(stmt, iCol);
+      const nBytes = sqlite3.column_bytes(stmt, iCol);
+      const parts = [];
+      let start = 0;
+      for (let end = 0; end < nBytes; ++end) {
+        if (Module.HEAPU8[address + end] === 0) {
+          if (start < end) {
+            parts.push(Module.UTF8ToString(address + start, end - start));
+          }
+          parts.push('\0');
+          start = end + 1;
+        }
+      }
+      if (start < nBytes) {
+        parts.push(Module.UTF8ToString(address + start, nBytes - start));
+      }
+      return parts.join('');
     };
   })();
 
