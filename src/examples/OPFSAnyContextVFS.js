@@ -198,9 +198,10 @@ export class OPFSAnyContextVFS extends WebLocksMixin(FacadeVFS) {
         file.writable = await file.fileHandle.createWritable({ keepExistingData: true });
       }
       await file.writable.seek(iOffset);
-      // WebKit's writable stream ignores a view's byteOffset and byteLength
-      // and writes the whole ArrayBuffer, which here is the WASM heap.
-      // slice() copies just the page and still unwraps the Proxy.
+      // TODO: restore the subarray() call below once WebKit honors a view's
+      // byteOffset and byteLength instead of writing the whole ArrayBuffer,
+      // which here is the WASM heap: https://bugs.webkit.org/show_bug.cgi?id=302733
+      // await file.writable.write(pData.subarray());
       await file.writable.write(pData.slice());
       file.blob = null;
 
