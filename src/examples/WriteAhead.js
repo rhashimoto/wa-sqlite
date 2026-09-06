@@ -546,6 +546,18 @@ export class WriteAhead {
    * @param {{readToCurrent?: boolean, autoCheckpoint?: boolean}} options
    */
   #advanceTxId(options = {}) {
+    // This is a mitigation against a possible bug in the WAL implementation.
+    // There should never be any pending transactions with
+    // `tx.txId <= this.#txId`, but
+    // https://github.com/rhashimoto/wa-sqlite/issues/345
+    // could be explained if this somehow happened. 
+    for (const key of this.#mapIdToPendingTx.keys()) {
+      if (key <= this.#txId) {
+        console.warn(`removing invalid pending transaction ${key} <= ${this.#txId}`);
+        this.#mapIdToPendingTx.delete(key);
+      }
+    }
+
     let didAdvance = false;
     while (this.#mapIdToPendingTx.size) {
       // Fetch the next transaction in sequence. Usually this will come
