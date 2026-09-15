@@ -77,7 +77,11 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
         await navigator.locks.request(entry.name, { ifAvailable: true }, async lock => {
           if (lock) {
             this.log?.(`Deleting temporary directory ${entry.name}`);
-            await root.removeEntry(entry.name, { recursive: true });
+            // Another instance initializing at the same time may have
+            // deleted it between our listing and our lock.
+            await root.removeEntry(entry.name, { recursive: true }).catch(e => {
+              if (e?.name !== 'NotFoundError') throw e;
+            });
           } else {
             this.log?.(`Temporary directory ${entry.name} is in use`);
           }
