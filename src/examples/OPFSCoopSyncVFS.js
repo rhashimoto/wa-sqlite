@@ -434,12 +434,24 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
       // Don't change any state if this unlock is because xLock returned
       // SQLITE_BUSY.
       if (!file.persistentFile.isLockBusy) {
-        if (file.persistentFile.isHandleRequested) {
-            // Another connection wants the access handle.
-          this.#releaseAccessHandle(file);
-          file.persistentFile.isHandleRequested = false;
-        }
         file.persistentFile.isFileLocked = false;
+        if (file.persistentFile.isHandleRequested) {
+          // Another connection wants the access handle. Hand it over only
+          // once the current call has returned: SQLite can lock again within
+          // the same call (re-preparing a statement whose schema changed, or
+          // a function running statements of its own), and that lock would
+          // find the handle gone and return SQLITE_BUSY to a call that
+          // retry() has already tried twice. A task rather than a microtask:
+          // the JSPI build suspends at every VFS call, which runs microtasks
+          // in the middle of the call.
+          setTimeout(() => {
+            if (!file.persistentFile.isFileLocked &&
+                file.persistentFile.isHandleRequested) {
+              this.#releaseAccessHandle(file);
+              file.persistentFile.isHandleRequested = false;
+            }
+          });
+        }
       }
     }
     return VFS.SQLITE_OK;
