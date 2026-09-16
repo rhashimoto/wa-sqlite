@@ -102,6 +102,45 @@ for (const [key, factory] of FACTORIES) {
       expect(result).toEqual('foobar');
     });
   
+    it('should return a string with NUL bytes', async function() {
+      let rc;
+
+      rc = await sqlite3.create_function(
+        db,
+        'fn',
+        0,
+        SQLite.SQLITE_DETERMINISTIC, 0,
+        (function(context, values) {
+          sqlite3.result_text(context, 'foo\0bar');
+        }));
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      let result;
+      rc = await sqlite3.exec(db, 'SELECT fn()', row => result = row[0]);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(result).toEqual('foo\0bar');
+    });
+
+    it('should pass a string with NUL bytes', async function() {
+      let rc;
+
+      let received;
+      rc = await sqlite3.create_function(
+        db,
+        'fn',
+        1,
+        SQLite.SQLITE_DETERMINISTIC, 0,
+        (function(context, values) {
+          received = sqlite3.value_text(values[0]);
+          sqlite3.result_null(context);
+        }));
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+
+      rc = await sqlite3.exec(db, `SELECT fn('foo' || char(0) || 'bar')`);
+      expect(rc).toEqual(SQLite.SQLITE_OK);
+      expect(received).toEqual('foo\0bar');
+    });
+
     it('should return a blob', async function() {
       let rc;
       
