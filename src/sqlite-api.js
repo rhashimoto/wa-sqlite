@@ -36,15 +36,34 @@ export function Factory(Module) {
   const tmpPtr = [tmp, tmp + 4];
 
   const textEncoder = new TextEncoder();
+
+  // ignoreBOM keeps a leading U+FEFF instead of consuming it, so text that
+  // begins with a byte order mark is returned as it was stored.
+  const textDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
+
   // Convert a JS string to a C string. sqlite3_malloc is used to allocate
-  // memory (use sqlite3_free to deallocate).
-  function createUTF8(s) {
-    if (typeof s !== 'string') return 0;
+  // memory (use sqlite3_free to deallocate). The encoded byte length is
+  // returned with the pointer so that callers can pass it to SQLite instead
+  // of -1, which stops at the first NUL.
+  function createUTF8WithLength(s) {
+    if (typeof s !== 'string') return [0, -1];
     const utf8 = textEncoder.encode(s);
     const zts = Module._sqlite3_malloc(utf8.byteLength + 1);
     Module.HEAPU8.set(utf8, zts);
     Module.HEAPU8[zts + utf8.byteLength] = 0;
-    return zts;
+    return [zts, utf8.byteLength];
+  }
+
+  function createUTF8(s) {
+    return createUTF8WithLength(s)[0];
+  }
+
+  // Read a SQLite text value of nBytes from the WASM heap, or null when there
+  // is no value there. nBytes comes from SQLite, so a NUL inside the text is
+  // decoded as the character it is instead of ending the string.
+  function readUTF8(address, nBytes) {
+    if (!address) return null;
+    return textDecoder.decode(Module.HEAPU8.subarray(address, address + nBytes));
   }
 
   /**
@@ -224,8 +243,8 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      const ptr = createUTF8(value);
-      const result = f(stmt, i, ptr, -1, sqliteFreeAddress);
+      const [ptr, nBytes] = createUTF8WithLength(value);
+      const result = f(stmt, i, ptr, nBytes, sqliteFreeAddress);
       return check(fname, result, mapStmtToDB.get(stmt));
     };
   })();
@@ -369,11 +388,14 @@ export function Factory(Module) {
 
   sqlite3.column_text = (function() {
     const fname = 'sqlite3_column_text';
-    const f = Module.cwrap(fname, ...decl('nn:s'));
+    const f = Module.cwrap(fname, ...decl('nn:n'));
     return function(stmt, iCol) {
       verifyStatement(stmt);
-      const result = f(stmt, iCol);
-      return result;
+      // sqlite3_column_text() before sqlite3_column_bytes(), the order SQLite
+      // recommends: a conversion made by the second call can invalidate the
+      // pointer returned by the first.
+      const address = f(stmt, iCol);
+      return readUTF8(address, sqlite3.column_bytes(stmt, iCol));
     };
   })();
 
@@ -599,8 +621,8 @@ export function Factory(Module) {
     const fname = 'sqlite3_result_text';
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(context, value) {
-      const ptr = createUTF8(value);
-      f(context, ptr, -1, sqliteFreeAddress); // void return
+      const [ptr, nBytes] = createUTF8WithLength(value);
+      f(context, ptr, nBytes, sqliteFreeAddress); // void return
     };
   })();
 
@@ -836,10 +858,11 @@ export function Factory(Module) {
 
   sqlite3.value_text = (function() {
     const fname = 'sqlite3_value_text';
-    const f = Module.cwrap(fname, ...decl('n:s'));
+    const f = Module.cwrap(fname, ...decl('n:n'));
     return function(pValue) {
-      const result = f(pValue);
-      return result;
+      // Same order as column_text(), for the same reason.
+      const address = f(pValue);
+      return readUTF8(address, sqlite3.value_bytes(pValue));
     };
   })();
 

@@ -461,9 +461,9 @@ declare interface SQLiteAPI {
    * @see https://www.sqlite.org/c3ref/column_blob.html
    * @param stmt prepared statement pointer
    * @param i column index
-   * @returns column value
+   * @returns column value, or null if the column is SQL NULL
    */
-  column_text(stmt: number, i: number): string;
+  column_text(stmt: number, i: number): string|null;
 
   /**
    * Get column type for a prepared statement
@@ -846,9 +846,9 @@ declare interface SQLiteAPI {
    * Extract a value from `sqlite3_value`
    * @see https://sqlite.org/c3ref/value_blob.html
    * @param pValue `sqlite3_value` pointer
-   * @returns value
+   * @returns value, or null if the value is SQL NULL
    */
-  value_text(pValue: number): string;
+  value_text(pValue: number): string|null;
 
   /**
    * Get type of `sqlite3_value`
