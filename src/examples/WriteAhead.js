@@ -555,13 +555,25 @@ export class WriteAhead {
       if (this.#mapIdToPendingTx.has(nextTxId)) {
         // This transaction arrived via message.
         tx = this.#mapIdToPendingTx.get(nextTxId);
-        this.#mapIdToPendingTx.delete(tx.id);
 
-        // Move the WAL file offset past this transaction.
+        // Move the WAL file offset past this transaction. Only remove it
+        // from the pending map once #skipTx has actually consumed it: if
+        // it throws, the id must stay queued so a retry (the next
+        // broadcast, or the backstop) can still make progress instead of
+        // losing the transaction forever and getting stuck at this txId.
         this.#skipTx(tx);
+        this.#mapIdToPendingTx.delete(tx.id);
       } else {
         // Read the transaction from the WAL file.
         tx = this.#readTx();
+        if (!tx) {
+          // The next transaction genuinely isn't at our current file
+          // position (yet, or possibly ever -- see #adoptFileForSalt1).
+          // Stop advancing for now rather than activating a null
+          // transaction; the pending entries stay queued for the next
+          // broadcast or the backstop's readToCurrent pass to retry.
+          break;
+        }
       }
 
       this.#activateTx(tx);
@@ -862,14 +874,46 @@ export class WriteAhead {
    */
   #skipTx(tx) {
     if (tx.waSalt1 !== this.#activeHeader.salt1) {
-      // This transaction is on the other WAL file.
-      if (!this.#followFileChange(null)) {
+      // This transaction is on the other WAL file. Adopt whichever
+      // physical file actually holds tx.waSalt1 right now, verified
+      // against its real on-disk header -- not just "the inactive file,
+      // if it happens to be exactly one generation ahead". A connection
+      // can be more than one swap behind (only one hop was ever handled
+      // here before), and even at exactly one swap behind, accepting the
+      // inactive file on a "+1" check alone without confirming it matches
+      // tx.waSalt1 can silently adopt the WRONG file on a coincidental
+      // match, which corrupts later reads instead of failing loudly.
+      if (!this.#adoptFileForSalt1(tx.waSalt1)) {
         throw new Error('invalid WAL file');
       }
     }
 
     this.#txId = tx.id;
     this.#activeOffset = tx.waOffsetEnd;
+  }
+
+  /**
+   * Adopt whichever of the two physical WAL files currently has a valid,
+   * checksummed header whose salt1 equals targetSalt1, verified by reading
+   * the real file rather than assumed from a generation-count hop. There
+   * are only ever two physical files, so if the transaction we're trying
+   * to skip to still exists at all, one of them names it exactly; if
+   * neither does, the data genuinely isn't recoverable from disk.
+   *
+   * @param {number} targetSalt1
+   * @returns {boolean}
+   */
+  #adoptFileForSalt1(targetSalt1) {
+    for (const candidate of this.#waHandles) {
+      const header = this.#readFileHeader(candidate);
+      if (header?.salt1 === targetSalt1) {
+        this.#activeHandle = candidate;
+        this.#activeHeader = header;
+        this.#activeOffset = FILE_HEADER_SIZE;
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
