@@ -38,6 +38,31 @@ const FRAME_TYPE_END = 2;
 export class WriteAhead {
 
   log = null;
+  diagnosticLog = null;
+  tag = '?';
+  /** TEST ONLY: ids in this set are dropped as if the broadcast for them never
+   *  arrived, to reproduce genuine message loss (as opposed to delay). */
+  testDropTxIds = new Set();
+  /** TEST ONLY: while true, EVERY 'tx' broadcast is ignored entirely --
+   *  never added to #mapIdToPendingTx, #advanceTxId never called. Deterministic
+   *  stand-in for a connection whose BroadcastChannel listener is simply not
+   *  running (frozen tab, or a tab mid-reload) for a controlled span of real
+   *  swaps, without needing a busy-loop or guessing which specific ids to drop. */
+  testPauseConsumption = false;
+  /** TEST ONLY: force this connection's own view back to an arbitrary
+   *  salt1, simulating "this connection's view is N generations behind"
+   *  directly -- the state a real connection ends up in for whatever
+   *  real-world reason (missed a swap notification, reopened after a
+   *  gap), without needing to fight the checkpoint back-pressure that
+   *  blocks forcing multiple REAL swaps while another lock is stale. */
+  testForceActiveHeaderSalt1(salt1) { this.#activeHeader = { ...this.#activeHeader, salt1 }; }
+  /** TEST ONLY: directly populate #mapIdToPendingTx, bypassing
+   *  #handleMessage/BroadcastChannel entirely -- guarantees the entry is
+   *  present before a subsequent query's own isolateForRead/rejoin cycle
+   *  runs, instead of racing a real postMessage against it. */
+  testInjectPendingTx(id, waSalt1) {
+    this.#mapIdToPendingTx.set(id, { id, waSalt1, pages: new Map(), dbFileSize: 0, waOffsetEnd: 0 });
+  }
   /** @type {WriteAheadOptions} */ options = {
     autoCheckpoint: 1,
     backstopInterval: DEFAULT_BACKSTOP_INTERVAL,
@@ -555,24 +580,21 @@ export class WriteAhead {
       if (this.#mapIdToPendingTx.has(nextTxId)) {
         // This transaction arrived via message.
         tx = this.#mapIdToPendingTx.get(nextTxId);
-
-        // Move the WAL file offset past this transaction. Only remove it
-        // from the pending map once #skipTx has actually consumed it: if
-        // it throws, the id must stay queued so a retry (the next
-        // broadcast, or the backstop) can still make progress instead of
-        // losing the transaction forever and getting stuck at this txId.
-        this.#skipTx(tx);
         this.#mapIdToPendingTx.delete(tx.id);
+
+        // Move the WAL file offset past this transaction.
+        this.#skipTx(tx);
       } else {
         // Read the transaction from the WAL file.
         tx = this.#readTx();
         if (!tx) {
-          // The next transaction genuinely isn't at our current file
-          // position (yet, or possibly ever -- see #adoptFileForSalt1).
-          // Stop advancing for now rather than activating a null
-          // transaction; the pending entries stay queued for the next
-          // broadcast or the backstop's readToCurrent pass to retry.
-          break;
+          this.diagnosticLog?.({
+            tag: this.tag, event: 'advanceTxId-readTx-null',
+            txId: this.#txId, nextTxId,
+            pendingKeys: [...this.#mapIdToPendingTx.keys()],
+            activeOffset: this.#activeOffset,
+            activeHeaderSalt1: this.#activeHeader.salt1,
+          });
         }
       }
 
@@ -648,7 +670,14 @@ export class WriteAhead {
       // New transaction from another connection. Don't use it if we
       // already have it.
       /** @type {Transaction} */ const tx = event.data.tx;
+      this.diagnosticLog?.({ tag: this.tag, event: 'debug-handleMessage', testPauseConsumption: this.testPauseConsumption, incomingTxId: tx.id, currentTxId: this.#txId, isolationState: this.#isolationState, pendingMapAfter: null });
+      if (this.testPauseConsumption) return;
       if (tx.id > this.#txId) {
+        if (this.testDropTxIds.has(tx.id)) {
+          this.diagnosticLog?.({ tag: this.tag, event: 'test-dropped-broadcast', txId: tx.id });
+          this.testDropTxIds.delete(tx.id);
+          return;
+        }
         this.#mapIdToPendingTx.set(tx.id, tx);
         if (this.#isolationState === null) {
           // Not in an isolated state, so advance our view of the database.
@@ -874,46 +903,25 @@ export class WriteAhead {
    */
   #skipTx(tx) {
     if (tx.waSalt1 !== this.#activeHeader.salt1) {
-      // This transaction is on the other WAL file. Adopt whichever
-      // physical file actually holds tx.waSalt1 right now, verified
-      // against its real on-disk header -- not just "the inactive file,
-      // if it happens to be exactly one generation ahead". A connection
-      // can be more than one swap behind (only one hop was ever handled
-      // here before), and even at exactly one swap behind, accepting the
-      // inactive file on a "+1" check alone without confirming it matches
-      // tx.waSalt1 can silently adopt the WRONG file on a coincidental
-      // match, which corrupts later reads instead of failing loudly.
-      if (!this.#adoptFileForSalt1(tx.waSalt1)) {
+      // This transaction is on the other WAL file.
+      const before = this.#activeHeader.salt1;
+      if (!this.#followFileChange(null)) {
+        this.diagnosticLog?.({
+          tag: this.tag, event: 'skipTx-throw',
+          txId: this.#txId, txWaitingFor: tx.id, txWaSalt1: tx.waSalt1,
+          activeHeaderSalt1Before: before,
+        });
         throw new Error('invalid WAL file');
       }
+      this.diagnosticLog?.({
+        tag: this.tag, event: 'skipTx-followed',
+        txId: this.#txId, txWaitingFor: tx.id, txWaSalt1: tx.waSalt1,
+        activeHeaderSalt1Before: before, activeHeaderSalt1After: this.#activeHeader.salt1,
+      });
     }
 
     this.#txId = tx.id;
     this.#activeOffset = tx.waOffsetEnd;
-  }
-
-  /**
-   * Adopt whichever of the two physical WAL files currently has a valid,
-   * checksummed header whose salt1 equals targetSalt1, verified by reading
-   * the real file rather than assumed from a generation-count hop. There
-   * are only ever two physical files, so if the transaction we're trying
-   * to skip to still exists at all, one of them names it exactly; if
-   * neither does, the data genuinely isn't recoverable from disk.
-   *
-   * @param {number} targetSalt1
-   * @returns {boolean}
-   */
-  #adoptFileForSalt1(targetSalt1) {
-    for (const candidate of this.#waHandles) {
-      const header = this.#readFileHeader(candidate);
-      if (header?.salt1 === targetSalt1) {
-        this.#activeHandle = candidate;
-        this.#activeHeader = header;
-        this.#activeOffset = FILE_HEADER_SIZE;
-        return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -1033,9 +1041,11 @@ export class WriteAhead {
     }
 
     // Initialize the other WAL file and make it active.
+    const oldSalt1 = this.#activeHeader.salt1;
     this.#activeHeader = this.#writeFileHeader();
     this.#activeHandle = this.#getInactiveHandle();
     this.#activeOffset = FILE_HEADER_SIZE;
+    this.diagnosticLog?.({ tag: this.tag, event: 'swap', oldSalt1, newSalt1: this.#activeHeader.salt1, txId: this.#txId });
   }
 
   #getActiveFileStartingTxId() {
@@ -1141,6 +1151,12 @@ export class WriteAhead {
     const frameSalt2 = headerView.getUint32(20);
     if (frameSalt1 !== this.#activeHeader.salt1 || frameSalt2 !== this.#activeHeader.salt2) {
       // Not necessarily an error, could be from a restart without truncation.
+      this.diagnosticLog?.({
+        tag: this.tag, event: 'readFrame-salt-mismatch',
+        offset, txId: this.#txId,
+        frameSalt1, frameSalt2,
+        activeHeaderSalt1: this.#activeHeader.salt1, activeHeaderSalt2: this.#activeHeader.salt2,
+      });
       return null;
     }
 

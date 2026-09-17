@@ -1,0 +1,187 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>wa-sqlite deterministic repro — database disk image is malformed</title>
+<pre id="log" style="white-space:pre-wrap;font:12px monospace"></pre>
+<script type="module">
+// Third variant: "database disk image is malformed", via the OTHER branch
+// of #skipTx -- the one that does NOT throw. Derived earlier by hand:
+// forcing the victim's own salt1 to exactly ONE BEHIND a real generation
+// makes followFileChange's "+1" check accidentally match a DIFFERENT real
+// file than the one the incoming transaction actually names, so it silently
+// adopts the wrong physical file instead of throwing. The injected
+// transaction then supplies a page-0 entry pointing at a real but
+// misaligned offset in that wrong file (landing on a frame HEADER rather
+// than page data), so #fetchPage hands SQLite bytes that are real disk
+// content but not a valid page at that position -- the bytes SQLite's own
+// page-format check is supposed to catch.
+const logEl = document.getElementById('log');
+function log(...args) {
+  const line = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  console.log(line);
+  logEl.textContent += line + '\n';
+}
+
+async function clearOpfs() {
+  const root = await navigator.storage.getDirectory();
+  const deadline = performance.now() + 10000;
+  for (;;) {
+    let allDeleted = true;
+    for await (const name of root.keys()) {
+      try { await root.removeEntry(name, { recursive: true }); }
+      catch (e) { allDeleted = false; }
+    }
+    if (allDeleted) return;
+    if (performance.now() > deadline) throw new Error('timed out');
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+function waitFor(worker, predicate) {
+  return new Promise((resolve) => {
+    function handler(event) {
+      if (predicate(event.data)) {
+        worker.removeEventListener('message', handler);
+        resolve(event.data);
+      }
+    }
+    worker.addEventListener('message', handler);
+  });
+}
+
+const DB_NAME = 'repro.db';
+const FILE_HEADER_SIZE = 32;
+
+async function main() {
+  log('=== clearing OPFS ===');
+  await clearOpfs();
+
+  const writer = new Worker('./writer.worker.js', { type: 'module' });
+  let swapCount = 0, startSalt1 = null, finalSalt1 = null;
+  writer.onmessage = (e) => {
+    const d = e.data;
+    if (d.kind === 'diag' && d.record.event === 'swap') {
+      if (startSalt1 === null) startSalt1 = d.record.oldSalt1;
+      swapCount++;
+      finalSalt1 = d.record.newSalt1;
+      log(`[writer] swap #${swapCount}`, d.record);
+    }
+  };
+
+  writer.postMessage({ cmd: 'init', tag: 'writer' });
+  await waitFor(writer, d => d.kind === 'ready');
+  writer.postMessage({ cmd: 'raw-sql', sql: 'PRAGMA journal_size_limit=5' });
+  await waitFor(writer, d => d.kind === 'raw-sql-done');
+
+  log('=== writer inserting alone, waiting for 1 real swap ===');
+  writer.postMessage({ cmd: 'start', opts: { count: 500, blobSize: 3200, delayMs: 0 } });
+  const swapWaitStart = performance.now();
+  while (swapCount < 1 && performance.now() - swapWaitStart < 20000) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  if (swapCount < 1) { log('=== FAILED TO FORCE A SWAP ==='); return; }
+  log(`=== 1 real swap done, start salt1(G0)=${startSalt1}, final salt1(G1)=${finalSalt1} ===`);
+  writer.postMessage({ cmd: 'stop' });
+  await Promise.race([waitFor(writer, d => d.kind === 'stopped'), new Promise(r => setTimeout(r, 1000))]);
+  writer.terminate();
+
+  const victim = new Worker('./reader.worker.js', { type: 'module' });
+  let sawMalformed = null;
+  victim.onmessage = (e) => { log('[victim RAW]', e.data); };
+  victim.onerror = (e) => { log('[victim] *** UNCAUGHT ***', e.message); };
+
+  victim.postMessage({ cmd: 'init', tag: 'victim' });
+  await waitFor(victim, d => d.kind === 'ready');
+  log('=== victim opened, reads G1 honestly (its #activeHandle = G1\'s real physical file) ===');
+
+  victim.postMessage({ cmd: 'pause-consumption' });
+  await waitFor(victim, d => d.kind === 'paused');
+
+  victim.postMessage({ cmd: 'count', label: 'real-txid', table: 't' });
+  const realState = await waitFor(victim, d => d.kind === 'count' && d.label === 'real-txid');
+  const realTxId = realState.value;
+  log(`=== victim's REAL #txId (frozen while paused) = ${realTxId} ===`);
+
+  // Force it to exactly ONE BEHIND G0 (not far off like phases 1/2): this
+  // makes followFileChange's "does the inactive file show my_salt+1" check
+  // land on G0's OWN real header by coincidence (G0 = forced+1), so it
+  // succeeds -- but the transaction we're about to hand it actually lives
+  // in G1, not G0. That mismatch is exactly the silent-wrong-adopt case.
+  const forcedSalt1 = (startSalt1 - 1) >>> 0;
+  victim.postMessage({ cmd: 'force-active-header-salt1', salt1: forcedSalt1 });
+  await waitFor(victim, d => d.kind === 'forced-active-header');
+  log(`=== victim's view forced to exactly one behind G0 (${forcedSalt1}) ===`);
+
+  victim.postMessage({ cmd: 'unpause-consumption' });
+  await waitFor(victim, d => d.kind === 'unpaused');
+
+  // Page-0 entry pointing at a REAL but misaligned offset in G0's physical
+  // file: offset 32 is right past G0's own file header, landing on the
+  // FIRST real frame's own 32-byte frame header rather than its page data.
+  // waSalt1 here must match G0's parity so #fetchPage reads from G0's
+  // physical file (waHandles[waSalt1 & 1]) -- it does not have to equal
+  // forcedSalt1 or finalSalt1, only share their parity, since #fetchPage
+  // only ever uses `& 1` on it.
+  const channel = new BroadcastChannel(`${DB_NAME}#wa`);
+  let nextId = realTxId + 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // Page 1 (offset 0) is the DB header page: SQLite's check there is a
+    // strict magic-string match ("SQLite format 3\0"), which garbage bytes
+    // fail as "file is not a database" (confirmed: that's exactly what the
+    // first attempt at this got, one error message over from "malformed").
+    // A LATER page goes through the general b-tree page-structure check
+    // instead, which is what actually reports "malformed". Target page 6
+    // (offset 5*4096) against a database we tell it is 20 pages, and read
+    // from a real but misaligned offset in G0's file (again landing on a
+    // frame header rather than page data).
+    // #activateTx unconditionally reads tx.pages.get(0) first (to track
+    // active-file page counts), so page 1 (offset 0) has to be present and
+    // safe to avoid crashing there instead -- point it at a genuinely
+    // aligned, valid page read in G0's real file (its own real page 1).
+    // Offset 5*4096 is the actual target: a later page, read from a
+    // misaligned real position (landing on a frame header, not page data).
+    const PAGE_SIZE = 4096;
+    const targetPageOffset = 5 * PAGE_SIZE;
+    const injected = {
+      id: nextId,
+      waSalt1: finalSalt1, // mismatches forcedSalt1 -> enters the branch
+      pages: new Map([
+        [0, { pageSize: PAGE_SIZE, waOffset: FILE_HEADER_SIZE + 32, waSalt1: startSalt1 }],
+        [targetPageOffset, { pageSize: PAGE_SIZE, waOffset: FILE_HEADER_SIZE, waSalt1: startSalt1 }],
+      ]),
+      dbFileSize: 20 * PAGE_SIZE,
+      waOffsetEnd: FILE_HEADER_SIZE + 32 + PAGE_SIZE,
+    };
+    log(`=== posting synthetic broadcast (attempt ${attempt + 1}):`, { type: 'tx', tx: { ...injected, pages: '[[0,{...}]]' } }, '===');
+    const probe = waitFor(victim, d => d.kind === 'diag' && d.record.event === 'debug-handleMessage');
+    channel.postMessage({ type: 'tx', tx: injected });
+    const observed = await Promise.race([probe, new Promise(r => setTimeout(() => r(null), 1500))]);
+    if (!observed) { log('=== no debug-handleMessage observed ==='); break; }
+    if (observed.record.currentTxId === nextId - 1) {
+      log('=== id matched current+1 ===');
+      break;
+    }
+    nextId = observed.record.currentTxId + 1;
+    log(`=== drift detected, retrying with corrected id=${nextId} ===`);
+  }
+
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Now read: if the silent-wrong-adopt worked, this reads page 0 from the
+  // wrong offset in the wrong file.
+  victim.postMessage({ cmd: 'count', label: 'post-inject-read', table: 't' });
+  const readResult = await waitFor(victim, d => d.kind === 'count' && d.label === 'post-inject-read');
+  log('=== post-inject-read result:', readResult, '===');
+  if (readResult.error && /malformed/i.test(readResult.error.message || '')) {
+    log('=== REPRODUCED: "database disk image is malformed" ===');
+  } else if (readResult.error) {
+    log('=== got a DIFFERENT error, not malformed:', readResult.error.message, '===');
+  } else {
+    log('=== read succeeded with no error -- did not reproduce this attempt ===');
+  }
+
+  channel.close();
+  log('=== ATTEMPT DONE ===');
+}
+
+main().catch(e => log('FATAL', e.stack || String(e)));
+</script>

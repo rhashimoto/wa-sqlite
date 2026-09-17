@@ -1,0 +1,242 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>wa-sqlite deterministic repro — forced 3-generation gap</title>
+<pre id="log" style="white-space:pre-wrap;font:12px monospace"></pre>
+<script type="module">
+// Deterministic, code-level reproduction of the #skipTx "invalid WAL file"
+// throw. Directly engineers the exact internal precondition the bug needs (a
+// broadcast naming a transaction 3+ real WAL-file generations ahead of a
+// connection's own view) and delivers it through the REAL, UNMODIFIED
+// #handleMessage code path via a genuine BroadcastChannel message -- the
+// same path a real peer's broadcast takes.
+//
+// Two things learned building this that shaped the design:
+// 1. A terminated Worker's OPFSWriteAheadVFS locks/handles don't appear to
+//    release synchronously, so this runs ONE attempt per page load rather
+//    than reusing workers across attempts in one page.
+// 2. Checkpoint back-pressure (a stale connection's published txId lock
+//    blocks ALL further passive checkpoints/swaps origin-wide) blocks
+//    forcing multiple real swaps once ANY second connection exists with a
+//    non-advancing lock -- confirmed empirically: exactly one swap
+//    succeeded, then it stalled for the full 20s timeout with a paused
+//    second connection merely present. So the writer forces its 3 swaps
+//    completely ALONE first (no other connection to block it), and only
+//    afterwards does a second connection open and have its own view
+//    directly set back to the pre-swap generation -- simulating the state a
+//    real connection ends up in (missed a swap notification, or reopened
+//    after a gap) without needing to win that race in real time.
+const logEl = document.getElementById('log');
+function log(...args) {
+  const line = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  console.log(line);
+  logEl.textContent += line + '\n';
+}
+
+async function clearOpfs() {
+  const root = await navigator.storage.getDirectory();
+  const deadline = performance.now() + 10000;
+  for (;;) {
+    let allDeleted = true;
+    for await (const name of root.keys()) {
+      try { await root.removeEntry(name, { recursive: true }); }
+      catch (e) { allDeleted = false; }
+    }
+    if (allDeleted) return;
+    if (performance.now() > deadline) throw new Error('timed out');
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+function waitFor(worker, predicate) {
+  return new Promise((resolve) => {
+    function handler(event) {
+      if (predicate(event.data)) {
+        worker.removeEventListener('message', handler);
+        resolve(event.data);
+      }
+    }
+    worker.addEventListener('message', handler);
+  });
+}
+
+const DB_NAME = 'repro.db';
+
+async function main() {
+  log('=== clearing OPFS ===');
+  await clearOpfs();
+
+  const writer = new Worker('./writer.worker.js', { type: 'module' });
+
+  let swapCount = 0;
+  let startSalt1 = null;
+  let finalSalt1 = null;
+  let txIdAtSwap = null;
+  writer.onmessage = (e) => {
+    const d = e.data;
+    if (d.kind === 'diag' && d.record.event === 'swap') {
+      if (startSalt1 === null) startSalt1 = d.record.oldSalt1;
+      swapCount++;
+      finalSalt1 = d.record.newSalt1;
+      txIdAtSwap = d.record.txId;
+      log(`[writer] swap #${swapCount}`, d.record);
+    }
+  };
+
+  // 1. Writer opens and forces exactly 3 swaps completely ALONE -- no other
+  // connection exists yet, so there is no stale lock to block checkpointing.
+  writer.postMessage({ cmd: 'init', tag: 'writer' });
+  await waitFor(writer, d => d.kind === 'ready');
+  writer.postMessage({ cmd: 'raw-sql', sql: 'PRAGMA journal_size_limit=5' });
+  await waitFor(writer, d => d.kind === 'raw-sql-done');
+
+  // Only ONE real swap is actually needed: `force-active-header-salt1`
+  // below can push the victim arbitrarily far behind that single real
+  // generation directly, without needing more real swaps to occur (which
+  // turned out to stall past #1 for reasons not yet understood -- a
+  // separate anomaly worth its own look, not blocking this test).
+  log('=== writer inserting alone, waiting for 1 real swap ===');
+  writer.postMessage({ cmd: 'start', opts: { count: 500, blobSize: 3200, delayMs: 0 } });
+  const swapWaitStart = performance.now();
+  while (swapCount < 1 && performance.now() - swapWaitStart < 20000) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  if (swapCount < 1) {
+    log('=== FAILED TO FORCE EVEN 1 SWAP IN TIME ===');
+    return;
+  }
+  log(`=== ${swapCount} real swap(s) done, start salt1=${startSalt1}, final salt1=${finalSalt1} ===`);
+
+  // The writer's own commit loop appears to stall on whatever commit comes
+  // right after the first swap+checkpoint with this tiny journal_size_limit
+  // (a separate anomaly worth its own investigation later, not blocking
+  // this test) -- it may never post 'stopped'. We already have what this
+  // test needs (one real swap happened), so don't wait on it; terminate it
+  // outright rather than risk hanging this test on that stall.
+  writer.postMessage({ cmd: 'stop' });
+  await Promise.race([
+    waitFor(writer, d => d.kind === 'stopped'),
+    new Promise(r => setTimeout(r, 1000)),
+  ]);
+  writer.terminate();
+
+  // 2. NOW open the victim, fresh, on the file that has ALREADY moved 3
+  // generations. A normal open would read the CURRENT header correctly (not
+  // behind at all) -- so we then directly declare its view stuck at the
+  // PRE-swap generation, simulating exactly what a connection that missed
+  // those 3 swaps looks like, without needing to win that timing race live.
+  const victim = new Worker('./reader.worker.js', { type: 'module' });
+  let victimThrew = null;
+  victim.onmessage = (e) => {
+    const d = e.data;
+    log('[victim RAW]', d);
+    if (d.kind === 'diag' && d.record.event === 'skipTx-throw') victimThrew = d.record;
+  };
+  victim.onerror = (e) => { log('[victim] *** UNCAUGHT ***', e.message); victimThrew = victimThrew || { uncaught: e.message }; };
+
+  victim.postMessage({ cmd: 'init', tag: 'victim' });
+  await waitFor(victim, d => d.kind === 'ready');
+  log('=== victim opened (reads the true current header -- not behind yet) ===');
+
+  // Pause FIRST, before any query -- rejoin()'s own call to #advanceTxId
+  // after a read is NOT gated by testPauseConsumption, so querying first
+  // left a real gap where one more broadcast could still land and advance
+  // #txId between the query and the pause taking effect (confirmed: it did,
+  // by exactly 1, in an earlier run of this same test). Paused first, with
+  // #mapIdToPendingTx therefore staying empty, rejoin()'s own call becomes a
+  // harmless no-op and the query below is a stable, frozen snapshot.
+  victim.postMessage({ cmd: 'pause-consumption' });
+  await waitFor(victim, d => d.kind === 'paused');
+
+  // The victim's own #ready reads and activates every pre-existing row at
+  // open time (correctly) -- so its real #txId already equals however many
+  // rows existed at open, not 0. Query it directly rather than assume.
+  victim.postMessage({ cmd: 'count', label: 'real-txid', table: 't' });
+  const realState = await waitFor(victim, d => d.kind === 'count' && d.label === 'real-txid');
+  const realTxId = realState.value;
+  log(`=== victim's REAL #txId (frozen while paused) = ${realTxId} ===`);
+
+  // Force it many generations further back than a single real swap would
+  // ever produce (>>1 apart), guaranteeing this lands in the "3+ generations
+  // behind" case that throws, not the "exactly 1 behind" case that
+  // legitimately succeeds via followFileChange.
+  const forcedSalt1 = (startSalt1 - 1000) >>> 0;
+  victim.postMessage({ cmd: 'force-active-header-salt1', salt1: forcedSalt1 });
+  await waitFor(victim, d => d.kind === 'forced-active-header');
+  log(`=== victim's own view forced far behind (salt1=${forcedSalt1}, real current=${finalSalt1}) ===`);
+
+  victim.postMessage({ cmd: 'unpause-consumption' });
+  await waitFor(victim, d => d.kind === 'unpaused');
+
+  // 3. Deliver exactly the transaction id=1 the victim is waiting for
+  // (its own #txId is still 0), naming the REAL current generation -- 3
+  // real swaps ahead of what we just forced it to believe. Only `id` and
+  // `waSalt1` matter for reaching the throw: it fires inside #skipTx,
+  // before #activateTx ever looks at pages/dbFileSize.
+  const channel = new BroadcastChannel(`${DB_NAME}#wa`);
+
+  // Self-correcting: something not yet identified advances the victim's own
+  // #txId by exactly 1 somewhere in this sequence even while paused (seen
+  // consistently: a snapshot of 500 becomes 501 by the time a message is
+  // actually processed) -- rather than keep chasing that separately, probe
+  // with a deliberately-wrong id first, read back the live currentTxId the
+  // debug diagnostic reports for it, and send the real one from that.
+  let nextId = realTxId + 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const probe = { id: nextId, waSalt1: finalSalt1, pages: new Map(), dbFileSize: 0, waOffsetEnd: 0 };
+    log(`=== posting synthetic broadcast (attempt ${attempt + 1}):`, { type: 'tx', tx: probe }, '===');
+    const probeResult = waitFor(victim, d => d.kind === 'diag' && d.record.event === 'debug-handleMessage');
+    channel.postMessage({ type: 'tx', tx: probe });
+    const observed = await Promise.race([probeResult, new Promise(r => setTimeout(() => r(null), 1500))]);
+    if (!observed) { log('=== no debug-handleMessage observed for this attempt ==='); break; }
+    log('=== observed:', observed.record, '===');
+    if (observed.record.currentTxId === nextId - 1) {
+      log('=== id matched current+1, this should have reached #skipTx ===');
+      break;
+    }
+    nextId = observed.record.currentTxId + 1;
+    log(`=== drift detected, retrying with corrected id=${nextId} ===`);
+  }
+
+  await new Promise(r => setTimeout(r, 2000));
+
+  log(victimThrew ? '=== REPRODUCED: victim threw "invalid WAL file" (or uncaught equivalent) ===' : '=== did NOT reproduce ===');
+  log('victimThrew:', victimThrew);
+
+  if (!victimThrew) { log('=== skipping phase 2 (phase 1 did not reproduce) ==='); return; }
+
+  // Phase 2: "disk I/O error". #activeHeader.salt1 is still the fake forced
+  // value (nothing ever resets it), so any further pending transaction will
+  // hit the same salt mismatch via #readFrame and crash on
+  // #activateTx(null). #advanceTxId and rejoin() are both plain synchronous
+  // functions (confirmed above), so that throw, if it happens DURING
+  // rejoin(), propagates synchronously into jUnlock's try/catch, which
+  // converts it to SQLITE_IOERR_UNLOCK. rejoin() only calls #advanceTxId
+  // when isolationState was 'read' -- i.e. the pending entry has to already
+  // be there when the query's own isolateForRead/rejoin cycle runs. Racing a
+  // real postMessage against that window from outside the worker turned out
+  // to be unreliable (both earlier attempts landed too late, after the
+  // query had already released its read isolation). Injecting directly
+  // removes the race: the entry is guaranteed present before the query
+  // starts, not "maybe, if timing lines up".
+  log('=== phase 2: injecting a pending tx directly, then reading, to land the crash inside jUnlock ===');
+  victim.postMessage({ cmd: 'inject-pending-tx', id: realTxId + 5, waSalt1: finalSalt1 });
+  await waitFor(victim, d => d.kind === 'injected-pending-tx');
+
+  victim.postMessage({ cmd: 'write-one', label: 'io-error-write' });
+  const ioResult = await waitFor(victim, d => d.kind === 'write' && d.label === 'io-error-write');
+  log('=== io-error-write result:', ioResult, '===');
+  if (ioResult.error) {
+    log('=== REPRODUCED: write failed with:', ioResult.error.message, '===');
+  } else {
+    log('=== phase 2 did not reproduce via write either; querying to see current state ===');
+    victim.postMessage({ cmd: 'count', label: 'post-write-count', table: 't' });
+    const c = await waitFor(victim, d => d.kind === 'count' && d.label === 'post-write-count');
+    log('=== post-write-count:', c, '===');
+  }
+
+  channel.close();
+  log('=== ATTEMPT DONE ===');
+}
+
+main().catch(e => log('FATAL', e.stack || String(e)));
+</script>

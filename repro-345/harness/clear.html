@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>clearing</title>
+<script type="module">
+async function clearOpfs() {
+  const root = await navigator.storage.getDirectory();
+  const deadline = performance.now() + 10000;
+  for (;;) {
+    let allDeleted = true;
+    for await (const name of root.keys()) {
+      try { await root.removeEntry(name, { recursive: true }); }
+      catch (e) { allDeleted = false; }
+    }
+    if (allDeleted) return;
+    if (performance.now() > deadline) throw new Error('timed out');
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+clearOpfs().then(() => { document.title = 'CLEARED'; }).catch(e => { document.title = 'CLEAR-FAILED: ' + e.message; });
+</script>
