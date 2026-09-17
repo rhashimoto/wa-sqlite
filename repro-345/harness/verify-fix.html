@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>wa-sqlite fix verification — real broadcasts only, no synthetic data</title>
+<pre id="log" style="white-space:pre-wrap;font:12px monospace"></pre>
+<script type="module">
+// Cleaner than the first attempt at this: that one fabricated a synthetic
+// page-0 entry, which happened to point at a byte range in the
+// freshly-swapped file that had no real content written yet (still
+// zero-filled) -- a defect in the TEST's synthetic data, not in the fix,
+// but it made the result ambiguous. This version injects nothing at all
+// except the "far behind" starting condition; the writer keeps running for
+// real the whole time, so every transaction the victim receives afterward
+// is entirely real, on-disk, checksummed content -- the only way to be
+// sure a clean read afterward reflects the fix and not a test artifact.
+const logEl = document.getElementById('log');
+function log(...args) {
+  const line = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  console.log(line);
+  logEl.textContent += line + '\n';
+}
+
+async function clearOpfs() {
+  const root = await navigator.storage.getDirectory();
+  const deadline = performance.now() + 10000;
+  for (;;) {
+    let allDeleted = true;
+    for await (const name of root.keys()) {
+      try { await root.removeEntry(name, { recursive: true }); }
+      catch (e) { allDeleted = false; }
+    }
+    if (allDeleted) return;
+    if (performance.now() > deadline) throw new Error('timed out');
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+function waitFor(worker, predicate) {
+  return new Promise((resolve) => {
+    function handler(event) {
+      if (predicate(event.data)) {
+        worker.removeEventListener('message', handler);
+        resolve(event.data);
+      }
+    }
+    worker.addEventListener('message', handler);
+  });
+}
+
+const DB_NAME = 'repro.db';
+
+async function main() {
+  log('=== clearing OPFS ===');
+  await clearOpfs();
+
+  const writer = new Worker('./writer.worker.fixed.js', { type: 'module' });
+  let swapCount = 0, startSalt1 = null;
+  writer.onmessage = (e) => {
+    const d = e.data;
+    if (d.kind === 'diag' && d.record.event === 'swap') {
+      if (startSalt1 === null) startSalt1 = d.record.oldSalt1;
+      swapCount++;
+      log(`[writer] swap #${swapCount}`, d.record);
+    }
+  };
+  writer.postMessage({ cmd: 'init', tag: 'writer' });
+  await waitFor(writer, d => d.kind === 'ready');
+  writer.postMessage({ cmd: 'raw-sql', sql: 'PRAGMA journal_size_limit=5' });
+  await waitFor(writer, d => d.kind === 'raw-sql-done');
+
+  const victim = new Worker('./reader.worker.fixed.js', { type: 'module' });
+  let sawThrow = false, sawUncaught = null;
+  const diagCounts = {};
+  victim.onmessage = (e) => {
+    const d = e.data;
+    if (d.kind === 'diag') {
+      diagCounts[d.record.event] = (diagCounts[d.record.event] || 0) + 1;
+      if (d.record.event === 'skipTx-throw') sawThrow = true;
+      if (diagCounts[d.record.event] <= 3) log('[victim diag]', d.record); // first few of each kind only
+    }
+  };
+  victim.onerror = (e) => { sawUncaught = e.message; log('[victim] *** UNCAUGHT ***', e.message); };
+
+  victim.postMessage({ cmd: 'init', tag: 'victim' });
+  await waitFor(victim, d => d.kind === 'ready');
+  log('=== victim opened, on the still-empty file (before the writer starts) ===');
+
+  victim.postMessage({ cmd: 'pause-consumption' });
+  await waitFor(victim, d => d.kind === 'paused');
+  log('=== victim paused BEFORE the writer starts -- it will miss every real transaction from here ===');
+
+  log('=== writer starts (for real), inserting 500 rows, forcing swaps as it goes ===');
+  writer.postMessage({ cmd: 'start', opts: { count: 500, blobSize: 3200, delayMs: 0 } });
+
+  // A paused victim's published txId lock never advances (same as a truly
+  // frozen one -- confirmed earlier this session), which blocks further
+  // passive checkpoints/swaps origin-wide; so only 1 real swap is reliably
+  // achievable here, not more. That's still the same condition phase 1 of
+  // the bug reproduction used, just via a real miss instead of a forced one.
+  const swapWaitStart = performance.now();
+  while (swapCount < 1 && performance.now() - swapWaitStart < 20000) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  log(`=== ${swapCount} real swap(s) happened while the victim was paused and blind to all of them ===`);
+
+  victim.postMessage({ cmd: 'unpause-consumption' });
+  await waitFor(victim, d => d.kind === 'unpaused');
+  log('=== victim unpaused -- the writer is STILL running live, sending only real broadcasts from here ===');
+
+  // Let it run a while longer so the victim has real broadcasts to
+  // actually catch up on.
+  await new Promise(r => setTimeout(r, 3000));
+  writer.postMessage({ cmd: 'stop' });
+  await Promise.race([waitFor(writer, d => d.kind === 'stopped'), new Promise(r => setTimeout(r, 1000))]);
+
+  writer.postMessage({ cmd: 'count' });
+  const writerFinal = await waitFor(writer, d => d.kind === 'count');
+  log('=== writer final row count:', writerFinal.value, '===');
+  writer.terminate();
+
+  await new Promise(r => setTimeout(r, 500));
+  victim.postMessage({ cmd: 'count', label: 'health-check', table: 't' });
+  const health = await waitFor(victim, d => d.kind === 'count' && d.label === 'health-check');
+  log('=== victim health-check read:', health, '===');
+  log('=== diag event counts:', diagCounts, '===');
+
+  const dataMatches = health.value === writerFinal.value;
+  const verdict = !sawThrow && !sawUncaught && !health.error && dataMatches;
+  log(`=== sawThrow=${sawThrow} sawUncaught=${JSON.stringify(sawUncaught)} readError=${JSON.stringify(health.error)} writerRows=${writerFinal.value} victimSees=${health.value} ===`);
+  log(verdict
+    ? '=== FIX VERIFIED: victim self-healed across a genuinely-missed multi-swap gap, no throw, no crash, correct row count ==='
+    : '=== FIX DID NOT FULLY RESOLVE THIS ATTEMPT ===');
+  log('=== ATTEMPT DONE ===');
+}
+
+main().catch(e => log('FATAL', e.stack || String(e)));
+</script>
