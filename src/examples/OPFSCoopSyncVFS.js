@@ -522,13 +522,23 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
         try {
           // Get access handles for the database and releated files in parallel.
           this.log?.(`creating access handles for ${file.path}`)
-          await Promise.all(DB_RELATED_FILE_SUFFIXES.map(async suffix => {
-            const persistentFile = this.persistentFiles.get(file.path + suffix);
-            if (persistentFile) {
-              persistentFile.accessHandle =
-                await persistentFile.fileHandle.createSyncAccessHandle();
-            }
-          }));
+          // Settle them all before reporting a failure: Promise.all rejects as
+          // soon as one does, while the others are still in flight, so the
+          // cleanup in the catch below runs too early to see them. Those
+          // acquisitions then complete and assign to persistent files nothing
+          // will close, leaking one access handle per attempt - which makes
+          // every later open of the same database fail on a sidecar file it
+          // holds itself.
+          const results = await Promise.allSettled(
+            DB_RELATED_FILE_SUFFIXES.map(async suffix => {
+              const persistentFile = this.persistentFiles.get(file.path + suffix);
+              if (persistentFile) {
+                persistentFile.accessHandle =
+                  await persistentFile.fileHandle.createSyncAccessHandle();
+              }
+            }));
+          const failure = results.find(result => result.status === 'rejected');
+          if (failure) throw failure.reason;
         } catch (e) {
           this.log?.(`failed to create access handles for ${file.path}`, e);
           // Close any of the potentially opened access handles
