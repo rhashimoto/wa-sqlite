@@ -346,14 +346,6 @@ export class WriteAhead {
     // Persist the final pending transaction page with the database size.
     this.#commitTx();
 
-    // Incorporate the transaction locally.
-    this.#activateTx(tx);
-    this.#updateTxIdLock();
-
-    // Send the transaction to other connections.
-    const payload = { type: 'tx', tx };
-    this.#broadcastChannel.postMessage(payload);
-
     // Check whether to move to the other WAL file. The other WAL file must
     // be empty, and the active WAL file size (in pages) must exceed the
     // configured threshold.
@@ -366,8 +358,22 @@ export class WriteAhead {
       if (walFilePageCount >= nPageThreshold) {
         this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'background-color: lightskyblue;');
         this.#swapActiveFile();
+
+        // Move transaction WAL position to the new file. This ensures that
+        // once all connections have reached this transaction, the other WAL
+        // file can be checkpointed and truncated.
+        tx.waSalt1 = this.#activeHeader.salt1;
+        tx.waOffsetEnd = this.#activeOffset;
       }
     }
+
+    // Incorporate the transaction locally.
+    this.#activateTx(tx);
+    this.#updateTxIdLock();
+
+    // Send the transaction to other connections.
+    const payload = { type: 'tx', tx };
+    this.#broadcastChannel.postMessage(payload);
 
     this.#autoCheckpoint();
     this.#backstopTimestamp = performance.now();
