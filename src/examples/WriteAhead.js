@@ -103,26 +103,20 @@ export class WriteAhead {
       // and we have to initialize a WAL file.
       const { fileHeader } =
         await navigator.locks.request(`${this.#zName}#ckpt`, async () => {
-        // Set our advertised txId to zero until we know the proper value.
-        // This will also prevent other connections from checkpointing
-        // after we release the #ckpt lock.
-        await this.#updateTxIdLock();
+          // Set our advertised txId to zero until we know the proper value.
+          // This will also prevent other connections from checkpointing
+          // after we release the #ckpt lock.
+          await this.#updateTxIdLock();
 
-        // Listen for transactions and checkpoints from other connections.
-        this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
-        this.#broadcastChannel.onmessage = (event) => {
-          this.#handleMessage(event);
-        };
-
-        // Read headers from both WAL files and use the one with the
-        // lower nextTxId. If neither header is valid, create a new header.
-        const fileHeader = this.#waHandles
-          .map(handle => this.#readFileHeader(handle))
-          .filter(h => h)
-          .sort((a, b) => a.nextTxId - b.nextTxId)[0]
-          ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
-        return { fileHeader };
-      });
+          // Read headers from both WAL files and use the one with the
+          // lower nextTxId. If neither header is valid, create a new header.
+          const fileHeader = this.#waHandles
+            .map(handle => this.#readFileHeader(handle))
+            .filter(h => h)
+            .sort((a, b) => a.nextTxId - b.nextTxId)[0]
+            ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
+          return { fileHeader };
+        });
 
       // The checkpoint lock has been released, but checkpointing will not
       // happen until read the WAL files and advance our txId.
@@ -130,6 +124,12 @@ export class WriteAhead {
       this.#activeHandle = this.#waHandles[fileHeader.salt1 & 1];
       this.#activeOffset = FILE_HEADER_SIZE;
       this.#txId = fileHeader.nextTxId - 1;
+
+      // Listen for transactions and checkpoints from other connections.
+      this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
+      this.#broadcastChannel.onmessage = (event) => {
+        this.#handleMessage(event);
+      };
 
       // Load all the transactions from the WAL.
       for (const tx of this.#readAllTx()) {
