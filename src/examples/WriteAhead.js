@@ -220,12 +220,12 @@ export class WriteAhead {
     if (pageEntry) {
       if (pageEntry.pageData) {
         // Page data is cached.
-        this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset} (cached)`, 'background-color: gold;');
+        this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset} (cached)`, 'color: black; background-color: gold;');
         return pageEntry.pageData;
       }
 
       // Read the page from the WAL file.
-      this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset}`, 'background-color: gold;');
+      this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset}`, 'color: black; background-color: gold;');
       return this.#fetchPage(pageEntry);
     }
     return null;
@@ -262,7 +262,7 @@ export class WriteAhead {
         for (let i = 0; i < data.byteLength; i += this.#txInProgress.newPageSize) {
           const pageData = data.slice(i, i + this.#txInProgress.newPageSize);
           const waOffset = this.#writePage(offset + i, pageData);
-          this.log?.(`%cwrite page at ${offset + i} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+          this.log?.(`%cwrite page at ${offset + i} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
         }
       } else {
         // New page size is larger. Save the page data to the WAL file
@@ -274,12 +274,12 @@ export class WriteAhead {
           FRAME_HEADER_SIZE +
           pageOffset;
         this.#activeHandle.write(data.subarray(), { at: waOffset });
-        this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+        this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
       }
     } else {
       // This is the normal case without a page size change.
       const waOffset = this.#writePage(offset, data.slice());
-      this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+      this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
     }
   }
 
@@ -356,7 +356,7 @@ export class WriteAhead {
         this.options.journalSizeLimit :
         DEFAULT_JOURNAL_SIZE_LIMIT;
       if (walFilePageCount >= nPageThreshold) {
-        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'background-color: lightskyblue;');
+        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'color: black; background-color: lightskyblue;');
         this.#swapActiveFile();
 
         // Move transaction WAL position to the new file. This ensures that
@@ -429,7 +429,7 @@ export class WriteAhead {
         await this.#waitForTxIdLocks(value => value.maxTxId >= this.#txId);
         ckptId = this.#txId;
       }
-      this.log?.(`%ccheckpoint through txId ${ckptId}`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint through txId ${ckptId}`, 'color: black; background-color: lightgreen;');
 
       // Sync the WAL file. This ensures that if there is a crash after
       // part of the WAL has been copied, the uncopied part will still be
@@ -462,7 +462,7 @@ export class WriteAhead {
               throw new Error('Checkpoint write failed');
             }
             writtenOffsets.add(offset);
-            this.log?.(`%ccheckpoint wrote txId ${tx.id} page at ${offset} to database`, 'background-color: lightgreen;');
+            this.log?.(`%ccheckpoint wrote txId ${tx.id} page at ${offset} to database`, 'color: black; background-color: lightgreen;');
           }
         }
 
@@ -477,7 +477,7 @@ export class WriteAhead {
       }
 
       // Ensure that database writes are durable.
-      this.log?.(`%ccheckpoint flush database file`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint flush database file`, 'color: black; background-color: lightgreen;');
       this.#dbHandle.flush();
 
       // Notify other connections and ourselves of the checkpoint.
@@ -488,14 +488,14 @@ export class WriteAhead {
       this.#handleCheckpoint(ckptId);
 
       // Wait for all connections to update their overlay.
-      this.log?.(`%ccheckpoint waiting for connection updates`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint waiting for connection updates`, 'color: black; background-color: lightgreen;');
       await this.#waitForTxIdLocks(value => value.minTxId > ckptId);
 
       // Truncate the inactive WAL file. This prevents new connections from
       // unnecessarily reading checkpointed data, and allows writers to make
       // it active when their conditions are met.
       this.#truncateInactiveFile();
-      this.log?.(`%ccheckpoint complete`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint complete`, 'color: black; background-color: lightgreen;');
     });
   }
 
@@ -613,7 +613,7 @@ export class WriteAhead {
    * @param {number} ckptId
    */
   #handleCheckpoint(ckptId) {
-    this.log?.(`%capply checkpoint through txId ${ckptId}`, 'background-color: lightgreen;');
+    this.log?.(`%capply checkpoint through txId ${ckptId}`, 'color: black; background-color: lightgreen;');
 
     // Loop backwards from ckptId.
     for (let tx = this.#mapIdToTx.get(ckptId); tx; tx = this.#mapIdToTx.get(tx.id - 1)) {
@@ -622,7 +622,7 @@ export class WriteAhead {
         // Be sure not to remove a newer version of the page.
         const overlayEntry = this.#waOverlay.get(offset);
         if (overlayEntry === pageEntry) {
-          this.log?.(`%cremove txId ${tx.id} page at offset ${offset}`, 'background-color: lightgreen;');
+          this.log?.(`%cremove txId ${tx.id} page at offset ${offset}`, 'color: black; background-color: lightgreen;');
           this.#waOverlay.delete(offset);
         }
       }
@@ -677,7 +677,7 @@ export class WriteAhead {
       const oldTxId = this.#txId;
       this.#advanceTxId({ readToCurrent: true });
       if (this.#txId > oldTxId) {
-        this.log?.(`%cbackstop txId ${oldTxId} -> ${this.#txId}`, 'background-color: lightyellow;');
+        this.log?.(`%cbackstop txId ${oldTxId} -> ${this.#txId}`, 'color: black; background-color: lightyellow;');
       }
       this.#backstopTimestamp = performance.now();
     }
@@ -709,7 +709,7 @@ export class WriteAhead {
 
       if (this.log) {
         const { minTxId, maxTxId } = this.#decodeTxIdLockName(newLockName);
-        this.log?.(`%ctxId to ${minTxId}:${maxTxId}`, 'background-color: pink;');
+        this.log?.(`%ctxId to ${minTxId}:${maxTxId}`, 'color: black; background-color: pink;');
       }
     }
   }
