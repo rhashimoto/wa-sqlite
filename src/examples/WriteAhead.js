@@ -9,6 +9,8 @@ const FRAME_HEADER_SIZE = 32;
 const FRAME_TYPE_PAGE = 0;
 const FRAME_TYPE_COMMIT = 1;
 const FRAME_TYPE_END = 2;
+const FRAME_COMMIT_PAGE_SIZE_MASK = 1 << 0;
+const FRAME_COMMIT_CHANGE_FILE_MASK = 1 << 1;
 
 /**
  * @typedef PageEntry
@@ -103,26 +105,20 @@ export class WriteAhead {
       // and we have to initialize a WAL file.
       const { fileHeader } =
         await navigator.locks.request(`${this.#zName}#ckpt`, async () => {
-        // Set our advertised txId to zero until we know the proper value.
-        // This will also prevent other connections from checkpointing
-        // after we release the #ckpt lock.
-        await this.#updateTxIdLock();
+          // Set our advertised txId to zero until we know the proper value.
+          // This will also prevent other connections from checkpointing
+          // after we release the #ckpt lock.
+          await this.#updateTxIdLock();
 
-        // Listen for transactions and checkpoints from other connections.
-        this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
-        this.#broadcastChannel.onmessage = (event) => {
-          this.#handleMessage(event);
-        };
-
-        // Read headers from both WAL files and use the one with the
-        // lower nextTxId. If neither header is valid, create a new header.
-        const fileHeader = this.#waHandles
-          .map(handle => this.#readFileHeader(handle))
-          .filter(h => h)
-          .sort((a, b) => a.nextTxId - b.nextTxId)[0]
-          ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
-        return { fileHeader };
-      });
+          // Read headers from both WAL files and use the one with the
+          // lower nextTxId. If neither header is valid, create a new header.
+          const fileHeader = this.#waHandles
+            .map(handle => this.#readFileHeader(handle))
+            .filter(h => h)
+            .sort((a, b) => a.nextTxId - b.nextTxId)[0]
+            ?? this.#writeFileHeader(Math.floor(Math.random() * 0xffffffff));
+          return { fileHeader };
+        });
 
       // The checkpoint lock has been released, but checkpointing will not
       // happen until read the WAL files and advance our txId.
@@ -130,6 +126,12 @@ export class WriteAhead {
       this.#activeHandle = this.#waHandles[fileHeader.salt1 & 1];
       this.#activeOffset = FILE_HEADER_SIZE;
       this.#txId = fileHeader.nextTxId - 1;
+
+      // Listen for transactions and checkpoints from other connections.
+      this.#broadcastChannel = new BroadcastChannel(`${zName}#wa`);
+      this.#broadcastChannel.onmessage = (event) => {
+        this.#handleMessage(event);
+      };
 
       // Load all the transactions from the WAL.
       for (const tx of this.#readAllTx()) {
@@ -220,12 +222,12 @@ export class WriteAhead {
     if (pageEntry) {
       if (pageEntry.pageData) {
         // Page data is cached.
-        this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset} (cached)`, 'background-color: gold;');
+        this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset} (cached)`, 'color: black; background-color: gold;');
         return pageEntry.pageData;
       }
 
       // Read the page from the WAL file.
-      this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset}`, 'background-color: gold;');
+      this.log?.(`%cread page at ${offset} from WAL ${pageEntry.waSalt1 & 1}:${pageEntry.waOffset}`, 'color: black; background-color: gold;');
       return this.#fetchPage(pageEntry);
     }
     return null;
@@ -262,7 +264,7 @@ export class WriteAhead {
         for (let i = 0; i < data.byteLength; i += this.#txInProgress.newPageSize) {
           const pageData = data.slice(i, i + this.#txInProgress.newPageSize);
           const waOffset = this.#writePage(offset + i, pageData);
-          this.log?.(`%cwrite page at ${offset + i} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+          this.log?.(`%cwrite page at ${offset + i} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
         }
       } else {
         // New page size is larger. Save the page data to the WAL file
@@ -274,12 +276,12 @@ export class WriteAhead {
           FRAME_HEADER_SIZE +
           pageOffset;
         this.#activeHandle.write(data.subarray(), { at: waOffset });
-        this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+        this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
       }
     } else {
       // This is the normal case without a page size change.
       const waOffset = this.#writePage(offset, data.slice());
-      this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'background-color: lightskyblue;');
+      this.log?.(`%cwrite page at ${offset} to WAL ${this.#activeHeader.salt1 & 1}:${waOffset}`, 'color: black; background-color: lightskyblue;');
     }
   }
 
@@ -343,8 +345,24 @@ export class WriteAhead {
       return;
     }
 
+    // Check whether to move to the other WAL file. The other WAL file must
+    // be empty, and the active WAL file size (in pages) must exceed the
+    // configured threshold.
+    let changeFile = false;
+    if (this.#isInactiveFileEmpty()) {
+      const walFilePageCount =
+        this.#activeHandlePageCounts[0] + this.#activeHandlePageCounts[1];
+      const nPageThreshold = this.options.journalSizeLimit > 0 ?
+        this.options.journalSizeLimit :
+        DEFAULT_JOURNAL_SIZE_LIMIT;
+      if (walFilePageCount >= nPageThreshold) {
+        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'color: black; background-color: lightskyblue;');
+        changeFile = true;
+      }
+    }
+
     // Persist the final pending transaction page with the database size.
-    this.#commitTx();
+    this.#commitTx(changeFile);
 
     // Incorporate the transaction locally.
     this.#activateTx(tx);
@@ -353,21 +371,6 @@ export class WriteAhead {
     // Send the transaction to other connections.
     const payload = { type: 'tx', tx };
     this.#broadcastChannel.postMessage(payload);
-
-    // Check whether to move to the other WAL file. The other WAL file must
-    // be empty, and the active WAL file size (in pages) must exceed the
-    // configured threshold.
-    if (this.#isInactiveFileEmpty()) {
-      const walFilePageCount =
-        this.#activeHandlePageCounts[0] + this.#activeHandlePageCounts[1];
-      const nPageThreshold = this.options.journalSizeLimit > 0 ?
-        this.options.journalSizeLimit :
-        DEFAULT_JOURNAL_SIZE_LIMIT;
-      if (walFilePageCount >= nPageThreshold) {
-        this.log?.(`%cchange WAL file at ${walFilePageCount} pages`, 'background-color: lightskyblue;');
-        this.#swapActiveFile();
-      }
-    }
 
     this.#autoCheckpoint();
     this.#backstopTimestamp = performance.now();
@@ -423,7 +426,7 @@ export class WriteAhead {
         await this.#waitForTxIdLocks(value => value.maxTxId >= this.#txId);
         ckptId = this.#txId;
       }
-      this.log?.(`%ccheckpoint through txId ${ckptId}`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint through txId ${ckptId}`, 'color: black; background-color: lightgreen;');
 
       // Sync the WAL file. This ensures that if there is a crash after
       // part of the WAL has been copied, the uncopied part will still be
@@ -456,7 +459,7 @@ export class WriteAhead {
               throw new Error('Checkpoint write failed');
             }
             writtenOffsets.add(offset);
-            this.log?.(`%ccheckpoint wrote txId ${tx.id} page at ${offset} to database`, 'background-color: lightgreen;');
+            this.log?.(`%ccheckpoint wrote txId ${tx.id} page at ${offset} to database`, 'color: black; background-color: lightgreen;');
           }
         }
 
@@ -471,7 +474,7 @@ export class WriteAhead {
       }
 
       // Ensure that database writes are durable.
-      this.log?.(`%ccheckpoint flush database file`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint flush database file`, 'color: black; background-color: lightgreen;');
       this.#dbHandle.flush();
 
       // Notify other connections and ourselves of the checkpoint.
@@ -482,14 +485,14 @@ export class WriteAhead {
       this.#handleCheckpoint(ckptId);
 
       // Wait for all connections to update their overlay.
-      this.log?.(`%ccheckpoint waiting for connection updates`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint waiting for connection updates`, 'color: black; background-color: lightgreen;');
       await this.#waitForTxIdLocks(value => value.minTxId > ckptId);
 
       // Truncate the inactive WAL file. This prevents new connections from
       // unnecessarily reading checkpointed data, and allows writers to make
       // it active when their conditions are met.
       this.#truncateInactiveFile();
-      this.log?.(`%ccheckpoint complete`, 'background-color: lightgreen;');
+      this.log?.(`%ccheckpoint complete`, 'color: black; background-color: lightgreen;');
     });
   }
 
@@ -607,7 +610,7 @@ export class WriteAhead {
    * @param {number} ckptId
    */
   #handleCheckpoint(ckptId) {
-    this.log?.(`%capply checkpoint through txId ${ckptId}`, 'background-color: lightgreen;');
+    this.log?.(`%capply checkpoint through txId ${ckptId}`, 'color: black; background-color: lightgreen;');
 
     // Loop backwards from ckptId.
     for (let tx = this.#mapIdToTx.get(ckptId); tx; tx = this.#mapIdToTx.get(tx.id - 1)) {
@@ -616,7 +619,7 @@ export class WriteAhead {
         // Be sure not to remove a newer version of the page.
         const overlayEntry = this.#waOverlay.get(offset);
         if (overlayEntry === pageEntry) {
-          this.log?.(`%cremove txId ${tx.id} page at offset ${offset}`, 'background-color: lightgreen;');
+          this.log?.(`%cremove txId ${tx.id} page at offset ${offset}`, 'color: black; background-color: lightgreen;');
           this.#waOverlay.delete(offset);
         }
       }
@@ -671,7 +674,7 @@ export class WriteAhead {
       const oldTxId = this.#txId;
       this.#advanceTxId({ readToCurrent: true });
       if (this.#txId > oldTxId) {
-        this.log?.(`%cbackstop txId ${oldTxId} -> ${this.#txId}`, 'background-color: lightyellow;');
+        this.log?.(`%cbackstop txId ${oldTxId} -> ${this.#txId}`, 'color: black; background-color: lightyellow;');
       }
       this.#backstopTimestamp = performance.now();
     }
@@ -703,7 +706,7 @@ export class WriteAhead {
 
       if (this.log) {
         const { minTxId, maxTxId } = this.#decodeTxIdLockName(newLockName);
-        this.log?.(`%ctxId to ${minTxId}:${maxTxId}`, 'background-color: pink;');
+        this.log?.(`%ctxId to ${minTxId}:${maxTxId}`, 'color: black; background-color: pink;');
       }
     }
   }
@@ -839,10 +842,21 @@ export class WriteAhead {
         tx.id = this.#txId;
         tx.dbFileSize = frame.dbFileSize;
         tx.waSalt1 = this.#activeHeader.salt1;
-        tx.newPageSize = (frame.flags & 1) ? tx.pages.get(0).pageSize : null;
-        tx.waOffsetEnd = this.#activeOffset;
+        tx.newPageSize =
+          (frame.flags & FRAME_COMMIT_PAGE_SIZE_MASK) ? tx.pages.get(0).pageSize : null;
+        if (frame.fileHeader) {
+          // The commit and destination header form one reader-visible
+          // transition. Only update active state after both are valid.
+          this.#followFileChange(frame.fileHeader);
+          tx.waSalt1 = this.#activeHeader.salt1;
+          tx.waOffsetEnd = this.#activeOffset;
+        }
         return tx;
       } else if (frame.frameType === FRAME_TYPE_END) {
+        // A WAL file change is now marked by a commit frame with the
+        // change-file flag set, but the end frame is still written and
+        // read for backward compatibility.
+        //
         // No more transactions on the current WAL file. Switch to the
         // other file.
         this.#followFileChange(frame.fileHeader);
@@ -863,7 +877,8 @@ export class WriteAhead {
   #skipTx(tx) {
     if (tx.waSalt1 !== this.#activeHeader.salt1) {
       // This transaction is on the other WAL file.
-      if (!this.#followFileChange(null)) {
+      const fileHeader = this.#followFileChange(null);
+      if (!fileHeader || fileHeader.salt1 !== tx.waSalt1) {
         throw new Error('invalid WAL file');
       }
     }
@@ -931,14 +946,18 @@ export class WriteAhead {
   }
 
   /**
+   * @param {boolean} changeFile
    * @returns {Transaction}
    */
-  #commitTx() {
-    // Write a commit frame - which is a special frame header with no
-    // body - to the WAL file.
+  #commitTx(changeFile) {
+    // Write a commit frame - which is a special frame header with no body -
+    // to the WAL file.
     const headerView = new DataView(new ArrayBuffer(FRAME_HEADER_SIZE));
     headerView.setUint8(0, FRAME_TYPE_COMMIT);
-    headerView.setUint8(1, this.#txInProgress.newPageSize ? 1 : 0);
+    headerView.setUint8(1,
+      (this.#txInProgress.newPageSize ? FRAME_COMMIT_PAGE_SIZE_MASK : 0) |
+      (changeFile ? FRAME_COMMIT_CHANGE_FILE_MASK : 0)
+    );
     headerView.setBigUint64(8, BigInt(this.#txInProgress.dbFileSize));
     headerView.setUint32(16, this.#activeHeader.salt1);
     headerView.setUint32(20, this.#activeHeader.salt2);
@@ -960,6 +979,17 @@ export class WriteAhead {
     this.#txInProgress = null;
     this.#activeOffset = tx.waOffsetEnd;
     this.#txId = tx.id;
+
+    if (changeFile) {
+      this.#swapActiveFile();
+
+      // Move the transaction WAL position to the new file. This ensures that
+      // once all connections have reached this transaction, the other WAL
+      // file can be checkpointed and truncated.
+      tx.waSalt1 = this.#activeHeader.salt1;
+      tx.waOffsetEnd = this.#activeOffset;
+    }
+
     return tx;
   }
 
@@ -972,7 +1002,8 @@ export class WriteAhead {
    * Switch the active WAL file prior to writing the next transaction.
    */
   #swapActiveFile() {
-    // Write an end frame to terminate the currently active WAL file.
+    // Write an end frame for readers that do not understand the commit
+    // change-file flag.
     const frameView = new DataView(new ArrayBuffer(FRAME_HEADER_SIZE));
     frameView.setUint8(0, FRAME_TYPE_END);
     frameView.setUint32(16, this.#activeHeader.salt1);
@@ -1130,13 +1161,30 @@ export class WriteAhead {
         pageData: payloadData,
       };
     } else if (frameType === FRAME_TYPE_COMMIT) {
+      const flags = headerView.getUint8(1);
+      let fileHeader;
+      if (flags & FRAME_COMMIT_CHANGE_FILE_MASK) {
+        // Handling the flagged commit and new file header must be atomic, so
+        // validate the destination before returning the frame. A corrupt
+        // header should be repaired by the next writer that swaps files.
+        fileHeader = this.#readFileHeader(this.#getInactiveHandle());
+        if (fileHeader?.salt1 !== ((this.#activeHeader.salt1 + 1) >>> 0)) {
+          return null;
+        }
+      }
+
       return {
         frameType,
         byteLength: FRAME_HEADER_SIZE,
-        flags: headerView.getUint8(1),
+        flags,
         dbFileSize: Number(headerView.getBigUint64(8)),
+        fileHeader,
       };
     } else if (frameType === FRAME_TYPE_END) {
+      // A commit frame with the change-file flag is now used to mark
+      // a WAL file change, but the end frame is still written and read
+      // for backward compatibility.
+      
       // Handling the end frame and new file header must be atomic, so
       // we validate the new file header before returning the frame.
       // If the file header is corrupt, the end frame effectively does
@@ -1145,7 +1193,9 @@ export class WriteAhead {
       // A corrupt file header should be repaired by the next writer
       // that attempts to swap WAL files.
       const fileHeader = this.#readFileHeader(this.#getInactiveHandle());
-      if (fileHeader?.salt1 !== ((this.#activeHeader.salt1 + 1) >>> 0)) return null;
+      if (fileHeader?.salt1 !== ((this.#activeHeader.salt1 + 1) >>> 0)) {
+        return null;
+      }
 
       return {
         frameType,
