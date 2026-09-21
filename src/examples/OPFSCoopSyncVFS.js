@@ -156,6 +156,14 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
               // for the retried open.
               const persistentFile = new PersistentFile(null);
               this.persistentFiles.set(path, persistentFile);
+
+              // Carry the cause to the retried open, which reports
+              // SQLITE_CANTOPEN from a branch that has no error of its own.
+              // Every other error return of this VFS records its cause here
+              // first, so without this one a caller cannot tell a file held
+              // by another context from a file that is not there - and
+              // xGetLastError may still be holding an older error.
+              this.lastError = e;
               console.error(e);
             }
           })());
