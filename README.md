@@ -31,6 +31,27 @@ Here are the build steps:
 
 The default build produces ES6 modules + WASM, [synchronous and asynchronous](https://github.com/rhashimoto/wa-sqlite/issues/7) (using Asyncify and JSPI) in `dist/`.
 
+### Linking an external extension
+
+Extra C sources and Emscripten-compatible static libraries can be supplied without
+modifying this repository:
+
+```sh
+make dist \
+  CFILES_EXTRA=register-extension.c \
+  VPATH=../my-extension \
+  LIBS_EXTRA=../my-extension/libextension.a
+```
+
+`CFILES_EXTRA` lists additional C source basenames; Make's built-in `VPATH` locates
+them. `LIBS_EXTRA` lists library file paths, appended after the object files when
+linking all synchronous, Asyncify, and JSPI release/debug variants. Changes to
+these files trigger relinking. Build the libraries before invoking `make`; paths
+are relative to the wa-sqlite directory. Use `EMFLAGS_EXTRA` for linker flags.
+
+Run `make clean` when changing the source/library list or compiler options between
+builds; Make does not track changes to these command-line arguments.
+
 ## API
 Javascript wrappers for core SQLITE C API functions (and some others) are provided. Some convenience functions are also provided to reduce boilerplate. Here is sample code to load the library and call the API:
 

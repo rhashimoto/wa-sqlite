@@ -70,3 +70,6 @@ jobs:
       run: |
         make clean && make
         yarn test
+
+    - name: Test external extension builds
+      run: sh test/build-extensions.sh
