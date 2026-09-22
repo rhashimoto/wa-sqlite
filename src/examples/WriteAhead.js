@@ -74,11 +74,9 @@ export class WriteAhead {
   // be counted once here.
   #approxPageCount = 0;
 
-  // The sum across this array tracks the number of pages in the active
-  // WAL file. The element corresponding to the inactive WAL file will
-  // always be zero; it will *not* contain the number of pages in the
-  // inactive WAL file.
-  #activeHandlePageCounts = [0, 0];
+  // Number of pages in the active WAL file. This is used to determine when
+  // to switch WAL files.
+  #activeHandlePageCount = 0;
 
   /** @type {BroadcastChannel} */ #broadcastChannel;
 
@@ -350,8 +348,7 @@ export class WriteAhead {
     // configured threshold.
     let changeFile = false;
     if (this.#isInactiveFileEmpty()) {
-      const walFilePageCount =
-        this.#activeHandlePageCounts[0] + this.#activeHandlePageCounts[1];
+      const walFilePageCount = this.#activeHandlePageCount + this.#txInProgress.pages.size;
       const nPageThreshold = this.options.journalSizeLimit > 0 ?
         this.options.journalSizeLimit :
         DEFAULT_JOURNAL_SIZE_LIMIT;
@@ -526,12 +523,16 @@ export class WriteAhead {
     // Transfer to the active collection of transactions.
     this.#mapIdToTx.set(tx.id, tx);
 
-    // Track the number of pages in the active WAL file.
+    // Track the number of pages in the active WAL file. The count is used
+    // to determine when to switch the WAL file.
     const page1 = tx.pages.get(0);
-    const activeIndex = page1.waSalt1 & 0x1;
-    this.#activeHandlePageCounts[activeIndex] += tx.pages.size;
-    this.#activeHandlePageCounts[1 - activeIndex] = 0;
-
+    if (page1.waSalt1 === tx.waSalt1) {
+      this.#activeHandlePageCount += tx.pages.size;
+    } else {
+      // This transaction was the last one on a WAL file and the active
+      // handle uses a new WAL file.
+      this.#activeHandlePageCount = 0;
+    }
     this.#approxPageCount += tx.pages.size;
 
     // Add transaction pages to the write-ahead overlay.
