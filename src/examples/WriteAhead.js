@@ -6,6 +6,10 @@ const DEFAULT_BACKSTOP_INTERVAL = 30_000;
 const MAGIC = 0x377f0684;
 const FILE_HEADER_SIZE = 32;
 const FRAME_HEADER_SIZE = 32;
+
+// Maximum size of the transient buffer used to read or write a run of
+// pages with a single call. Runs longer than this are split.
+const MAX_RUN_SIZE = 4 * 1024 * 1024;
 const FRAME_TYPE_PAGE = 0;
 const FRAME_TYPE_COMMIT = 1;
 const FRAME_TYPE_END = 2;
@@ -434,9 +438,10 @@ export class WriteAhead {
       }
 
       // Starting at ckptId and going backwards (higher to lower txId),
-      // write transaction pages to the main database file. Do not overwrite
-      // a page written by a more recent transaction.
-      const writtenOffsets = new Set();
+      // collect the transaction pages to write to the main database file.
+      // Do not overwrite a page written by a more recent transaction.
+      /** @type {Map<number, {pageEntry: PageEntry, txId: number}>} */
+      const pagesToWrite = new Map();
       let dbFileSize = this.#dbHandle.getSize();
       for (let tx = this.#mapIdToTx.get(ckptId); tx; tx = this.#mapIdToTx.get(tx.id - 1)) {
         if (tx.id === ckptId && dbFileSize !== tx.dbFileSize) {
@@ -446,17 +451,8 @@ export class WriteAhead {
         }
 
         for (const [offset, pageEntry] of tx.pages) {
-          if (offset < dbFileSize && !writtenOffsets.has(offset)) {
-            // Fetch the page data from the WAL file if not cached.
-            const pageData = pageEntry.pageData ?? this.#fetchPage(pageEntry);
-
-            // Write the page to the database file.
-            const nWritten = this.#dbHandle.write(pageData, { at: offset });
-            if (nWritten !== pageData.byteLength) {
-              throw new Error('Checkpoint write failed');
-            }
-            writtenOffsets.add(offset);
-            this.log?.(`%ccheckpoint wrote txId ${tx.id} page at ${offset} to database`, 'color: black; background-color: lightgreen;');
+          if (offset < dbFileSize && !pagesToWrite.has(offset)) {
+            pagesToWrite.set(offset, { pageEntry, txId: tx.id });
           }
         }
 
@@ -469,6 +465,10 @@ export class WriteAhead {
           break;
         }
       }
+
+      // Write the collected pages to the database file. Pages that are
+      // contiguous in the database are written with a single call.
+      this.#writePages(pagesToWrite);
 
       // Ensure that database writes are durable.
       this.log?.(`%ccheckpoint flush database file`, 'color: black; background-color: lightgreen;');
@@ -794,6 +794,103 @@ export class WriteAhead {
       throw new Error(`Short WAL read: expected ${pageEntry.pageSize} bytes, got ${nBytesRead}`);
     }
     return pageData;
+  }
+
+  /**
+   * Fetch page data for the given entries, reading runs of consecutive
+   * WAL frames with a single call. Frames have a fixed stride, so a run
+   * is read into one buffer and sliced without copying.
+   * @param {PageEntry[]} pageEntries
+   * @returns {Map<PageEntry, Uint8Array>}
+   */
+  #fetchPages(pageEntries) {
+    /** @type {Map<PageEntry, Uint8Array>} */ const result = new Map();
+    for (const [handleIndex, accessHandle] of this.#waHandles.entries()) {
+      // Entries in the same WAL file, ordered by frame.
+      const entries = pageEntries
+        .filter(entry => !entry.pageData && (entry.waSalt1 & 1) === handleIndex)
+        .sort((a, b) => a.waOffset - b.waOffset);
+
+      for (let i = 0; i < entries.length;) {
+        // Extend the run over frames that are consecutive in the WAL file.
+        // Only frames of the same page size have the same stride.
+        const stride = FRAME_HEADER_SIZE + entries[i].pageSize;
+        let end = i + 1;
+        while (end < entries.length &&
+               entries[end].pageSize === entries[i].pageSize &&
+               entries[end].waOffset === entries[end - 1].waOffset + stride &&
+               (end - i + 1) * stride <= MAX_RUN_SIZE) {
+          end++;
+        }
+
+        if (end - i === 1) {
+          result.set(entries[i], this.#fetchPage(entries[i]));
+        } else {
+          // The last frame of the run contributes no frame header.
+          const runSize = (end - i - 1) * stride + entries[i].pageSize;
+          const runData = new Uint8Array(runSize);
+          const nBytesRead = accessHandle.read(runData, { at: entries[i].waOffset });
+          if (nBytesRead !== runSize) {
+            throw new Error(`Short WAL read: expected ${runSize} bytes, got ${nBytesRead}`);
+          }
+          for (let k = i; k < end; k++) {
+            const at = (k - i) * stride;
+            result.set(entries[k], runData.subarray(at, at + entries[k].pageSize));
+          }
+        }
+        i = end;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Write pages to the database file, writing runs of pages that are
+   * contiguous in the database with a single call.
+   * @param {Map<number, {pageEntry: PageEntry, txId: number}>} pagesToWrite
+   *   database offset to the page and the transaction it comes from
+   * @returns {void}
+   */
+  #writePages(pagesToWrite) {
+    const entries = [...pagesToWrite.values()].map(({ pageEntry }) => pageEntry);
+    const fetched = this.#fetchPages(entries);
+    const dataOf = pageEntry =>
+      pageEntry.pageData ?? fetched.get(pageEntry) ?? this.#fetchPage(pageEntry);
+
+    const offsets = [...pagesToWrite.keys()].sort((a, b) => a - b);
+    for (let i = 0; i < offsets.length;) {
+      // Extend the run over pages that are contiguous in the database.
+      let end = i;
+      let runSize = 0;
+      while (end < offsets.length &&
+             offsets[end] === offsets[i] + runSize &&
+             runSize < MAX_RUN_SIZE) {
+        runSize += pagesToWrite.get(offsets[end]).pageEntry.pageSize;
+        end++;
+      }
+
+      let runData;
+      if (end - i === 1) {
+        runData = dataOf(pagesToWrite.get(offsets[i]).pageEntry);
+      } else {
+        runData = new Uint8Array(runSize);
+        let at = 0;
+        for (let k = i; k < end; k++) {
+          const data = dataOf(pagesToWrite.get(offsets[k]).pageEntry);
+          runData.set(data, at);
+          at += data.byteLength;
+        }
+      }
+
+      const nWritten = this.#dbHandle.write(runData, { at: offsets[i] });
+      if (nWritten !== runData.byteLength) {
+        throw new Error('Checkpoint write failed');
+      }
+      for (let k = i; k < end; k++) {
+        this.log?.(`%ccheckpoint wrote txId ${pagesToWrite.get(offsets[k]).txId} page at ${offsets[k]} to database`, 'color: black; background-color: lightgreen;');
+      }
+      i = end;
+    }
   }
 
   *#readAllTx() {
