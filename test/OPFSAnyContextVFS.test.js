@@ -4,6 +4,7 @@ import { vfs_xAccess } from "./vfs_xAccess.js";
 import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
+import { vfs_xUnlock } from "./vfs_xUnlock.js";
 
 const CONFIG = 'OPFSAnyContextVFS';
 const BUILDS = ['asyncify', 'jspi'];
@@ -22,6 +23,7 @@ describe(CONFIG, function() {
       vfs_xClose(context);
       vfs_xRead(context);
       vfs_xWrite(context);
+      vfs_xUnlock(context);
     });
   }
 });
