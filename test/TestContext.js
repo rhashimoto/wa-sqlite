@@ -71,26 +71,8 @@ export class TestContext {
     }
   }
 
-  // https://github.com/WebAssembly/js-promise-integration/issues/21#issuecomment-1634843621
   static async supportsJSPI() {
-    try {
-      const m = new Uint8Array([
-        0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 1, 111, 0, 3, 2, 1, 0, 7, 5, 1,
-        1, 111, 0, 0, 10, 4, 1, 2, 0, 11,
-      ]);
-      const { instance } = await WebAssembly.instantiate(m);
-      // @ts-ignore
-      new WebAssembly.Function(
-        {
-          parameters: [],
-          results: ["externref"],
-        },
-        instance.exports.o,
-        { promising: "first" }
-      );
-      return true;
-    } catch (e) {
-      return false;
-    }
+    return typeof WebAssembly === 'object' && 
+      ( 'Suspending' in WebAssembly || 'Suspender' in WebAssembly );
   }
 }
