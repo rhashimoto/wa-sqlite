@@ -271,18 +271,45 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         }, 'rw', file.txOptions);
       } else {
         this.#idb.q(async ({ blocks }) => {
-          // Read the existing block.
-          const range = IDBKeyRange.bound(
-            [file.path, -iOffset],
-            [file.path, Infinity]);
-          const block = await blocks.get(range);
+          // Walk the blocks this write covers, the way jRead does. A single
+          // block starting exactly at iOffset and holding the whole write is
+          // the common case, not a guarantee: SQLite writes its transient
+          // files out of order, so nothing may start at iOffset at all, and it
+          // rewrites parts of a journal header, so a block may be shorter than
+          // what is written over it.
+          let dataOffset = 0;
+          while (dataOffset < data.byteLength) {
+            const fileOffset = iOffset + dataOffset;
+            const range = IDBKeyRange.bound(
+              [file.path, -fileOffset],
+              [file.path, Infinity]);
+            const block = await blocks.get(range);
 
-          // Modify the block data.
-          // @ts-ignore
-          block.data.subarray(iOffset + block.offset).set(data);
+            if (!block || block.data.byteLength - block.offset <= fileOffset) {
+              // No block reaches this offset. Store the rest as its own block,
+              // as the branch above does for a file being extended.
+              blocks.put({
+                path: file.path,
+                offset: -fileOffset,
+                version: version,
+                data: data.slice(dataOffset)
+              });
+              return;
+            }
 
-          // Write back.
-          blocks.put(block);
+            // Modify the block data.
+            const blockOffset = fileOffset + block.offset;
+            const nBytes = Math.min(
+              block.data.byteLength - blockOffset,
+              data.byteLength - dataOffset);
+            // @ts-ignore
+            block.data.subarray(blockOffset, blockOffset + nBytes)
+              .set(data.subarray(dataOffset, dataOffset + nBytes));
+
+            // Write back.
+            blocks.put(block);
+            dataOffset += nBytes;
+          }
         }, 'rw', file.txOptions);
 
       }
