@@ -292,6 +292,33 @@ export class OPFSAnyContextVFS extends WebLocksMixin(FacadeVFS) {
     return super.jLock(fileId, lockType);
   }
 
+  /**
+   * @param {number} fileId 
+   * @param {number} lockType 
+   * @returns {Promise<number>}
+   */
+  async jUnlock(fileId, lockType) {
+    // Changes pending in an open writable are not visible to other contexts
+    // until it is closed. SQLite does not always call xSync after its last
+    // change, e.g. the truncation at the end of a VACUUM, so close it here,
+    // before another context can take the lock and read the file.
+    let rc = VFS.SQLITE_OK;
+    const file = this.mapIdToFile.get(fileId);
+    if (file?.writable) {
+      try {
+        await file.writable.close();
+      } catch (e) {
+        this.lastError = e;
+        rc = VFS.SQLITE_IOERR_UNLOCK;
+      }
+      file.writable = null;
+      file.blob = null;
+    }
+
+    const unlockResult = await super.jUnlock(fileId, lockType);
+    return rc === VFS.SQLITE_OK ? unlockResult : rc;
+  }
+
   jGetLastError(zBuf) {
     if (this.lastError) {
       console.error(this.lastError);
