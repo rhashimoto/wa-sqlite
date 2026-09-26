@@ -653,9 +653,15 @@ export class IDBMirrorVFS extends FacadeVFS {
       }
     }
 
-    let truncated = tx.fileSize + file.blockSize;
-    while (file.blocks.delete(truncated)) {
-      truncated += file.blockSize;
+    // Drop the blocks past the end of the file. The first of them starts at
+    // fileSize, not one block beyond it, and they need not be contiguous.
+    if (file.blockSize) {
+      const end = Math.ceil(tx.fileSize / file.blockSize) * file.blockSize;
+      for (const offset of [...file.blocks.keys()]) {
+        if (offset >= end) {
+          file.blocks.delete(offset);
+        }
+      }
     }
 
     file.viewTx = tx;
@@ -677,6 +683,14 @@ export class IDBMirrorVFS extends FacadeVFS {
     const blocks = idbTx.objectStore('blocks');
     for (const [offset, data] of file.txActive.blocks) {
       blocks.put({ path: file.path, offset, data });
+    }
+
+    // Delete blocks past the end of the file, which the view has just
+    // dropped. Without this the store keeps every block a shrinking
+    // transaction leaves behind.
+    if (file.blockSize) {
+      const end = Math.ceil(file.txActive.fileSize / file.blockSize) * file.blockSize;
+      blocks.delete(IDBKeyRange.bound([file.path, end], [file.path, Infinity]));
     }
 
     // Delete obsolete transactions no longer needed.
