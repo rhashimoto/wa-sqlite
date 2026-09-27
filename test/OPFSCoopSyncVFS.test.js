@@ -4,6 +4,7 @@ import { vfs_xAccess } from "./vfs_xAccess.js";
 import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
+import { vfs_handle_recovery } from "./vfs_handle_recovery.js";
 import { vfs_handover } from "./vfs_handover.js";
 
 const CONFIG = 'OPFSCoopSyncVFS';
@@ -23,6 +24,7 @@ describe(CONFIG, function() {
       vfs_xClose(context);
       vfs_xRead(context);
       vfs_xWrite(context);
+      vfs_handle_recovery(context);
       vfs_handover(context, { build, config: CONFIG });
     });
   }
