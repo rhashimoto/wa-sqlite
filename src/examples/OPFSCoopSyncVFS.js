@@ -77,7 +77,11 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
         await navigator.locks.request(entry.name, { ifAvailable: true }, async lock => {
           if (lock) {
             this.log?.(`Deleting temporary directory ${entry.name}`);
-            await root.removeEntry(entry.name, { recursive: true });
+            // Another instance initializing at the same time may have
+            // deleted it between our listing and our lock.
+            await root.removeEntry(entry.name, { recursive: true }).catch(e => {
+              if (e?.name !== 'NotFoundError') throw e;
+            });
           } else {
             this.log?.(`Temporary directory ${entry.name} is in use`);
           }
@@ -442,12 +446,24 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
       // Don't change any state if this unlock is because xLock returned
       // SQLITE_BUSY.
       if (!file.persistentFile.isLockBusy) {
-        if (file.persistentFile.isHandleRequested) {
-            // Another connection wants the access handle.
-          this.#releaseAccessHandle(file);
-          file.persistentFile.isHandleRequested = false;
-        }
         file.persistentFile.isFileLocked = false;
+        if (file.persistentFile.isHandleRequested) {
+          // Another connection wants the access handle. Hand it over only
+          // once the current call has returned: SQLite can lock again within
+          // the same call (re-preparing a statement whose schema changed, or
+          // a function running statements of its own), and that lock would
+          // find the handle gone and return SQLITE_BUSY to a call that
+          // retry() has already tried twice. A task rather than a microtask:
+          // the JSPI build suspends at every VFS call, which runs microtasks
+          // in the middle of the call.
+          setTimeout(() => {
+            if (!file.persistentFile.isFileLocked &&
+                file.persistentFile.isHandleRequested) {
+              this.#releaseAccessHandle(file);
+              file.persistentFile.isHandleRequested = false;
+            }
+          });
+        }
       }
     }
     return VFS.SQLITE_OK;
@@ -530,13 +546,23 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
         try {
           // Get access handles for the database and releated files in parallel.
           this.log?.(`creating access handles for ${file.path}`)
-          await Promise.all(DB_RELATED_FILE_SUFFIXES.map(async suffix => {
-            const persistentFile = this.persistentFiles.get(file.path + suffix);
-            if (persistentFile) {
-              persistentFile.accessHandle =
-                await persistentFile.fileHandle.createSyncAccessHandle();
-            }
-          }));
+          // Settle them all before reporting a failure: Promise.all rejects as
+          // soon as one does, while the others are still in flight, so the
+          // cleanup in the catch below runs too early to see them. Those
+          // acquisitions then complete and assign to persistent files nothing
+          // will close, leaking one access handle per attempt - which makes
+          // every later open of the same database fail on a sidecar file it
+          // holds itself.
+          const results = await Promise.allSettled(
+            DB_RELATED_FILE_SUFFIXES.map(async suffix => {
+              const persistentFile = this.persistentFiles.get(file.path + suffix);
+              if (persistentFile) {
+                persistentFile.accessHandle =
+                  await persistentFile.fileHandle.createSyncAccessHandle();
+              }
+            }));
+          const failure = results.find(result => result.status === 'rejected');
+          if (failure) throw failure.reason;
         } catch (e) {
           this.log?.(`failed to create access handles for ${file.path}`, e);
           // Close any of the potentially opened access handles
