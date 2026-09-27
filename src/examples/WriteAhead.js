@@ -186,8 +186,7 @@ export class WriteAhead {
 
   /**
    * Freeze our view of the database.
-   * The view includes the transactions received so far but is not
-   * guaranteed to be completely up to date. Unfreeze the view with rejoin().
+   * The view includes all transactions. Unfreeze the view with rejoin().
    */
   isolateForRead() {
     if (this.#isolationState !== null) {
@@ -198,6 +197,12 @@ export class WriteAhead {
     // Disable backstop during isolation.
     clearTimeout(this.#backstopTimer);
     this.#backstopTimer = null;
+
+    // A transaction another connection committed before this read began may
+    // not have been broadcast here yet: the message and the request for this
+    // read arrive over different channels, in no guaranteed order. Read the
+    // WAL through its end so that such a transaction is part of the view.
+    this.#advanceTxId({ readToCurrent: true });
   }
 
   /**
