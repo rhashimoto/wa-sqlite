@@ -1,8 +1,9 @@
 const BLOCK_MS = 1500;
 
 /**
- * A read on one connection must see a transaction another connection has
- * already committed, however soon the read starts.
+ * With PRAGMA read_to_current, a read on one connection must see a
+ * transaction another connection has already committed, however soon the
+ * read starts.
  * @param {{ build: string }} params
  */
 export function vfs_read_freshness({ build }) {

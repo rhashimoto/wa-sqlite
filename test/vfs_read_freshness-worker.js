@@ -1,6 +1,6 @@
-// A worker for vfs_read_freshness.js, holding one connection. Each context
-// has its own WriteAhead view, which is the point: two connections in one
-// context share it and cannot disagree.
+// A worker for vfs_read_freshness.js, holding one connection with
+// read_to_current set. Each context has its own WriteAhead view, which is
+// the point: two connections in one context share it and cannot disagree.
 import * as SQLite from '../src/sqlite-api.js';
 import { OPFSWriteAheadVFS } from '../src/examples/OPFSWriteAheadVFS.js';
 
@@ -17,6 +17,7 @@ const ready = (async () => {
   const vfs = await OPFSWriteAheadVFS.create('read-freshness', module);
   sqlite3.vfs_register(vfs, true);
   const db = await sqlite3.open_v2(searchParams.get('filename'));
+  await sqlite3.exec(db, 'PRAGMA read_to_current = 1');
   return { sqlite3, db };
 })();
 

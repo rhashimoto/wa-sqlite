@@ -55,6 +55,7 @@ const FRAME_COMMIT_CHANGE_FILE_MASK = 1 << 1;
  * @property {number} [backstopInterval]
  * @property {number} [checkpointBufferSize]
  * @property {number} [journalSizeLimit]
+ * @property {boolean} [readToCurrent]
  */
 
 export class WriteAhead {
@@ -65,6 +66,7 @@ export class WriteAhead {
     backstopInterval: DEFAULT_BACKSTOP_INTERVAL,
     journalSizeLimit: DEFAULT_JOURNAL_SIZE_LIMIT,
     checkpointBufferSize: DEFAULT_CHECKPOINT_BUFFER_SIZE,
+    readToCurrent: false,
   };
 
   #zName;
@@ -186,7 +188,9 @@ export class WriteAhead {
 
   /**
    * Freeze our view of the database.
-   * The view includes all transactions. Unfreeze the view with rejoin().
+   * The view includes the transactions received so far but is not
+   * guaranteed to be completely up to date, unless the readToCurrent
+   * option is set. Unfreeze the view with rejoin().
    */
   isolateForRead() {
     if (this.#isolationState !== null) {
@@ -198,11 +202,11 @@ export class WriteAhead {
     clearTimeout(this.#backstopTimer);
     this.#backstopTimer = null;
 
-    // A transaction another connection committed before this read began may
-    // not have been broadcast here yet: the message and the request for this
-    // read arrive over different channels, in no guaranteed order. Read the
-    // WAL through its end so that such a transaction is part of the view.
-    this.#advanceTxId({ readToCurrent: true });
+    if (this.options.readToCurrent) {
+      // Include transactions committed but not yet received. This scans
+      // any uncommitted frames of a write in progress, on every read.
+      this.#advanceTxId({ readToCurrent: true });
+    }
   }
 
   /**
