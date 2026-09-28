@@ -935,8 +935,10 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
         // Open the main database OPFS file.
         const accessHandle = await openFile(dbName, { create });
 
-        // Open WAL files.
-        const waHandles = await Promise.all([0, 1].map(async i => {
+        // Open WAL files. Settle both before reporting a failure, so that
+        // the cleanup below also closes a handle acquired after the other
+        // open had already failed.
+        const results = await Promise.allSettled([0, 1].map(async i => {
           const waName = this.#getWriteAheadNameFromDbName(dbName, i);
           const waHandle = await openFile(waName, { create: true });
           if (isNewDatabase) {
@@ -944,6 +946,9 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
           }
           return waHandle;
         }));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+        const waHandles = results.map(result => result.value);
         return { accessHandle, waHandles };
       });
 
