@@ -1,7 +1,7 @@
 const BLOCK_MS = 1500;
 
 /**
- * With PRAGMA read_to_current, a read on one connection must see a
+ * With PRAGMA wal_read_latest, a read on one connection must see a
  * transaction another connection has already committed, however soon the
  * read starts.
  * @param {{ build: string }} params

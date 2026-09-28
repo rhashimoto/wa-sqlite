@@ -7,7 +7,7 @@ import { vfs_xWrite } from "./vfs_xWrite.js";
 import { vfs_read_freshness } from "./vfs_read_freshness.js";
 
 const CONFIG = 'OPFSWriteAheadVFS';
-const BUILDS = ['asyncify', 'jspi'];
+const BUILDS = ['default', 'asyncify', 'jspi'];
 
 const supportsJSPI = await TestContext.supportsJSPI();
 

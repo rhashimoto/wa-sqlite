@@ -612,19 +612,6 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
                 }
               }
               break;
-            case 'read_to_current':
-              // A setting of 1 makes each read transaction include every
-              // committed transaction, at the cost of scanning the WAL.
-              if (value !== null) {
-                file.writeAhead.options.readToCurrent = parseInt(value) !== 0;
-              } else {
-                // Return current setting.
-                const s = file.writeAhead.options.readToCurrent ? '1' : '0';
-                const ptr = this._module._sqlite3_malloc64(s.length + 1);
-                this._module.stringToUTF8(s, ptr, s.length + 1);
-                pArg.setUint32(0, ptr, true);
-              }
-              return VFS.SQLITE_OK;
             case 'synchronous':
               // Track SQLite synchronous mode. Write-ahead transactions
               // trade durability for performance on values 1 (NORMAL) or
@@ -691,6 +678,19 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
               // that is not feasible from a VFS.
               {
                 const s = file.writeAhead.getWriteAheadSize().toString();
+                const ptr = this._module._sqlite3_malloc64(s.length + 1);
+                this._module.stringToUTF8(s, ptr, s.length + 1);
+                pArg.setUint32(0, ptr, true);
+              }
+              return VFS.SQLITE_OK;
+            case 'wal_read_latest':
+              // A setting of 1 makes each read transaction include every
+              // committed transaction, at the cost of scanning the WAL.
+              if (value !== null) {
+                file.writeAhead.options.readToCurrent = parseInt(value) !== 0;
+              } else {
+                // Return current setting.
+                const s = file.writeAhead.options.readToCurrent ? '1' : '0';
                 const ptr = this._module._sqlite3_malloc64(s.length + 1);
                 this._module.stringToUTF8(s, ptr, s.length + 1);
                 pArg.setUint32(0, ptr, true);
