@@ -124,6 +124,13 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+
+      // SQLite does not call xClose after a failed xOpen, so release here
+      // whatever this open acquired before it failed.
+      const file = this.mapIdToFile.get(fileId);
+      file?.openLockReleaser?.();
+      file?.handleRequestChannel?.close();
+      this.mapIdToFile.delete(fileId);
       return VFS.SQLITE_CANTOPEN;
     }
   }
