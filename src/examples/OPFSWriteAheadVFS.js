@@ -683,6 +683,19 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
                 pArg.setUint32(0, ptr, true);
               }
               return VFS.SQLITE_OK;
+            case 'wal_read_latest':
+              // A setting of 1 makes each read transaction include every
+              // committed transaction, at the cost of scanning the WAL.
+              if (value !== null) {
+                file.writeAhead.options.readToCurrent = parseInt(value) !== 0;
+              } else {
+                // Return current setting.
+                const s = file.writeAhead.options.readToCurrent ? '1' : '0';
+                const ptr = this._module._sqlite3_malloc64(s.length + 1);
+                this._module.stringToUTF8(s, ptr, s.length + 1);
+                pArg.setUint32(0, ptr, true);
+              }
+              return VFS.SQLITE_OK;
             case 'lazy_lock':
               // Lazy locks don't actually release their Web Lock until
               // they receive a message requesting it. Typically a setting
