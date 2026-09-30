@@ -354,9 +354,9 @@ export class IDBMirrorVFS extends FacadeVFS {
           file.blocks.set(0, newBlock);
           block = newBlock;
         }
-        // pData is a Uint8ArrayProxy, which has no indexed access, so set()
-        // would read undefined at every index and store zeroes. subarray()
-        // returns a real Uint8Array over the same bytes.
+        // pData is a Uint8ArrayProxy that has no indexed access, which
+        // set() requires, so use subarray() to get a real Uint8Array over
+        // the same bytes.
         block.set(pData.subarray(), iOffset);
         file.blockSize = Math.max(file.blockSize, iOffset + pData.byteLength);
       }
