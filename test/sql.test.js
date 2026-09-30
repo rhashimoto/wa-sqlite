@@ -22,7 +22,7 @@ const CONFIGS = new Map([
   ['IDBMirrorVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
   ['OPFSAnyContextVFS', ASYNC_BUILDS],
-  ['OPFSWriteAheadVFS', ASYNC_BUILDS],
+  ['OPFSWriteAheadVFS', ALL_BUILDS],
 ]);
 
 const DISALLOWS_PAGE_SIZE_CHANGE = ['IDBBatchAtomicVFS', 'IDBMirrorVFS'];
