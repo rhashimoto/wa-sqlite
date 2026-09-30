@@ -5,9 +5,7 @@ const FILEID = 1;
 const PAGE = 4096;
 
 /**
- * Writes that do not line up with the blocks already stored. jRead walks the
- * blocks it finds and checks that each one reaches the offset it is asked for;
- * jWrite assumes a block starts exactly at the offset it is given.
+ * Writes that do not line up with the blocks already stored.
  * @param {import('./TestContext.js').TestContext} context
  */
 export function vfs_sparse_write(context) {
@@ -36,15 +34,12 @@ export function vfs_sparse_write(context) {
       return [...out];
     }
 
-    // A file written out of order: the gap is filled last. SQLite does this on
-    // the transient files it opens to materialise a result.
+    // A file written out of order: the gap is filled last.
     it('should fill a gap between blocks already written', async function() {
       await open('sparse-gap');
       expect(await vfs.jWrite(FILEID, filled(1, PAGE), 0)).toEqual(VFS.SQLITE_OK);
       expect(await vfs.jWrite(FILEID, filled(3, PAGE), 2 * PAGE)).toEqual(VFS.SQLITE_OK);
 
-      // Nothing has been written at PAGE yet, and the file is already longer
-      // than that, so this is an overwrite of a block that does not exist.
       expect(await vfs.jWrite(FILEID, filled(2, PAGE), PAGE)).toEqual(VFS.SQLITE_OK);
 
       expect(await readBack(PAGE, 0)).toEqual([...filled(1, PAGE)]);
@@ -52,14 +47,35 @@ export function vfs_sparse_write(context) {
       expect(await readBack(PAGE, 2 * PAGE)).toEqual([...filled(3, PAGE)]);
     });
 
-    // A block written short, then written over with more than it holds. SQLite
-    // writes a 512-byte journal header and rewrites parts of it.
+    // A block written over with more than it holds.
     it('should overwrite a block with more data than it holds', async function() {
       await open('sparse-grow');
       expect(await vfs.jWrite(FILEID, filled(1, 512), 0)).toEqual(VFS.SQLITE_OK);
       expect(await vfs.jWrite(FILEID, filled(2, PAGE), 0)).toEqual(VFS.SQLITE_OK);
 
       expect(await readBack(PAGE, 0)).toEqual([...filled(2, PAGE)]);
+    });
+
+    // A write that fills a gap and runs over a block starting inside it.
+    it('should read back a gap write from any offset', async function() {
+      await open('sparse-inner');
+      expect(await vfs.jWrite(FILEID, filled(1, 1024), 0)).toEqual(VFS.SQLITE_OK);
+      expect(await vfs.jWrite(FILEID, filled(2, 8), 1032)).toEqual(VFS.SQLITE_OK);
+
+      expect(await vfs.jWrite(FILEID, filled(3, 512), 1024)).toEqual(VFS.SQLITE_OK);
+
+      expect(await readBack(512, 1024)).toEqual([...filled(3, 512)]);
+      expect(await readBack(4, 1032)).toEqual([...filled(3, 4)]);
+      expect(await readBack(4, 1040)).toEqual([...filled(3, 4)]);
+    });
+
+    // SQLite overwrites a single byte to invalidate a stale journal header.
+    it('should overwrite a single byte', async function() {
+      await open('sparse-byte');
+      expect(await vfs.jWrite(FILEID, filled(1, 512), 0)).toEqual(VFS.SQLITE_OK);
+      expect(await vfs.jWrite(FILEID, filled(2, 1), 8)).toEqual(VFS.SQLITE_OK);
+
+      expect(await readBack(12, 0)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1]);
     });
   });
 }
