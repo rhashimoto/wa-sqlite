@@ -271,37 +271,44 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         }, 'rw', file.txOptions);
       } else {
         this.#idb.q(async ({ blocks }) => {
-          // Walk the blocks this write covers, the way jRead does. A single
-          // block starting exactly at iOffset and holding the whole write is
-          // the common case, not a guarantee: SQLite writes its transient
-          // files out of order, so nothing may start at iOffset at all, and it
-          // rewrites parts of a journal header, so a block may be shorter than
-          // what is written over it.
+          // Write each byte to the block jRead will read it from.
+          const starts = data.byteLength > 1 ?
+            (await blocks.getAllKeys(IDBKeyRange.bound(
+              [file.path, -(iOffset + data.byteLength - 1)],
+              [file.path, -iOffset],
+              false, true))).map(key => -key[1]).reverse() :
+            [];
+
           let dataOffset = 0;
           while (dataOffset < data.byteLength) {
             const fileOffset = iOffset + dataOffset;
+            while (starts.length && starts[0] <= fileOffset) starts.shift();
+            const pieceEnd = Math.min(
+              data.byteLength,
+              (starts[0] ?? Infinity) - iOffset);
+
             const range = IDBKeyRange.bound(
               [file.path, -fileOffset],
               [file.path, Infinity]);
             const block = await blocks.get(range);
 
             if (!block || block.data.byteLength - block.offset <= fileOffset) {
-              // No block reaches this offset. Store the rest as its own block,
-              // as the branch above does for a file being extended.
+              // No block reaches this offset: store up to the next one.
               blocks.put({
                 path: file.path,
                 offset: -fileOffset,
                 version: version,
-                data: data.slice(dataOffset)
+                data: data.slice(dataOffset, pieceEnd)
               });
-              return;
+              dataOffset = pieceEnd;
+              continue;
             }
 
             // Modify the block data.
             const blockOffset = fileOffset + block.offset;
             const nBytes = Math.min(
               block.data.byteLength - blockOffset,
-              data.byteLength - dataOffset);
+              pieceEnd - dataOffset);
             // @ts-ignore
             block.data.subarray(blockOffset, blockOffset + nBytes)
               .set(data.subarray(dataOffset, dataOffset + nBytes));
