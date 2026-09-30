@@ -53,7 +53,7 @@ This VFS is a synchronous OPFS VFS (like AccessHandlePoolVFS) that allows multip
 
 OPFSCoopSyncVFS uses an access handle pool for files other than the main database and its journal file. For the shared files, it closes them lazily (like OPFSAdaptiveVFS) to support multiple connections while retaining performance with a single connection.
 
-To keep all the methods synchronous, when asynchronous operations are necessary (e.g. for locking) a method returns an error. The library wrapper API internally handles the error, waits for the asynchronous operation to complete, and then repeats the operation. This is not very efficient, but is only necessary when opening a database or under active multiple connection contention.
+To keep all the methods synchronous, when asynchronous operations are necessary (e.g. for locking) a method returns an error. The library wrapper API internally handles the error, waits for the asynchronous operation to complete, and then repeats the operation. This is not very efficient, but is only necessary when opening a database or under active multiple connection contention. Note that this "retry hack" exposes possible race condition failures (even with a synchronous build) if multiple database connections are opened and used concurrently in the same wa-sqlite instance. 
 
 Transactions that access more than one main (non-temporary) database are not supported.
 
@@ -62,13 +62,17 @@ This is a synchronous OPFS VFS that that implements write-ahead logging. It requ
 
 Write-ahead logging is implemented entirely within the VFS and is always on. It does not use the WAL feature built in to SQLite.
 
+OPFSWriteAheadVFS uses the "retry hack" to support multiple connections like OPFSCoopSyncVFS does, and may have similar problems with multiple connections in the same instance.
+
+Transactions that access more than one main (non-temporary) database are not supported.
+
 ## VFS Comparison
 
 ||MemoryVFS|MemoryAsyncVFS|IDBBatchAtomicVFS|OPFSAdaptiveVFS|AccessHandlePoolVFS|OPFSAnyContextVFS|OPFSCoopSyncVFS|OPFSWriteAheadVFS|
 |-|-|-|-|-|-|-|-|-|
 |Storage|RAM|RAM|IndexedDB|OPFS|OPFS|OPFS|OPFS|OPFS|
 |Synchronous build|✅|:x:|:x:|:x:|✅|:x:|✅|✅|
-|Asyncify build|✅|✅|✅|✅|✅|✅|✅|
+|Asyncify build|✅|✅|✅|✅|✅|✅|✅|✅|
 |JSPI build|✅|✅|✅|✅|✅|✅|✅|✅|
 |Contexts|All|All|All|Worker|Worker|All|Worker|Worker|
 |Multiple connections|:x:|:x:|✅|✅|:x:|✅|✅|✅|
