@@ -653,14 +653,10 @@ export class IDBMirrorVFS extends FacadeVFS {
       }
     }
 
-    // Drop the blocks past the end of the file. The first of them starts at
-    // fileSize, not one block beyond it, and they need not be contiguous.
-    if (file.blockSize) {
-      const end = Math.ceil(tx.fileSize / file.blockSize) * file.blockSize;
-      for (const offset of [...file.blocks.keys()]) {
-        if (offset >= end) {
-          file.blocks.delete(offset);
-        }
+    // Drop the blocks past the end of the file.
+    for (const offset of [...file.blocks.keys()]) {
+      if (offset >= tx.fileSize) {
+        file.blocks.delete(offset);
       }
     }
 
@@ -685,13 +681,9 @@ export class IDBMirrorVFS extends FacadeVFS {
       blocks.put({ path: file.path, offset, data });
     }
 
-    // Delete blocks past the end of the file, which the view has just
-    // dropped. Without this the store keeps every block a shrinking
-    // transaction leaves behind.
-    if (file.blockSize) {
-      const end = Math.ceil(file.txActive.fileSize / file.blockSize) * file.blockSize;
-      blocks.delete(IDBKeyRange.bound([file.path, end], [file.path, Infinity]));
-    }
+    // Delete blocks past the end of the file.
+    blocks.delete(IDBKeyRange.bound(
+      [file.path, file.txActive.fileSize], [file.path, Infinity]));
 
     // Delete obsolete transactions no longer needed.
     const oldRange = IDBKeyRange.bound(
