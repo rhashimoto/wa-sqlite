@@ -23,7 +23,7 @@ const CONFIGS = new Map([
   ['IDBMirrorVFS', ASYNC_BUILDS],
   ['OPFSAdaptiveVFS', ASYNC_BUILDS],
   ['OPFSAnyContextVFS', ASYNC_BUILDS],
-  ['OPFSWriteAheadVFS', ASYNC_BUILDS],
+  ['OPFSWriteAheadVFS', ALL_BUILDS],
 ]);
 
 describe('SQLite API', function() {
