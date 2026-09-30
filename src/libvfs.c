@@ -124,6 +124,7 @@ static int libvfs_xOpen(sqlite3_vfs* pVfs, const char* zName, sqlite3_file* pFil
 
   VFS* pVfsExt = (VFS*)pVfs;
   sqlite3_io_methods* pMethods = (sqlite3_io_methods*)sqlite3_malloc(sizeof(sqlite3_io_methods));
+  if (!pMethods) return SQLITE_NOMEM;
   pMethods->iVersion = 2;
 #define METHOD(NAME) pMethods->NAME = (pVfsExt->methodMask & (1 << NAME)) ? libvfs_##NAME : NULL
   METHOD(xClose);
