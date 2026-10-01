@@ -121,14 +121,16 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
       const url = new URL(zName, 'file://');
       const path = url.pathname;
 
+      // SQLite sets syncDir when deleting a journal on a batch atomic VFS,
+      // and a journal that survives the commit would roll it back.
       this.#idb.q(({ metadata, blocks }) => {
         const range = IDBKeyRange.bound([path, -Infinity], [path, Infinity]);
         blocks.delete(range);
         metadata.delete(path);
-      }, 'rw');
+      }, 'rw', syncDir ? { durability: 'strict' } : {});
 
       if (syncDir) {
-        await this.#idb.sync(false);
+        await this.#idb.sync(true);
       }
       return VFS.SQLITE_OK;
     } catch (e) {
