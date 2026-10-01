@@ -271,16 +271,30 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         }, 'rw', file.txOptions);
       } else {
         this.#idb.q(async ({ blocks }) => {
-          // Write each byte to the block jRead will read it from.
-          const starts = data.byteLength > 1 ?
-            (await blocks.getAllKeys(IDBKeyRange.bound(
-              [file.path, -(iOffset + data.byteLength - 1)],
-              [file.path, -iOffset],
-              false, true))).map(key => -key[1]).reverse() :
-            [];
+          // File blocks in IndexedDB must never overlap. We must avoid
+          // writing a block to IDB that violates this guarantee.
+          //
+          // SQLite write ordering can cause gaps in the file where
+          // no data has yet been written. When writing in such a gap
+          // we take care not to write a new block that extends
+          // further than the end of the gap.
+          //
+          // Fetch offsets for existing blocks in IDB that might be
+          // the end of a gap.
+          //
+          // TODO: Consider one getAll() for the blocks that start inside
+          // the write, plus one get() for the block covering iOffset,
+          // instead of a get() per piece.
+          const starts = (await blocks.getAllKeys(IDBKeyRange.bound(
+            [file.path, -(iOffset + data.byteLength)],
+            [file.path, -iOffset],
+            true, true))).map(key => -key[1]).reverse();
 
           let dataOffset = 0;
           while (dataOffset < data.byteLength) {
+            // Limit each iteration's write to the extent of the
+            // IDB block at this location if it exists, otherwise
+            // until the start of the next block that does exist.
             const fileOffset = iOffset + dataOffset;
             while (starts.length && starts[0] <= fileOffset) starts.shift();
             const pieceEnd = Math.min(
