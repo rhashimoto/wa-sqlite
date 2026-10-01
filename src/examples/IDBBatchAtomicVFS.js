@@ -271,18 +271,66 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
         }, 'rw', file.txOptions);
       } else {
         this.#idb.q(async ({ blocks }) => {
-          // Read the existing block.
-          const range = IDBKeyRange.bound(
+          // File blocks in IndexedDB must never overlap. We must avoid
+          // writing a block to IDB that violates this guarantee.
+          //
+          // SQLite write ordering can cause gaps in the file where
+          // no data has yet been written. When writing in such a gap
+          // we take care not to write a new block that extends
+          // further than the end of the gap.
+          //
+          // Fetch offsets for existing blocks in IDB that might be
+          // the end of a gap.
+          //
+          // TODO: Consider one getAll() for the blocks that start inside
+          // the write, plus one get() for the block covering iOffset,
+          // instead of a get() per piece.
+          const starts = (await blocks.getAllKeys(IDBKeyRange.bound(
+            [file.path, -(iOffset + data.byteLength)],
             [file.path, -iOffset],
-            [file.path, Infinity]);
-          const block = await blocks.get(range);
+            true, true))).map(key => -key[1]).reverse();
 
-          // Modify the block data.
-          // @ts-ignore
-          block.data.subarray(iOffset + block.offset).set(data);
+          let dataOffset = 0;
+          while (dataOffset < data.byteLength) {
+            // Limit each iteration's write to the extent of the
+            // IDB block at this location if it exists, otherwise
+            // until the start of the next block that does exist.
+            const fileOffset = iOffset + dataOffset;
+            while (starts.length && starts[0] <= fileOffset) starts.shift();
+            const pieceEnd = Math.min(
+              data.byteLength,
+              (starts[0] ?? Infinity) - iOffset);
 
-          // Write back.
-          blocks.put(block);
+            const range = IDBKeyRange.bound(
+              [file.path, -fileOffset],
+              [file.path, Infinity]);
+            const block = await blocks.get(range);
+
+            if (!block || block.data.byteLength - block.offset <= fileOffset) {
+              // No block reaches this offset: store up to the next one.
+              blocks.put({
+                path: file.path,
+                offset: -fileOffset,
+                version: version,
+                data: data.slice(dataOffset, pieceEnd)
+              });
+              dataOffset = pieceEnd;
+              continue;
+            }
+
+            // Modify the block data.
+            const blockOffset = fileOffset + block.offset;
+            const nBytes = Math.min(
+              block.data.byteLength - blockOffset,
+              pieceEnd - dataOffset);
+            // @ts-ignore
+            block.data.subarray(blockOffset, blockOffset + nBytes)
+              .set(data.subarray(dataOffset, dataOffset + nBytes));
+
+            // Write back.
+            blocks.put(block);
+            dataOffset += nBytes;
+          }
         }, 'rw', file.txOptions);
 
       }
