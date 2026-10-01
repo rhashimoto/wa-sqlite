@@ -122,6 +122,11 @@ maybeReset().then(async () => {
           return value.apply(target, args);
         };
       }
+
+      // Plain properties are passed through, so a test can read the VFS
+      // state a call left behind - lastError, for one. Without this the
+      // proxy answers undefined for everything that is not a method.
+      return value;
     }
   });
 
