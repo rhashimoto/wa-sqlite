@@ -125,8 +125,8 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     } catch (e) {
       this.lastError = e;
 
-      // SQLite does not call xClose after a failed xOpen, so release here
-      // whatever this open acquired before it failed.
+      // Release at once what this open acquired, rather than leave it to
+      // xClose.
       const file = this.mapIdToFile.get(fileId);
       file?.openLockReleaser?.();
       file?.handleRequestChannel?.close();
@@ -190,6 +190,9 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
       await file?.accessHandle?.close();
+
+      // Release the open lock if no read came to release it.
+      file?.openLockReleaser?.();
 
       if (file?.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const [directoryHandle, name] = await getPathComponents(file.pathname, false);
