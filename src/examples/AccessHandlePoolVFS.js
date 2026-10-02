@@ -303,7 +303,9 @@ export class AccessHandlePoolVFS extends FacadeVFS {
     }
 
     // Open access handles in parallel, separating associated and unassociated.
-    await Promise.all(files.map(async ([name, handle]) => {
+    // Settle them all before reporting a failure, so that the handles
+    // acquired beside the one that failed are closed rather than kept.
+    const results = await Promise.allSettled(files.map(async ([name, handle]) => {
       const accessHandle = await handle.createSyncAccessHandle();
       this.#mapAccessHandleToName.set(accessHandle, name);
       const path = this.#getAssociatedPath(accessHandle);
@@ -313,6 +315,11 @@ export class AccessHandlePoolVFS extends FacadeVFS {
         this.#availableAccessHandles.add(accessHandle);
       }
     }));
+    const failure = results.find(result => result.status === 'rejected');
+    if (failure) {
+      this.#releaseAccessHandles();
+      throw failure.reason;
+    }
   }
 
   #releaseAccessHandles() {
