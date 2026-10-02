@@ -683,6 +683,19 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
                 pArg.setUint32(0, ptr, true);
               }
               return VFS.SQLITE_OK;
+            case 'wal_read_latest':
+              // A setting of 1 makes each read transaction include every
+              // committed transaction, at the cost of scanning the WAL.
+              if (value !== null) {
+                file.writeAhead.options.readToCurrent = parseInt(value) !== 0;
+              } else {
+                // Return current setting.
+                const s = file.writeAhead.options.readToCurrent ? '1' : '0';
+                const ptr = this._module._sqlite3_malloc64(s.length + 1);
+                this._module.stringToUTF8(s, ptr, s.length + 1);
+                pArg.setUint32(0, ptr, true);
+              }
+              return VFS.SQLITE_OK;
             case 'lazy_lock':
               // Lazy locks don't actually release their Web Lock until
               // they receive a message requesting it. Typically a setting
@@ -935,8 +948,10 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
         // Open the main database OPFS file.
         const accessHandle = await openFile(dbName, { create });
 
-        // Open WAL files.
-        const waHandles = await Promise.all([0, 1].map(async i => {
+        // Open WAL files. Settle both before reporting a failure, so that
+        // the cleanup below also closes a handle acquired after the other
+        // open had already failed.
+        const results = await Promise.allSettled([0, 1].map(async i => {
           const waName = this.#getWriteAheadNameFromDbName(dbName, i);
           const waHandle = await openFile(waName, { create: true });
           if (isNewDatabase) {
@@ -944,6 +959,9 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
           }
           return waHandle;
         }));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+        const waHandles = results.map(result => result.value);
         return { accessHandle, waHandles };
       });
 

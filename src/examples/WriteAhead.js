@@ -55,6 +55,7 @@ const FRAME_COMMIT_CHANGE_FILE_MASK = 1 << 1;
  * @property {number} [backstopInterval]
  * @property {number} [checkpointBufferSize]
  * @property {number} [journalSizeLimit]
+ * @property {boolean} [readToCurrent]
  */
 
 export class WriteAhead {
@@ -65,6 +66,7 @@ export class WriteAhead {
     backstopInterval: DEFAULT_BACKSTOP_INTERVAL,
     journalSizeLimit: DEFAULT_JOURNAL_SIZE_LIMIT,
     checkpointBufferSize: DEFAULT_CHECKPOINT_BUFFER_SIZE,
+    readToCurrent: false,
   };
 
   #zName;
@@ -187,7 +189,8 @@ export class WriteAhead {
   /**
    * Freeze our view of the database.
    * The view includes the transactions received so far but is not
-   * guaranteed to be completely up to date. Unfreeze the view with rejoin().
+   * guaranteed to be completely up to date, unless the readToCurrent
+   * option is set. Unfreeze the view with rejoin().
    */
   isolateForRead() {
     if (this.#isolationState !== null) {
@@ -198,6 +201,12 @@ export class WriteAhead {
     // Disable backstop during isolation.
     clearTimeout(this.#backstopTimer);
     this.#backstopTimer = null;
+
+    if (this.options.readToCurrent) {
+      // Include transactions committed but not yet received. This scans
+      // any uncommitted frames of a write in progress, on every read.
+      this.#advanceTxId({ readToCurrent: true });
+    }
   }
 
   /**
