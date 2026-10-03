@@ -124,6 +124,13 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       this.lastError = e;
+
+      // Release at once what this open acquired, rather than leave it to
+      // xClose.
+      const file = this.mapIdToFile.get(fileId);
+      file?.openLockReleaser?.();
+      file?.handleRequestChannel?.close();
+      this.mapIdToFile.delete(fileId);
       return VFS.SQLITE_CANTOPEN;
     }
   }
@@ -183,6 +190,11 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
       await file?.accessHandle?.close();
+
+      // Release what the open and the last transaction may still hold.
+      file?.openLockReleaser?.();
+      file?.handleLockReleaser?.();
+      file?.handleRequestChannel?.close();
 
       if (file?.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const [directoryHandle, name] = await getPathComponents(file.pathname, false);
