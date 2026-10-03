@@ -5,6 +5,7 @@ import { vfs_xClose } from "./vfs_xClose.js";
 import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 import { vfs_sparse_write } from "./vfs_sparse_write.js";
+import { vfs_commit_survives } from "./vfs_commit_survives.js";
 
 import SQLiteESMFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
@@ -28,6 +29,7 @@ describe(CONFIG, function() {
       vfs_xRead(context);
       vfs_xWrite(context);
       vfs_sparse_write(context);
+      vfs_commit_survives({ build });
     });
   }
 
