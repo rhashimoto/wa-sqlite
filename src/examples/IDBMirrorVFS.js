@@ -31,6 +31,7 @@ class File {
 
   /** @type {BroadcastChannel} */ broadcastChannel;
   /** @type {Transaction[]} */ broadcastReceived;
+  /** @type {Set<Promise<void>>} */ commitsInFlight;
 
   /** @type {number} */ lockState;
   /** @type {{write?: function, reserved?: function, hint?: function}} */ locks;
@@ -54,6 +55,7 @@ class File {
       this.viewReleaser = null;
       this.broadcastChannel = new BroadcastChannel('mirror:' + pathname);
       this.broadcastReceived = [];
+      this.commitsInFlight = new Set();
       this.lockState = VFS.SQLITE_LOCK_NONE;
       this.locks = {};
       this.txActive = null;
@@ -263,6 +265,8 @@ export class IDBMirrorVFS extends FacadeVFS {
       this.#mapIdToFile.delete(fileId);
 
       if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        // Commits still in flight broadcast on this channel when they complete.
+        await Promise.allSettled(file.commitsInFlight);
         file.broadcastChannel.close();
         file.viewReleaser?.();
       }
@@ -710,6 +714,8 @@ export class IDBMirrorVFS extends FacadeVFS {
       idbTx.commit();
     });
 
+    file.commitsInFlight.add(complete);
+    complete.finally(() => file.commitsInFlight.delete(complete)).catch(() => {});
     if (file.synchronous === 'full') {
       await complete;
     }
