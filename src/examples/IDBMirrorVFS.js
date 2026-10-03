@@ -354,7 +354,10 @@ export class IDBMirrorVFS extends FacadeVFS {
           file.blocks.set(0, newBlock);
           block = newBlock;
         }
-        block.set(pData, iOffset);
+        // pData is a Uint8ArrayProxy that has no indexed access, which
+        // set() requires, so use subarray() to get a real Uint8Array over
+        // the same bytes.
+        block.set(pData.subarray(), iOffset);
         file.blockSize = Math.max(file.blockSize, iOffset + pData.byteLength);
       }
       return VFS.SQLITE_OK;
@@ -653,9 +656,11 @@ export class IDBMirrorVFS extends FacadeVFS {
       }
     }
 
-    let truncated = tx.fileSize + file.blockSize;
-    while (file.blocks.delete(truncated)) {
-      truncated += file.blockSize;
+    // Drop the blocks past the end of the file.
+    for (const offset of [...file.blocks.keys()]) {
+      if (offset >= tx.fileSize) {
+        file.blocks.delete(offset);
+      }
     }
 
     file.viewTx = tx;
@@ -678,6 +683,10 @@ export class IDBMirrorVFS extends FacadeVFS {
     for (const [offset, data] of file.txActive.blocks) {
       blocks.put({ path: file.path, offset, data });
     }
+
+    // Delete blocks past the end of the file.
+    blocks.delete(IDBKeyRange.bound(
+      [file.path, file.txActive.fileSize], [file.path, Infinity]));
 
     // Delete obsolete transactions no longer needed.
     const oldRange = IDBKeyRange.bound(

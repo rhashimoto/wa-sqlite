@@ -22,7 +22,7 @@ const HOLDER_SRC = `
  * Holds an exclusive access handle on a file, in a worker of its own:
  * createSyncAccessHandle is not available on the main thread.
  */
-function createHolder() {
+export function createHolder() {
   const url = URL.createObjectURL(
     new Blob([HOLDER_SRC], { type: 'text/javascript' }));
   const worker = new Worker(url);
