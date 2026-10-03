@@ -59,12 +59,11 @@ export function vfs_commit_abort({ build }) {
           expect(aborted.error !== undefined).toBe(synchronous === 'full');
 
           if (synchronous === 'normal' && lockingMode === 'exclusive') {
-            // Once the abort is known, commits fail. The lock is never
-            // released, so the view is reloaded only when reopened.
+            // The lock is never released, so the first commit after the
+            // abort is known fails, and the view is reloaded then.
             await a({ type: 'settle' });
             expect((await exec(a, 'INSERT INTO t VALUES (zeroblob(20))')).error).toBeDefined();
             expect(await query(a, 'SELECT count(*) FROM t WHERE length(x) = 20')).toBe(0);
-            await a({ type: 'reopen' });
           }
           expect((await exec(a, 'INSERT INTO t VALUES (zeroblob(20))')).error).toBeUndefined();
           expect(await query(a, 'SELECT count(*) FROM t')).toBe(201);
@@ -108,7 +107,7 @@ export function vfs_commit_abort({ build }) {
       expect(await query(a, 'SELECT count(*) FROM t')).toBe(200);
 
       // A transaction larger than the cache writes a rollback journal
-      // before its commit is refused.
+      // before its commit is refused, so only a reopen recovers.
       await a({ type: 'abort-next-commit' });
       expect((await exec(a, ABORTED)).error).toBeUndefined();
       await a({ type: 'settle' });

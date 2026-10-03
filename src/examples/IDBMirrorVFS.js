@@ -657,7 +657,12 @@ export class IDBMirrorVFS extends FacadeVFS {
   async #commitTx(file) {
     if (file.abortController.signal.aborted) {
       // This transaction was built on a commit that was never stored.
+      // SQLite discards its cache after this error, so the view can be
+      // reloaded, unless SQLite rolls back from a journal written on it.
       this.#dropTx(file);
+      if (!this.#mapPathToFile.has(file.path + '-journal')) {
+        await this.#reloadFile(file);
+      }
       throw new Error('an earlier commit was aborted');
     }
 
