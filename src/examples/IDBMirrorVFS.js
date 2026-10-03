@@ -56,6 +56,8 @@ class File {
       this.broadcastReceived = [];
       this.lockState = VFS.SQLITE_LOCK_NONE;
       this.locks = {};
+      this.abortController = new AbortController();
+      this.commitsPending = 0;
       this.txActive = null;
       this.txWriteHint = false;
       this.txOverwrite = false;
@@ -141,39 +143,7 @@ export class IDBMirrorVFS extends FacadeVFS {
           }
         }
   
-        // Load pages into memory from IndexedDB.
-        await new Promise((resolve, reject) => {
-          const range = IDBKeyRange.bound([path, 0], [path, Infinity]);
-          const request = blocks.openCursor(range);
-          request.onsuccess = () => {
-            const cursor = request.result;
-            if (cursor) {
-              const { offset, data } = cursor.value;
-              file.blocks.set(offset, data);
-              cursor.continue();
-            } else {
-              resolve();
-            }
-          };
-          request.onerror = () => reject(request.error);
-        });
-        file.blockSize = file.blocks.get(0)?.byteLength ?? 0;
-
-        // Get the last transaction id.
-        const transactions = idbTx.objectStore('tx');
-        file.viewTx = await new Promise((resolve, reject) => {
-          const range = IDBKeyRange.bound([path, 0], [path, Infinity]);
-          const request = transactions.openCursor(range, 'prev');
-          request.onsuccess = () => {
-            const cursor = request.result;
-            if (cursor) {
-              resolve(cursor.value);
-            } else {
-              resolve({ txId: 0 });
-            }
-          };
-          request.onerror = () => reject(request.error);
-        });
+        await this.#loadFile(file, idbTx);
 
         // Publish our view of the database. This prevents other connections
         // from overwriting file data we still need.
@@ -263,6 +233,10 @@ export class IDBMirrorVFS extends FacadeVFS {
       this.#mapIdToFile.delete(fileId);
 
       if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        if (file.abortController.signal.aborted) {
+          // The journal belongs to a view that was never stored.
+          this.#mapPathToFile.delete(file.path + '-journal');
+        }
         file.broadcastChannel.close();
         file.viewReleaser?.();
       }
@@ -418,6 +392,11 @@ export class IDBMirrorVFS extends FacadeVFS {
     if (lockType <= file.lockState) return VFS.SQLITE_OK;
     switch (lockType) {
       case VFS.SQLITE_LOCK_SHARED:
+        if (file.abortController.signal.aborted) {
+          // SQLite validates its cache against the file here, so this is
+          // where a view including an aborted commit can be replaced.
+          await this.#reloadFile(file);
+        }
         if (file.txWriteHint) {
             // xFileControl() has hinted that this transaction will
             // write. Acquire the hint lock, which is required to reach
@@ -471,6 +450,12 @@ export class IDBMirrorVFS extends FacadeVFS {
         }
 
         console.assert(entries[0]?.txId === file.viewTx.txId || !file.viewTx.txId);
+        if (file.abortController.signal.aborted) {
+          // Our view includes a commit that was never stored. Make the
+          // transaction start over, which reloads the file.
+          file.locks.reserved();
+          return VFS.SQLITE_BUSY;
+        }
         break;
       case VFS.SQLITE_LOCK_EXCLUSIVE:
         await this.#lock(file, 'write');
@@ -670,6 +655,12 @@ export class IDBMirrorVFS extends FacadeVFS {
    * @param {File} file 
    */
   async #commitTx(file) {
+    if (file.abortController.signal.aborted) {
+      // This transaction was built on a commit that was never stored.
+      this.#dropTx(file);
+      throw new Error('an earlier commit was aborted');
+    }
+
     // Advance our own view. Even if we received our own broadcasts (we
     // don't), we want our view to be updated synchronously.
     this.#acceptTx(file, file.txActive);
@@ -677,45 +668,125 @@ export class IDBMirrorVFS extends FacadeVFS {
 
     const oldestTxId = await this.#getOldestTxInUse(file);
 
-    // Update IndexedDB page data.
+    const tx = file.txActive;
     const idbTx = this.#idb.transaction(['blocks', 'tx'], 'readwrite');
-    const blocks = idbTx.objectStore('blocks');
-    for (const [offset, data] of file.txActive.blocks) {
-      blocks.put({ path: file.path, offset, data });
-    }
-
-    // Delete blocks past the end of the file.
-    blocks.delete(IDBKeyRange.bound(
-      [file.path, file.txActive.fileSize], [file.path, Infinity]));
-
-    // Delete obsolete transactions no longer needed.
-    const oldRange = IDBKeyRange.bound(
-      [file.path, -Infinity], [file.path, oldestTxId],
-      false, true);
-    idbTx.objectStore('tx').delete(oldRange);
-
-    // Save transaction object. Omit page data as an optimization.
-    const txSansData = Object.assign({}, file.txActive);
-    txSansData.blocks = new Map(Array.from(file.txActive.blocks, ([k]) => [k, null]));
-    idbTx.objectStore('tx').put(txSansData);
-
-    // Broadcast transaction once it commits.
+    const gated = file.commitsPending++ > 0;
     const complete = new Promise((resolve, reject) => {
-      const message = file.txActive;
       idbTx.oncomplete = () => {
-        file.broadcastChannel.postMessage(message);
+        file.commitsPending--;
+        file.broadcastChannel.postMessage(tx);
         resolve();
       };
-      idbTx.onabort = () => reject(idbTx.error);
-      idbTx.commit();
+      idbTx.onabort = () => {
+        // Our view includes this transaction, so it must be reloaded.
+        file.commitsPending--;
+        file.abortController.abort();
+        reject(idbTx.error);
+      };
+
+      const write = () => {
+        if (file.abortController.signal.aborted) {
+          idbTx.abort();
+          return;
+        }
+
+        // Update IndexedDB page data.
+        const blocks = idbTx.objectStore('blocks');
+        for (const [offset, data] of tx.blocks) {
+          blocks.put({ path: file.path, offset, data });
+        }
+
+        // Delete blocks past the end of the file.
+        blocks.delete(IDBKeyRange.bound(
+          [file.path, tx.fileSize], [file.path, Infinity]));
+
+        // Delete obsolete transactions no longer needed.
+        const oldRange = IDBKeyRange.bound(
+          [file.path, -Infinity], [file.path, oldestTxId],
+          false, true);
+        idbTx.objectStore('tx').delete(oldRange);
+
+        // Save transaction object. Omit page data as an optimization.
+        const txSansData = Object.assign({}, tx);
+        txSansData.blocks = new Map(Array.from(tx.blocks, ([k]) => [k, null]));
+        idbTx.objectStore('tx').put(txSansData);
+        idbTx.commit();
+      };
+
+      if (gated) {
+        // A request runs only after the earlier commits have finished,
+        // so the check above sees whether one of them was aborted.
+        idbTx.objectStore('tx').get([file.path, -1]).onsuccess = write;
+      } else {
+        write();
+      }
     });
 
     if (file.synchronous === 'full') {
-      await complete;
+      try {
+        await complete;
+      } catch (e) {
+        // SQLite discards its cache after this error, so the view can be
+        // reloaded now, even in exclusive locking mode.
+        await this.#reloadFile(file);
+        throw e;
+      }
+    } else {
+      // A failure is handled by the next transaction.
+      complete.catch(() => {});
     }
 
     file.txActive = null;
     file.txWriteHint = false;
+  }
+
+  /**
+   * Load the stored blocks and the last transaction into a main database.
+   * @param {File} file 
+   * @param {IDBTransaction} idbTx 
+   */
+  async #loadFile(file, idbTx) {
+    const blocks = new Map();
+    await new Promise((resolve, reject) => {
+      const range = IDBKeyRange.bound([file.path, 0], [file.path, Infinity]);
+      const request = idbTx.objectStore('blocks').openCursor(range);
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          const { offset, data } = cursor.value;
+          blocks.set(offset, data);
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const viewTx = await new Promise((resolve, reject) => {
+      const range = IDBKeyRange.bound([file.path, 0], [file.path, Infinity]);
+      const request = idbTx.objectStore('tx').openCursor(range, 'prev');
+      request.onsuccess = () => resolve(request.result?.value ?? { txId: 0 });
+      request.onerror = () => reject(request.error);
+    });
+
+    file.blocks = blocks;
+    file.blockSize = blocks.get(0)?.byteLength ?? 0;
+    file.viewTx = viewTx;
+  }
+
+  /**
+   * Replace a view that includes an aborted commit with the stored one.
+   * @param {File} file 
+   */
+  async #reloadFile(file) {
+    await this.#loadFile(file, this.#idb.transaction(['blocks', 'tx']));
+    file.txActive = null;
+    file.abortController = new AbortController();
+    await this.#setView(file, file.viewTx);
+    if (file.lockState === VFS.SQLITE_LOCK_NONE) {
+      this.#processBroadcasts(file);
+    }
   }
 
   /**
