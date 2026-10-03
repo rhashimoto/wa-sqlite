@@ -12,6 +12,19 @@ const BUILDS = ['asyncify', 'jspi'];
 const supportsJSPI = await TestContext.supportsJSPI();
 
 describe(CONFIG, function() {
+  it('should load where FileSystemSyncAccessHandle is unavailable', async function() {
+    // The interface exists in dedicated workers only, so this page lacks it,
+    // as do Node and a page that is not a secure context.
+    expect(globalThis.FileSystemSyncAccessHandle).toBeUndefined();
+    let error;
+    try {
+      await import('../src/examples/OPFSAdaptiveVFS.js');
+    } catch (e) {
+      error = e;
+    }
+    expect(error?.message).toBeUndefined();
+  });
+
   for (const build of BUILDS) {
     if (build === 'jspi' && !supportsJSPI) return;
 
