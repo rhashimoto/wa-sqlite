@@ -191,8 +191,10 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       this.mapIdToFile.delete(fileId);
       await file?.accessHandle?.close();
 
-      // Release the open lock if no read came to release it.
+      // Release what the open and the last transaction may still hold.
       file?.openLockReleaser?.();
+      file?.handleLockReleaser?.();
+      file?.handleRequestChannel?.close();
 
       if (file?.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         const [directoryHandle, name] = await getPathComponents(file.pathname, false);
