@@ -1,4 +1,3 @@
-// Method names for these signatures must be in src/asyncify_imports.json.
 const SIGNATURES = [
   'ipp', // xProgress, xCommitHook
   'ippp', // xClose, xSectorSize, xDeviceCharacteristics
@@ -87,6 +86,8 @@ function injectMethod(signature, isAsync) {
     // @ts-ignore
     function(...args) { return adapters_support(false, ...args) };
   adapters[`${method}__deps`] = ['$adapters_support'];
+  // Emscripten makes __async methods async imports for both Asyncify and JSPI,
+  // so the synchronous relays stay plain imports.
   adapters[`${method}__async`] = isAsync;
 
   // Emscripten "legalizes" 64-bit integer arguments by passing them as
