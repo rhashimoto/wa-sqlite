@@ -36,6 +36,7 @@ class File {
   /** @type {{write?: function, reserved?: function, hint?: function}} */ locks;
 
   /** @type {AbortController} */ abortController;
+  /** @type {number} */ commitsPending;
 
   /** @type {Transaction?} */ txActive;
   /** @type {boolean} */ txWriteHint;
@@ -675,8 +676,7 @@ export class IDBMirrorVFS extends FacadeVFS {
 
     const tx = file.txActive;
     const idbTx = this.#idb.transaction(['blocks', 'tx'], 'readwrite');
-    const gated = file.commitsPending++ > 0;
-    const complete = new Promise((resolve, reject) => {
+    const complete = new Promise(async (resolve, reject) => {
       idbTx.oncomplete = () => {
         file.commitsPending--;
         file.broadcastChannel.postMessage(tx);
@@ -689,42 +689,41 @@ export class IDBMirrorVFS extends FacadeVFS {
         reject(idbTx.error);
       };
 
-      const write = () => {
-        if (file.abortController.signal.aborted) {
-          idbTx.abort();
-          return;
-        }
-
-        // Update IndexedDB page data.
-        const blocks = idbTx.objectStore('blocks');
-        for (const [offset, data] of tx.blocks) {
-          blocks.put({ path: file.path, offset, data });
-        }
-
-        // Delete blocks past the end of the file.
-        blocks.delete(IDBKeyRange.bound(
-          [file.path, tx.fileSize], [file.path, Infinity]));
-
-        // Delete obsolete transactions no longer needed.
-        const oldRange = IDBKeyRange.bound(
-          [file.path, -Infinity], [file.path, oldestTxId],
-          false, true);
-        idbTx.objectStore('tx').delete(oldRange);
-
-        // Save transaction object. Omit page data as an optimization.
-        const txSansData = Object.assign({}, tx);
-        txSansData.blocks = new Map(Array.from(tx.blocks, ([k]) => [k, null]));
-        idbTx.objectStore('tx').put(txSansData);
-        idbTx.commit();
-      };
-
-      if (gated) {
-        // A request runs only after the earlier commits have finished,
-        // so the check above sees whether one of them was aborted.
-        idbTx.objectStore('tx').get([file.path, -1]).onsuccess = write;
-      } else {
-        write();
+      if (file.commitsPending++ > 0) {
+        // There are other write transactions still in flight. Use
+        // a read request purely for the side effect of flushing
+        // the IDB pipeline. Then we can ensure we are not building
+        // the new transaction on a failed transaction.
+        const fence = idbTx.objectStore('tx').get([file.path, -1]);
+        await idbX(fence);
       }
+
+      if (file.abortController.signal.aborted) {
+        idbTx.abort();
+        return;
+      }
+
+      // Update IndexedDB page data.
+      const blocks = idbTx.objectStore('blocks');
+      for (const [offset, data] of tx.blocks) {
+        blocks.put({ path: file.path, offset, data });
+      }
+
+      // Delete blocks past the end of the file.
+      blocks.delete(IDBKeyRange.bound(
+        [file.path, tx.fileSize], [file.path, Infinity]));
+
+      // Delete obsolete transactions no longer needed.
+      const oldRange = IDBKeyRange.bound(
+        [file.path, -Infinity], [file.path, oldestTxId],
+        false, true);
+      idbTx.objectStore('tx').delete(oldRange);
+
+      // Save transaction object. Omit page data as an optimization.
+      const txSansData = Object.assign({}, tx);
+      txSansData.blocks = new Map(Array.from(tx.blocks, ([k]) => [k, null]));
+      idbTx.objectStore('tx').put(txSansData);
+      idbTx.commit();
     });
 
     if (file.synchronous === 'full') {
@@ -753,6 +752,8 @@ export class IDBMirrorVFS extends FacadeVFS {
   async #loadFile(file, idbTx) {
     const blocks = new Map();
     await new Promise((resolve, reject) => {
+      // TODO: Reading the database in batches with `getAll()` and a
+      // batch size count would be faster than using a cursor.
       const range = IDBKeyRange.bound([file.path, 0], [file.path, Infinity]);
       const request = idbTx.objectStore('blocks').openCursor(range);
       request.onsuccess = () => {
