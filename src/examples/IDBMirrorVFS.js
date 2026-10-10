@@ -698,32 +698,39 @@ export class IDBMirrorVFS extends FacadeVFS {
         await idbX(fence);
       }
 
-      if (file.abortController.signal.aborted) {
+      try {
+        if (file.abortController.signal.aborted) {
+          idbTx.abort();
+          return;
+        }
+
+        // Update IndexedDB page data.
+        const blocks = idbTx.objectStore('blocks');
+        for (const [offset, data] of tx.blocks) {
+          blocks.put({ path: file.path, offset, data });
+        }
+
+        // Delete blocks past the end of the file.
+        blocks.delete(IDBKeyRange.bound(
+          [file.path, tx.fileSize], [file.path, Infinity]));
+
+        // Delete obsolete transactions no longer needed.
+        const oldRange = IDBKeyRange.bound(
+          [file.path, -Infinity], [file.path, oldestTxId],
+          false, true);
+        idbTx.objectStore('tx').delete(oldRange);
+
+        // Save transaction object. Omit page data as an optimization.
+        const txSansData = Object.assign({}, tx);
+        txSansData.blocks = new Map(Array.from(tx.blocks, ([k]) => [k, null]));
+        idbTx.objectStore('tx').put(txSansData);
+        idbTx.commit();
+      } catch (e) {
+        // This code no longer runs inside a request event handler, so an
+        // exception would not abort the transaction on its own.
         idbTx.abort();
-        return;
+        throw e;
       }
-
-      // Update IndexedDB page data.
-      const blocks = idbTx.objectStore('blocks');
-      for (const [offset, data] of tx.blocks) {
-        blocks.put({ path: file.path, offset, data });
-      }
-
-      // Delete blocks past the end of the file.
-      blocks.delete(IDBKeyRange.bound(
-        [file.path, tx.fileSize], [file.path, Infinity]));
-
-      // Delete obsolete transactions no longer needed.
-      const oldRange = IDBKeyRange.bound(
-        [file.path, -Infinity], [file.path, oldestTxId],
-        false, true);
-      idbTx.objectStore('tx').delete(oldRange);
-
-      // Save transaction object. Omit page data as an optimization.
-      const txSansData = Object.assign({}, tx);
-      txSansData.blocks = new Map(Array.from(tx.blocks, ([k]) => [k, null]));
-      idbTx.objectStore('tx').put(txSansData);
-      idbTx.commit();
     });
 
     if (file.synchronous === 'full') {
