@@ -7,6 +7,7 @@ import { vfs_xWrite } from "./vfs_xWrite.js";
 import { vfs_leak } from "./vfs_leak.js";
 import { vfs_rollback } from "./vfs_rollback.js";
 import { vfs_commit_abort } from "./vfs_commit_abort.js";
+import { vfs_close_broadcast } from "./vfs_close_broadcast.js";
 
 const CONFIG = 'IDBMirrorVFS';
 const BUILDS = ['asyncify', 'jspi'];
@@ -28,6 +29,7 @@ describe(CONFIG, function() {
       vfs_leak(context);
       vfs_rollback(context);
       vfs_commit_abort({ build });
+      vfs_close_broadcast({ build });
     });
   }
 });
