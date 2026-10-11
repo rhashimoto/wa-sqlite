@@ -236,7 +236,9 @@ export class IDBMirrorVFS extends FacadeVFS {
       this.#mapIdToFile.delete(fileId);
 
       if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
-        // Commits still in flight broadcast on this channel when they complete.
+        // Wait for any outstanding write transactions to broadcast
+        // (after receiving an IDBTransaction complete event) before
+        // closing the BroadcastChannel.
         await Promise.allSettled(file.commitsInFlight);
         if (file.abortController.signal.aborted) {
           // The journal belongs to a view that was never stored.
