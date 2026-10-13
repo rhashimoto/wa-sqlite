@@ -6,7 +6,7 @@ import { WebLocksMixin } from '../WebLocksMixin.js';
 const LOCK_NOTIFY_INTERVAL = 1000;
 
 const hasUnsafeAccessHandle =
-  globalThis.FileSystemSyncAccessHandle.prototype.hasOwnProperty('mode');
+  globalThis.FileSystemSyncAccessHandle?.prototype.hasOwnProperty('mode');
 
 /**
  * @param {string} pathname 
