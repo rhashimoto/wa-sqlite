@@ -3,6 +3,10 @@ import * as SQLite from '../src/sqlite-api.js';
 const ITERATIONS = 100;
 const ATTEMPTS = 10;
 const ORPHANS = 30;
+const ROUNDS = 10;
+const LONG_QUERY = `
+  WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 10000000)
+  SELECT count(*) FROM c`;
 
 /**
  * Handle hand-over between connections of a VFS that rotates one access
@@ -110,6 +114,41 @@ export function vfs_handover(context, { build, config }) {
 
       expect(failures).toEqual([]);
     });
+
+    it('should acquire the handle of a connection terminated mid-call', async function() {
+      // A connection holds the access handle for the whole of a call. When
+      // its worker is terminated mid-call, its Web Lock is released at once
+      // but its access handle only later, so the connection queued on that
+      // lock can be granted it while the file is still held.
+      const failures = [];
+      for (let round = 0; round < ROUNDS; ++round) {
+        const filename = `terminated-${round}`;
+        const b = await context.create({ reset: false });
+        const dbB = await b.sqlite3.open_v2(filename);
+        await b.sqlite3.exec(dbB, 'CREATE TABLE IF NOT EXISTS t(x)');
+
+        // A takes the handle at its open, and keeps it while it counts.
+        const a = await context.create({ reset: false });
+        const dbA = await a.sqlite3.open_v2(filename);
+        a.sqlite3.exec(dbA, LONG_QUERY).catch(() => {});
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // B asks for the handle and queues on the lock A holds.
+        const query = b.sqlite3.exec(dbB, 'SELECT count(*) FROM t');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await context.destroy(a);
+
+        try {
+          await query;
+        } catch (e) {
+          failures.push(`${e.name}: ${e.message}`);
+        }
+        await b.sqlite3.close(dbB);
+        await context.destroy(b);
+      }
+
+      expect(failures).toEqual([]);
+    }, 60_000);
   });
 }
 
