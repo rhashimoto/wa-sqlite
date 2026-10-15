@@ -25,6 +25,14 @@ const PERSISTENT_FILE_TYPES =
 const DEFAULT_CAPACITY = 6;
 
 /**
+ * @typedef AccessHandlePoolOptions
+ * @property {() => Promise<FileSystemDirectoryHandle>} [getRoot] Returns the
+ * directory the VFS keeps its files in. It is called once, when the VFS
+ * starts, and the directory is kept. By default the root of the origin
+ * private file system, navigator.storage.getDirectory().
+ */
+
+/**
  * This VFS uses the updated Access Handle API with all synchronous methods
  * on FileSystemSyncAccessHandle (instead of just read and write). It will
  * work with the regular SQLite WebAssembly build, i.e. the one without
@@ -51,15 +59,28 @@ export class AccessHandlePoolVFS extends FacadeVFS {
 
   #mapIdToFile = new Map();
 
-  static async create(name, module) {
-    const vfs = new AccessHandlePoolVFS(name, module);
+  /** @type {() => Promise<FileSystemDirectoryHandle>} */ #getRoot;
+
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {AccessHandlePoolOptions} [options]
+   */
+  static async create(name, module, options = {}) {
+    const vfs = new AccessHandlePoolVFS(name, module, options);
     await vfs.isReady();
     return vfs;
   }
-  
-  constructor(name, module) {
+
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {AccessHandlePoolOptions} [options]
+   */
+  constructor(name, module, options = {}) {
     super(name, module);
     this.#directoryPath = name;
+    this.#getRoot = options.getRoot ?? (() => navigator.storage.getDirectory());
   }
 
   /**
@@ -222,7 +243,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   async isReady() {
     if (!this.#directoryHandle) {
       // All files are stored in a single directory.
-      let handle = await navigator.storage.getDirectory();
+      let handle = await this.#getRoot();
       for (const d of this.#directoryPath.split('/')) {
         if (d) {
           handle = await handle.getDirectoryHandle(d, { create: true });
