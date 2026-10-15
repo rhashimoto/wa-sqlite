@@ -5,6 +5,7 @@ const ITERATIONS = 100;
 const ATTEMPTS = 10;
 const ORPHANS = 30;
 const ROUNDS = 10;
+const QUERY_BOUND_MS = 10_000;
 const LONG_QUERY = `
   WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 10000000)
   SELECT count(*) FROM c`;
@@ -125,32 +126,39 @@ export function vfs_handover(context, { build, config }) {
       for (let round = 0; round < ROUNDS; ++round) {
         const filename = `terminated-${round}`;
         const b = await context.create({ reset: false });
-        const dbB = await b.sqlite3.open_v2(filename);
-        await b.sqlite3.exec(dbB, 'CREATE TABLE IF NOT EXISTS t(x)');
-
-        // A takes the handle at its open, and keeps it while it counts.
-        const a = await connect(build, config);
-        const dbA = await a.sqlite3.open_v2(filename);
-        a.sqlite3.exec(dbA, LONG_QUERY).catch(() => {});
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // B asks for the handle and queues on the lock A holds. A's worker
-        // is then terminated as it is, with no chance to close anything.
-        const query = b.sqlite3.exec(dbB, 'SELECT count(*) FROM t');
-        await new Promise(resolve => setTimeout(resolve, 100));
-        a.terminate();
-
+        let a;
         try {
-          await query;
-        } catch (e) {
-          failures.push(`${e.name}: ${e.message}`);
+          const dbB = await b.sqlite3.open_v2(filename);
+          await b.sqlite3.exec(dbB, 'CREATE TABLE IF NOT EXISTS t(x)');
+
+          // A takes the handle at its open, and keeps it while it counts.
+          a = await connect(build, config);
+          const dbA = await a.sqlite3.open_v2(filename);
+          a.sqlite3.exec(dbA, LONG_QUERY).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 200));
+
+          // B asks for the handle and queues on the lock A holds. A's worker
+          // is then terminated as it is, with no chance to close anything.
+          const query = b.sqlite3.exec(dbB, 'SELECT count(*) FROM t');
+          await new Promise(resolve => setTimeout(resolve, 100));
+          a.terminate();
+
+          // Bounded, so that a query that never settles is reported here
+          // rather than left running into the next test.
+          const outcome = await Promise.race([
+            query.then(() => null, e => `${e.name}: ${e.message}`),
+            new Promise(resolve => setTimeout(() => resolve('hung'), QUERY_BOUND_MS))
+          ]);
+          if (outcome) failures.push(outcome);
+          if (outcome !== 'hung') await b.sqlite3.close(dbB);
+        } finally {
+          a?.terminate();
+          await context.destroy(b);
         }
-        await b.sqlite3.close(dbB);
-        await context.destroy(b);
       }
 
       expect(failures).toEqual([]);
-    }, 60_000);
+    });
   });
 }
 
