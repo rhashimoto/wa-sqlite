@@ -6,10 +6,11 @@ const DEFAULT_TEMPORARY_FILES = 10;
 const LOCK_NOTIFY_INTERVAL = 1000;
 
 // A connection terminated mid-call releases its Web Lock at once and its
-// access handles only later: a few ms to about 150 ms, depending on the
-// engine and platform. The next lock holder sees the file as held meanwhile,
-// so creating its handles is retried, within this bound.
-const HELD_RETRY_TIMEOUT = 1000;
+// access handles only later: from a few ms to about a second, depending on
+// the engine, the platform and what the worker was doing. The next lock
+// holder sees the file as held meanwhile, so creating its handles is
+// retried, within this bound.
+const HELD_RETRY_TIMEOUT = 5000;
 const HELD_RETRY_INTERVAL = 10;
 
 // What createSyncAccessHandle() throws on a file another handle holds:
