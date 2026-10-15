@@ -1,3 +1,4 @@
+import * as Comlink from 'comlink';
 import * as SQLite from '../src/sqlite-api.js';
 
 const ITERATIONS = 100;
@@ -105,7 +106,7 @@ export function vfs_handover(context, { build, config }) {
         ]);
         for (const result of results) {
           if (result.status === 'fulfilled') {
-            result.value.terminate();
+            result.value.worker.terminate();
           } else {
             failures.push(`${result.reason.name}: ${result.reason.message}`);
           }
@@ -128,15 +129,16 @@ export function vfs_handover(context, { build, config }) {
         await b.sqlite3.exec(dbB, 'CREATE TABLE IF NOT EXISTS t(x)');
 
         // A takes the handle at its open, and keeps it while it counts.
-        const a = await context.create({ reset: false });
+        const a = await connect(build, config);
         const dbA = await a.sqlite3.open_v2(filename);
         a.sqlite3.exec(dbA, LONG_QUERY).catch(() => {});
         await new Promise(resolve => setTimeout(resolve, 200));
 
-        // B asks for the handle and queues on the lock A holds.
+        // B asks for the handle and queues on the lock A holds. A's worker
+        // is then terminated as it is, with no chance to close anything.
         const query = b.sqlite3.exec(dbB, 'SELECT count(*) FROM t');
         await new Promise(resolve => setTimeout(resolve, 100));
-        await context.destroy(a);
+        a.terminate();
 
         try {
           await query;
@@ -153,11 +155,22 @@ export function vfs_handover(context, { build, config }) {
 }
 
 /**
+ * Starts a test worker and returns its SQLite API with a way to terminate
+ * the worker directly, whatever TestContext.destroy() does first.
+ * @param {string} build
+ * @param {string} config
+ */
+async function connect(build, config) {
+  const { worker, port } = await startInstance(build, config);
+  return { sqlite3: Comlink.wrap(port).sqlite3, terminate: () => worker.terminate() };
+}
+
+/**
  * Starts a test worker and settles once the SQLite instance and its VFS
  * are ready. Unlike TestContext.create(), a failed start rejects.
  * @param {string} build
  * @param {string} config
- * @returns {Promise<Worker>}
+ * @returns {Promise<{ worker: Worker, port: MessagePort }>}
  */
 function startInstance(build, config) {
   const url = new URL('./test-worker.js', import.meta.url);
@@ -168,7 +181,7 @@ function startInstance(build, config) {
   return new Promise((resolve, reject) => {
     worker.addEventListener('message', ({ data, ports }) => {
       if (ports[0]) {
-        resolve(worker);
+        resolve({ worker, port: ports[0] });
       } else {
         worker.terminate();
         reject(Object.assign(new Error(data?.message), data));
