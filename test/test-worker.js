@@ -2,6 +2,7 @@
 
 import * as Comlink from 'comlink';
 import * as SQLite from '../src/sqlite-api.js';
+import { customRootOptions, TEST_ROOT_DIRECTORY } from "./customRoot.js";
 
 const BUILDS = new Map([
   ['default', '../dist/wa-sqlite.mjs'],
@@ -10,6 +11,10 @@ const BUILDS = new Map([
 ]);
 
 const MODULE = Symbol('module');
+
+// The "-customRoot" configurations keep their files in a directory of the
+// origin private file system instead of its root.
+const CUSTOM_ROOT_OPTIONS = Symbol('custom root options');
 const VFS_CONFIGS = new Map([
   {
     name: 'default',
@@ -55,6 +60,11 @@ const VFS_CONFIGS = new Map([
     name: 'OPFSWriteAheadVFS',
     vfsModule: '../src/examples/OPFSWriteAheadVFS.js',
   },
+  ...['AccessHandlePoolVFS', 'OPFSCoopSyncVFS', 'OPFSWriteAheadVFS'].map(className => ({
+    name: `${className}-customRoot`,
+    vfsModule: `../src/examples/${className}.js`,
+    vfsArgs: ['demo', MODULE, CUSTOM_ROOT_OPTIONS],
+  })),
 ].map(config => [config.name, config]));
 
 const INDEXEDDB_DBNAMES = ['demo'];
@@ -77,7 +87,8 @@ maybeReset().then(async () => {
       const namespace = await import(config.vfsModule);
       const className = config.vfsClass ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
       const vfsArgs = (config.vfsArgs ?? ['demo', MODULE])
-        .map(arg => arg === MODULE ? module : arg);
+        .map(arg => arg === MODULE ? module : arg)
+        .map(arg => arg === CUSTOM_ROOT_OPTIONS ? customRootOptions(TEST_ROOT_DIRECTORY) : arg);
       const vfs = await namespace[className].create(...vfsArgs);
       sqlite3.vfs_register(vfs, true);
       return vfs;
