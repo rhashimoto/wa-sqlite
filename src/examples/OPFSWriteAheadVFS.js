@@ -41,13 +41,13 @@ const finalizationRegistry = new FinalizationRegistry((/** @type {() => void} */
  * directory the VFS keeps its files in. It is called each time the VFS needs
  * the directory. By default the root of the origin private file system,
  * navigator.storage.getDirectory().
- * @property {string} [lockPrefix] Put in front of the names of the Web Locks
- * and BroadcastChannels the VFS derives from its file and directory names.
- * Set it when a file of the same name can exist under another root of this
- * origin, so the two do not share locks, and use the same prefix for every
- * VFS instance on one root. A file under the default root whose name starts
- * with the prefix still shares names with the other root. By default empty,
- * which keeps the names as they were.
+ * @property {string} [prefix] Put in front of the names of the Web Locks
+ * and BroadcastChannels the VFS derives from its file names. Set it when a
+ * file of the same name can exist under another root of this origin, so the
+ * two do not share them, and use the same prefix for every VFS instance on
+ * one root. A file under the default root whose name starts with the prefix
+ * still shares names with the other root. By default empty, which keeps the
+ * names as they were.
  */
 
 export class OPFSWriteAheadVFS extends FacadeVFS {
@@ -60,13 +60,12 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
   /** @type {Map<string, FileSystemSyncAccessHandle>} */ boundTempFiles = new Map();
   /** @type {Set<FileSystemSyncAccessHandle>} */ unboundTempFiles = new Set();
   /** @type {OPFSWriteAheadOptions} */ options = {
-    nTmpFiles: DEFAULT_TEMP_FILES
+    nTmpFiles: DEFAULT_TEMP_FILES,
+    getRoot: () => navigator.storage.getDirectory(),
+    prefix: '',
   };
 
   _ready;
-
-  /** @type {() => Promise<FileSystemDirectoryHandle>} */ #getRoot;
-  /** @type {string} */ #lockPrefix;
 
   /**
    * @param {string} name
@@ -88,11 +87,9 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
     super(name, module);
     // Applied before the directory is requested, which happens below.
     Object.assign(this.options, options);
-    this.#getRoot = this.options.getRoot ?? (() => navigator.storage.getDirectory());
-    this.#lockPrefix = this.options.lockPrefix ?? '';
     this._ready = (async () => {
       // Ensure the library files root directory exists.
-      let dirHandle = await this.#getRoot();
+      let dirHandle = await this.options.getRoot();
       dirHandle = await dirHandle.getDirectoryHandle(LIBRARY_FILES_ROOT, { create: true });
 
       // Clean up any stale session directories.
@@ -100,7 +97,7 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
       for await (const name of dirHandle.keys()) {
         if (name.startsWith('.session-')) {
           // Acquire a lock on the session directory to ensure it is not in use.
-          await navigator.locks.request(this.#lockPrefix + name, { ifAvailable: true }, async lock => {
+          await navigator.locks.request(name, { ifAvailable: true }, async lock => {
             if (lock) {
               // This directory is not in use.
               try {
@@ -116,7 +113,7 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
       // Create our session directory.
       const dirName = `.session-${Math.random().toString(16).slice(2)}`;
       await new Promise(resolve => {
-        navigator.locks.request(this.#lockPrefix + dirName, () => {
+        navigator.locks.request(dirName, () => {
           // @ts-ignore
           resolve();
           return new Promise(release => {
@@ -184,8 +181,8 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
 
         file.lockState = VFS.SQLITE_LOCK_NONE;
         file.lockingMode = 'normal';
-        file.readLock = new LazyLock(`${this.#lockPrefix}${zName}#read`);
-        file.writeLock = new LazyLock(`${this.#lockPrefix}${zName}#write`);
+        file.readLock = new LazyLock(`${this.options.prefix}${zName}#read`);
+        file.writeLock = new LazyLock(`${this.options.prefix}${zName}#write`);
         file.useLazyLock = 'readwrite';
         file.timeout = -1;
         file.synchronous = 1; // NORMAL
@@ -930,13 +927,13 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
     const file = this.mapPathToFile.get(zName);
     try {
       const { accessHandle, waHandles } =
-        await navigator.locks.request(`${this.#lockPrefix}${zName}#open`, async lock => {
+        await navigator.locks.request(`${this.options.prefix}${zName}#open`, async lock => {
         // Parse the path components.
         const directoryNames = zName.split('/').filter(d => d);
         const dbName = directoryNames.pop();
 
         // Get the OPFS directory handle.
-        let dirHandle = await this.#getRoot();
+        let dirHandle = await this.options.getRoot();
         const create = !!(flags & VFS.SQLITE_OPEN_CREATE);
         for (const directoryName of directoryNames) {
           dirHandle = await dirHandle.getDirectoryHandle(directoryName, { create });
@@ -995,7 +992,7 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
       // Create the write-ahead manager.
       // WriteAhead uses the name only to name its locks and its channel.
       const writeAhead = new WriteAhead(
-        `${this.#lockPrefix}${zName}`, accessHandle, waHandles);
+        `${this.options.prefix}${zName}`, accessHandle, waHandles);
       await writeAhead.ready();
 
       file.retryResult = { accessHandle, waHandles, writeAhead };

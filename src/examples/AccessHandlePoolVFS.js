@@ -59,7 +59,9 @@ export class AccessHandlePoolVFS extends FacadeVFS {
 
   #mapIdToFile = new Map();
 
-  /** @type {() => Promise<FileSystemDirectoryHandle>} */ #getRoot;
+  /** @type {AccessHandlePoolOptions} */ options = {
+    getRoot: () => navigator.storage.getDirectory(),
+  };
 
   /**
    * @param {string} name
@@ -80,7 +82,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   constructor(name, module, options = {}) {
     super(name, module);
     this.#directoryPath = name;
-    this.#getRoot = options.getRoot ?? (() => navigator.storage.getDirectory());
+    Object.assign(this.options, options);
   }
 
   /**
@@ -243,7 +245,7 @@ export class AccessHandlePoolVFS extends FacadeVFS {
   async isReady() {
     if (!this.#directoryHandle) {
       // All files are stored in a single directory.
-      let handle = await this.#getRoot();
+      let handle = await this.options.getRoot();
       for (const d of this.#directoryPath.split('/')) {
         if (d) {
           handle = await handle.getDirectoryHandle(d, { create: true });

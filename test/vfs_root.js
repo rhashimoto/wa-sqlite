@@ -6,7 +6,7 @@ const WAIT_MS = 3_000;
 
 /**
  * A VFS given the getRoot option keeps its files under that directory, and
- * with the lockPrefix option shares no locks or messages with a file of the
+ * with the prefix option shares no locks or messages with a file of the
  * same name under the default root.
  * @param {{ config: string }} params VFS class name
  */
