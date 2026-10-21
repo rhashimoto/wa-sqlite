@@ -62,7 +62,7 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   }
 
   close() {
-    this.#idb.close();
+    return this.#idb.close();
   }
   
   async isReady() {
@@ -632,6 +632,7 @@ export class IDBContext {
   /** @type {Promise<any>} */ #txComplete = Promise.resolve();
   /** @type {IDBRequest?} */ #request = null;
   /** @type {WeakSet<IDBTransaction>} */ #txPending = new WeakSet();
+  /** @type {Set<Promise<void>>} */ #txSettled = new Set();
   
   log = null;
 
@@ -699,8 +700,13 @@ export class IDBContext {
     this.#database = database;
   }
 
-  close() {
+  async close() {
+    // Let queued calls make their requests, then wait for every
+    // transaction to finish. sync() does not wait for the last commit
+    // unless durable, and reset() forgets it.
+    await this.#chain?.catch(() => {});
     this.#database.close();
+    await Promise.all(this.#txSettled);
   }
 
   /**
@@ -761,6 +767,11 @@ export class IDBContext {
         tx = this.#database.transaction(this.#database.objectStoreNames, mode, options);
         this.log?.('IDBTransaction open', mode);
         this.#txPending.add(tx);
+        const settled = new Promise(resolve => {
+          tx.addEventListener('complete', resolve);
+          tx.addEventListener('abort', resolve);
+        }).then(() => { this.#txSettled.delete(settled); });
+        this.#txSettled.add(settled);
         this.#txComplete = new Promise((resolve, reject) => {
           tx.addEventListener('complete', () => {
             this.log?.('IDBTransaction complete');
