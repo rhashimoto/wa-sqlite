@@ -75,5 +75,34 @@ export function vfs_commit_survives({ build }) {
       });
       expect(counted.ok ? counted.n : counted.error).toBe(2000);
     });
+
+    it('should keep a commit made before the VFS closes', async function() {
+      const name = 'closed.db';
+      // This worker is left running, so the table it creates stays committed.
+      const setup = connect();
+      expect((await setup.send({
+        type: 'write', name, sql: 'CREATE TABLE t(x)', holdMs: 0
+      })).ok).toBeTrue();
+
+      // With synchronous=normal, closing the database does not wait for its
+      // last IndexedDB transaction to commit; closing the VFS must.
+      const ROUNDS = 10;
+      for (let i = 0; i < ROUNDS; ++i) {
+        const writer = connect();
+        const written = await writer.send({
+          type: 'write-close',
+          name,
+          sql: `PRAGMA synchronous=normal; INSERT INTO t VALUES (${i})`
+        });
+        expect(written.ok).toBeTrue();
+        writer.worker.terminate();
+      }
+
+      const reader = connect();
+      const counted = await reader.send({
+        type: 'count', name, sql: 'SELECT count(*) FROM t'
+      });
+      expect(counted.ok ? counted.n : counted.error).toBe(ROUNDS);
+    });
   });
 }

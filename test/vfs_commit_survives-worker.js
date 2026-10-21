@@ -17,12 +17,12 @@ const ready = (async () => {
     idbName: searchParams.get('idbName')
   });
   sqlite3.vfs_register(vfs, true);
-  return sqlite3;
+  return { sqlite3, vfs };
 })();
 
 addEventListener('message', async ({ data }) => {
   try {
-    const sqlite3 = await ready;
+    const { sqlite3, vfs } = await ready;
     const db = await sqlite3.open_v2(data.name);
     switch (data.type) {
       case 'write':
@@ -31,6 +31,13 @@ addEventListener('message', async ({ data }) => {
         // Keep this thread busy, so nothing more of this context runs before
         // the page terminates it.
         for (const end = performance.now() + data.holdMs; performance.now() < end;);
+        break;
+      case 'write-close':
+        // Close the database and the VFS before answering.
+        await sqlite3.exec(db, data.sql);
+        await sqlite3.close(db);
+        await vfs.close();
+        postMessage({ ok: true });
         break;
       case 'count': {
         let n = null;
