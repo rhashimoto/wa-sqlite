@@ -16,6 +16,22 @@ const RETRYABLE_ERRORS = new Set([
  * @property {number} [pendingVersion]
  */
 
+/**
+ * @typedef IDBBatchAtomicOptions
+ * @property {string} [idbName] The name of the IndexedDB database. By
+ * default the name of the VFS.
+ * @property {'exclusive'|'shared'|'shared+hint'} [lockPolicy]
+ * @property {number} [lockTimeout]
+ * @property {() => IDBFactory|Promise<IDBFactory>} [getIDBFactory] Returns
+ * the IDBFactory the VFS opens its database with, for instance the indexedDB
+ * of a Storage Bucket. By default the global indexedDB.
+ * @property {string} [prefix] Put in front of the names of the Web Locks
+ * the VFS derives from its file names. Set it when a database of the same
+ * name can exist in another IDBFactory of this origin, so the two do not
+ * share them, and use the same prefix for every VFS instance on one
+ * IDBFactory. By default empty, which keeps the names as they were.
+ */
+
 class File {
   /** @type {string} */ path;
   /** @type {number} */ flags;
@@ -46,19 +62,35 @@ export class IDBBatchAtomicVFS extends WebLocksMixin(FacadeVFS) {
   /** @type {Promise} */ #isReady;
   /** @type {IDBContext} */ #idb;
 
+  /** @type {IDBBatchAtomicOptions} */ options = {
+    getIDBFactory: () => indexedDB,
+    prefix: '',
+  };
+
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {IDBBatchAtomicOptions} [options]
+   */
   static async create(name, module, options) {
     const vfs = new IDBBatchAtomicVFS(name, module, options);
     await vfs.isReady();
     return vfs;
   }
 
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {IDBBatchAtomicOptions} [options]
+   */
   constructor(name, module, options = {}) {
     super(name, module, options);
-    this.#isReady = this.#initialize(options.idbName ?? name);
+    Object.assign(this.options, options);
+    this.#isReady = this.#initialize(this.options.idbName ?? name);
   }
 
   async #initialize(name) {
-    this.#idb = await IDBContext.create(name);
+    this.#idb = await IDBContext.create(await this.options.getIDBFactory(), name);
   }
 
   close() {
@@ -635,9 +667,13 @@ export class IDBContext {
   
   log = null;
 
-  static async create(name) {
+  /**
+   * @param {IDBFactory} factory
+   * @param {string} name
+   */
+  static async create(factory, name) {
     const database = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(name, 6);
+      const request = factory.open(name, 6);
       request.onupgradeneeded = async event => {
         const db = request.result;
         if (event.oldVersion) {

@@ -28,7 +28,10 @@ const POLICIES = ['exclusive', 'shared', 'shared+hint'];
 export const WebLocksMixin = superclass => class extends superclass {
   #options = {
     lockPolicy: 'exclusive',
-    lockTimeout: Infinity
+    lockTimeout: Infinity,
+    // Put in front of the file names in the lock names, so files of the
+    // same name in different storage do not share locks.
+    prefix: ''
   };
 
   /** @type {Map<number, LockState>} */ #mapIdToState = new Map();
@@ -385,7 +388,7 @@ export const WebLocksMixin = superclass => class extends superclass {
         }, this.#options.lockTimeout);
       }
 
-      const lockName = `lock##${lockState.baseName}##${name}`;
+      const lockName = `lock##${this.#options.prefix}${lockState.baseName}##${name}`;
       navigator.locks.request(lockName, options, lock => {
         if (lock) {
           return new Promise(release => {
