@@ -5,6 +5,19 @@ import { WebLocksMixin } from '../WebLocksMixin.js';
 
 const LOCK_NOTIFY_INTERVAL = 1000;
 
+// A connection terminated mid-call releases its Web Lock at once and its
+// access handle only later: from a few ms to about a second, depending on
+// the engine, the platform and what the worker was doing. The next lock
+// holder sees the file as held meanwhile, so creating its handle is
+// retried, within this bound.
+const HELD_RETRY_TIMEOUT = 5000;
+const HELD_RETRY_INTERVAL = 10;
+
+// What createSyncAccessHandle() throws on a file another handle holds:
+// NoModificationAllowedError in Chromium and Firefox, InvalidStateError in
+// WebKit.
+const HELD_ERRORS = new Set(['NoModificationAllowedError', 'InvalidStateError']);
+
 const hasUnsafeAccessHandle =
   globalThis.FileSystemSyncAccessHandle?.prototype.hasOwnProperty('mode');
 
@@ -359,8 +372,30 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
           });
         });
 
-        // The access handle should now be available.
-        file.accessHandle = await file.fileHandle.createSyncAccessHandle();
+        // The access handle should now be available, unless the previous
+        // holder let go of the lock before its handle.
+        try {
+          const deadline = performance.now() + HELD_RETRY_TIMEOUT;
+          while (true) {
+            try {
+              file.accessHandle = await file.fileHandle.createSyncAccessHandle();
+              break;
+            } catch (e) {
+              if (!HELD_ERRORS.has(e?.name) || performance.now() >= deadline) throw e;
+              this.log?.('access handle held, retrying');
+              await new Promise(resolve => setTimeout(resolve, HELD_RETRY_INTERVAL));
+            }
+          }
+        } catch (e) {
+          // Give the lock back rather than keep it with no handle, which
+          // would leave every other connection waiting on it.
+          this.lastError = e;
+          file.handleRequestChannel.onmessage = null;
+          file.handleLockReleaser();
+          file.handleLockReleaser = null;
+          file.isFileLocked = false;
+          return VFS.SQLITE_IOERR_LOCK;
+        }
         this.log?.('access handle acquired');
       }
 
