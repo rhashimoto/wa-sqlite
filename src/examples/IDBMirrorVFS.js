@@ -17,6 +17,19 @@ const contextId = Math.random().toString(36).slice(2);
  * @property {number} [fileSize]
  */
 
+/**
+ * @typedef IDBMirrorOptions
+ * @property {() => IDBFactory|Promise<IDBFactory>} [getIDBFactory] Returns
+ * the IDBFactory the VFS opens its database with, for instance the indexedDB
+ * of a Storage Bucket. By default the global indexedDB.
+ * @property {string} [prefix] Put in front of the names of the Web Locks
+ * and BroadcastChannels the VFS derives from its file names. Set it when a
+ * database of the same name can exist in another IDBFactory of this origin,
+ * so the two do not share them, and use the same prefix for every VFS
+ * instance on one IDBFactory. By default empty, which keeps the names as
+ * they were.
+ */
+
 class File {
   /** @type {string} */ path;
   /** @type {number} */ flags;
@@ -45,7 +58,12 @@ class File {
 
   /** @type {string} */ synchronous;
 
-  constructor(pathname, flags) {
+  /**
+   * @param {string} pathname
+   * @param {number} flags
+   * @param {string} prefix put in front of the pathname in the channel name
+   */
+  constructor(pathname, flags, prefix) {
     this.path = pathname;
     this.flags = flags;
 
@@ -54,7 +72,7 @@ class File {
     if (flags & VFS.SQLITE_OPEN_MAIN_DB) {
       this.viewTx = null;
       this.viewReleaser = null;
-      this.broadcastChannel = new BroadcastChannel('mirror:' + pathname);
+      this.broadcastChannel = new BroadcastChannel(`mirror:${prefix}${pathname}`);
       this.broadcastReceived = [];
       this.commitsInFlight = new Set();
       this.lockState = VFS.SQLITE_LOCK_NONE;
@@ -80,21 +98,38 @@ export class IDBMirrorVFS extends FacadeVFS {
 
   /** @type {Promise} */ #isReady;
 
+  /** @type {IDBMirrorOptions} */ options = {
+    getIDBFactory: () => indexedDB,
+    prefix: '',
+  };
+
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {IDBMirrorOptions} [options]
+   */
   static async create(name, module, options) {
     const instance = new IDBMirrorVFS(name, module, options);
     await instance.isReady();
     return instance;
   }
 
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {IDBMirrorOptions} [options]
+   */
   constructor(name, module, options = {}) {
     super(name, module);
+    Object.assign(this.options, options);
     this.#isReady = this.#initialize(name);
   }
 
   async #initialize(name) {
     // Open IndexedDB database, creating it if necessary.
+    const factory = await this.options.getIDBFactory();
     this.#idb = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(name, 1);
+      const request = factory.open(name, 1);
       request.onupgradeneeded = (event) => {
         const db = request.result;
         switch (event.oldVersion) {
@@ -133,7 +168,7 @@ export class IDBMirrorVFS extends FacadeVFS {
       let file;
       if (flags & VFS.SQLITE_OPEN_MAIN_DB) {
         // TODO
-        file = new File(path, flags);
+        file = new File(path, flags, this.options.prefix);
 
         const idbTx = this.#idb.transaction(['blocks', 'tx'], 'readwrite');
         const blocks = idbTx.objectStore('blocks');
@@ -165,7 +200,7 @@ export class IDBMirrorVFS extends FacadeVFS {
         file = this.#mapPathToFile.get(path);
         if (!file) {
           if (flags & VFS.SQLITE_OPEN_CREATE) {
-            file = new File(path, flags);
+            file = new File(path, flags, this.options.prefix);
             file.blocks.set(0, new Uint8Array(0));
           } else {
             throw new Error('File not found');
@@ -866,7 +901,7 @@ export class IDBMirrorVFS extends FacadeVFS {
     const locks = await navigator.locks.query();
     for (const { name } of locks.held) {
       const m = TX_LOCK_REGEX.exec(name);
-      if (m && m[1] === file.path) {
+      if (m && m[1] === this.options.prefix + file.path) {
         oldestTxId = Math.min(oldestTxId, Number(m[2]));
       }
     }
@@ -882,7 +917,7 @@ export class IDBMirrorVFS extends FacadeVFS {
    */
   #lock(file, name, options = {}) {
     return new Promise(resolve => {
-      const lockName = `${file.path}@@${name}`;
+      const lockName = `${this.options.prefix}${file.path}@@${name}`;
       navigator.locks.request(lockName, options, lock => {
         if (lock) {
           return new Promise(release => {
@@ -947,7 +982,7 @@ export class IDBMirrorVFS extends FacadeVFS {
     // the transaction id. As long as we hold the lock, no other connection
     // will overwrite data we are using.
     file.viewTx = tx;
-    const lockName = `${file.path}@@[${tx.txId}]`;
+    const lockName = `${this.options.prefix}${file.path}@@[${tx.txId}]`;
     const newReleaser = await new Promise(resolve => {
       navigator.locks.request(lockName, SHARED, lock => {
         return new Promise(release => {
