@@ -767,16 +767,36 @@ export function Factory(Module) {
     })();
   };
 
-  sqlite3.step = (function() {
+  sqlite3.step = function(stmt) {
+    // Always a Promise, without awaiting the one step_asap() may return.
+    try {
+      return Promise.resolve(sqlite3.step_asap(stmt));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  };
+
+  sqlite3.step_asap = (function() {
     const fname = 'sqlite3_step';
-    const f = Module.cwrap(fname, ...decl('n:n'), { async });
-    return async function(stmt) {
+    // A build that cannot suspend (no handleAsync) calls the export
+    // directly. The others use ccall without the async option, which
+    // returns a Promise only when the call did not complete synchronously
+    // (always with JSPI); passing options keeps cwrap from returning the
+    // bare export, which on the Asyncify build cannot tell that the call
+    // unwound.
+    const f = Module.handleAsync ?
+      Module.cwrap(fname, ...decl('n:n'), {}) :
+      Module.cwrap(fname, ...decl('n:n'));
+    const allowed = [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE];
+    const done = (rc, stmt) => {
+      if (rc === SQLite.SQLITE_ROW || rc === SQLite.SQLITE_DONE) return rc;
+      return check(fname, rc, mapStmtToDB.get(stmt), allowed);
+    };
+    return function(stmt) {
       verifyStatement(stmt);
 
       // Allow retry operations.
-      const rc = await retry(() => f(stmt));
-
-      return check(fname, rc, mapStmtToDB.get(stmt), [SQLite.SQLITE_ROW, SQLite.SQLITE_DONE]);
+      return retry(f, stmt, done);
     };
   })();
 
@@ -909,36 +929,39 @@ export function Factory(Module) {
 
   // This function is used to automatically retry failed calls that
   // have pending retry operations that should allow the retry to
-  // succeed.
-  async function retry(f) {
-    let rc;
-    for (let retryCount = 0; retryCount < 2; ++retryCount) {
-      // Wait for all pending retry operations to complete. This is
-      // normally empty on the first loop iteration.
-      if (Module.retryOps.length) {
-        try { 
-          await Promise.all(Module.retryOps);
-        } finally {
-          Module.retryOps = [];
-        }
-      }
-      
-      rc = await f();
-      if (rc === SQLite.SQLITE_OK || Module.retryOps.length === 0) {
-        if (Module.pendingOps.length) {
-          try {
-            await Promise.all(Module.pendingOps);
-          } catch (e) {
+  // succeed. The final result of f(arg) is passed to done(rc, arg),
+  // whose return value is returned directly when f returned a number
+  // and left nothing pending, otherwise through a Promise.
+  function retry(f, arg, done = rc => rc, retryCount = 0) {
+    // Wait for all pending retry operations to complete. This is
+    // normally empty on the first attempt.
+    if (Module.retryOps.length) {
+      return Promise.all(Module.retryOps)
+        .finally(() => { Module.retryOps = []; })
+        .then(() => retry(f, arg, done, retryCount));
+    }
+
+    // Never assume the call was synchronous; look at what it returned.
+    const rc = f(arg);
+    return typeof rc === 'number' ?
+      retryResult(f, arg, done, retryCount, rc) :
+      rc.then(rc => retryResult(f, arg, done, retryCount, rc));
+  }
+
+  function retryResult(f, arg, done, retryCount, rc) {
+    if (rc === SQLite.SQLITE_OK || Module.retryOps.length === 0) {
+      if (Module.pendingOps.length) {
+        return Promise.all(Module.pendingOps)
+          .then(() => rc, e => {
             console.error('Error in pendingOps:', e);
             return e.code || SQLite.SQLITE_ERROR;
-          } finally {
-            Module.pendingOps = [];
-          }
-        }
-        return rc;
+          })
+          .finally(() => { Module.pendingOps = []; })
+          .then(rc => done(rc, arg));
       }
+      return done(rc, arg);
     }
-    return rc;
+    return retryCount === 0 ? retry(f, arg, done, 1) : done(rc, arg);
   }
 
   return sqlite3;
