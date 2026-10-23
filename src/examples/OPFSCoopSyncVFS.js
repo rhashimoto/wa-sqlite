@@ -5,6 +5,19 @@ import * as VFS from '../VFS.js';
 const DEFAULT_TEMPORARY_FILES = 10;
 const LOCK_NOTIFY_INTERVAL = 1000;
 
+// A connection terminated mid-call releases its Web Lock at once and its
+// access handles only later: from a few ms to about a second, depending on
+// the engine, the platform and what the worker was doing. The next lock
+// holder sees the file as held meanwhile, so creating its handles is
+// retried, within this bound.
+const HELD_RETRY_TIMEOUT = 5000;
+const HELD_RETRY_INTERVAL = 10;
+
+// What createSyncAccessHandle() throws on a file another handle holds:
+// NoModificationAllowedError in Chromium and Firefox, InvalidStateError in
+// WebKit.
+const HELD_ERRORS = new Set(['NoModificationAllowedError', 'InvalidStateError']);
+
 const DB_RELATED_FILE_SUFFIXES = ['', '-journal', '-wal'];
 
 const finalizationRegistry = new FinalizationRegistry(releaser => releaser());
@@ -586,16 +599,35 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
           // will close, leaking one access handle per attempt - which makes
           // every later open of the same database fail on a sidecar file it
           // holds itself.
-          const results = await Promise.allSettled(
-            DB_RELATED_FILE_SUFFIXES.map(async suffix => {
-              const persistentFile = this.persistentFiles.get(file.path + suffix);
-              if (persistentFile) {
-                persistentFile.accessHandle =
-                  await persistentFile.fileHandle.createSyncAccessHandle();
-              }
-            }));
-          const failure = results.find(result => result.status === 'rejected');
-          if (failure) throw failure.reason;
+          const deadline = performance.now() + HELD_RETRY_TIMEOUT;
+          while (true) {
+            const onError = [];
+            const results = await Promise.allSettled(
+              DB_RELATED_FILE_SUFFIXES.map(async suffix => {
+                const persistentFile = this.persistentFiles.get(file.path + suffix);
+                if (persistentFile) {
+                  persistentFile.accessHandle =
+                    await persistentFile.fileHandle.createSyncAccessHandle();
+                  onError.push(() => {
+                    persistentFile.accessHandle.close();
+                    persistentFile.accessHandle = null;
+                  });
+                }
+              }));
+            const failure = results.find(
+              /** @type {(result: PromiseSettledResult<void>) => result is PromiseRejectedResult} */
+              (result => result.status === 'rejected'));
+            if (!failure) break;
+            if (!HELD_ERRORS.has(failure.reason?.name) || performance.now() >= deadline) {
+              throw failure.reason;
+            }
+
+            // Still held by a connection that let go of the lock. Close what
+            // this attempt did get, keep the lock, and try again.
+            this.log?.(`access handles held for ${file.path}, retrying`);
+            for (const f of onError) f();
+            await new Promise(resolve => setTimeout(resolve, HELD_RETRY_INTERVAL));
+          }
         } catch (e) {
           this.log?.(`failed to create access handles for ${file.path}`, e);
           // Close any of the potentially opened access handles
