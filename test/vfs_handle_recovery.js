@@ -3,8 +3,11 @@ const HOLDER_SRC = `
   self.onmessage = async ({ data }) => {
     if (data.type === 'take') {
       try {
-        const root = await navigator.storage.getDirectory();
-        const file = await root.getFileHandle(data.name, { create: true });
+        let directory = await navigator.storage.getDirectory();
+        if (data.directory) {
+          directory = await directory.getDirectoryHandle(data.directory, { create: true });
+        }
+        const file = await directory.getFileHandle(data.name, { create: true });
         handle = await file.createSyncAccessHandle();
         self.postMessage({ ok: true });
       } catch (e) {
@@ -20,7 +23,8 @@ const HOLDER_SRC = `
 
 /**
  * Holds an exclusive access handle on a file, in a worker of its own:
- * createSyncAccessHandle is not available on the main thread.
+ * createSyncAccessHandle is not available on the main thread. The file is
+ * at the root, or in the named directory below it.
  */
 export function createHolder() {
   const url = URL.createObjectURL(
@@ -34,8 +38,8 @@ export function createHolder() {
     }, { once: true });
   });
   return {
-    take(name) {
-      worker.postMessage({ type: 'take', name });
+    take(name, directory) {
+      worker.postMessage({ type: 'take', name, directory });
       return next();
     },
     release() {
