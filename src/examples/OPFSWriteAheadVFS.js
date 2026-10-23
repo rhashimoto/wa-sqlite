@@ -37,6 +37,17 @@ const finalizationRegistry = new FinalizationRegistry((/** @type {() => void} */
  * @property {number} [nTmpFiles]
  * @property {number} [autoCheckpoint]
  * @property {number} [backstopInterval]
+ * @property {() => Promise<FileSystemDirectoryHandle>} [getRoot] Returns the
+ * directory the VFS keeps its files in. It is called each time the VFS needs
+ * the directory. By default the root of the origin private file system,
+ * navigator.storage.getDirectory().
+ * @property {string} [prefix] Put in front of the names of the Web Locks
+ * and BroadcastChannels the VFS derives from its file names. Set it when a
+ * file of the same name can exist under another root of this origin, so the
+ * two do not share them, and use the same prefix for every VFS instance on
+ * one root. A file under the default root whose name starts with the prefix
+ * still shares names with the other root. By default empty, which keeps the
+ * names as they were.
  */
 
 export class OPFSWriteAheadVFS extends FacadeVFS {
@@ -49,23 +60,36 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
   /** @type {Map<string, FileSystemSyncAccessHandle>} */ boundTempFiles = new Map();
   /** @type {Set<FileSystemSyncAccessHandle>} */ unboundTempFiles = new Set();
   /** @type {OPFSWriteAheadOptions} */ options = {
-    nTmpFiles: DEFAULT_TEMP_FILES
+    nTmpFiles: DEFAULT_TEMP_FILES,
+    getRoot: () => navigator.storage.getDirectory(),
+    prefix: '',
   };
 
   _ready;
 
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {OPFSWriteAheadOptions} [options]
+   */
   static async create(name, module, options) {
-    const vfs = new OPFSWriteAheadVFS(name, module);
-    Object.assign(vfs.options, options);
+    const vfs = new OPFSWriteAheadVFS(name, module, options);
     await vfs.isReady();
     return vfs;
   }
 
-  constructor(name, module) {
+  /**
+   * @param {string} name
+   * @param {*} module
+   * @param {OPFSWriteAheadOptions} [options]
+   */
+  constructor(name, module, options = {}) {
     super(name, module);
+    // Applied before the directory is requested, which happens below.
+    Object.assign(this.options, options);
     this._ready = (async () => {
       // Ensure the library files root directory exists.
-      let dirHandle = await navigator.storage.getDirectory();
+      let dirHandle = await this.options.getRoot();
       dirHandle = await dirHandle.getDirectoryHandle(LIBRARY_FILES_ROOT, { create: true });
 
       // Clean up any stale session directories.
@@ -157,8 +181,8 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
 
         file.lockState = VFS.SQLITE_LOCK_NONE;
         file.lockingMode = 'normal';
-        file.readLock = new LazyLock(`${zName}#read`);
-        file.writeLock = new LazyLock(`${zName}#write`);
+        file.readLock = new LazyLock(`${this.options.prefix}${zName}#read`);
+        file.writeLock = new LazyLock(`${this.options.prefix}${zName}#write`);
         file.useLazyLock = 'readwrite';
         file.timeout = -1;
         file.synchronous = 1; // NORMAL
@@ -903,13 +927,13 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
     const file = this.mapPathToFile.get(zName);
     try {
       const { accessHandle, waHandles } =
-        await navigator.locks.request(`${zName}#open`, async lock => {
+        await navigator.locks.request(`${this.options.prefix}${zName}#open`, async lock => {
         // Parse the path components.
         const directoryNames = zName.split('/').filter(d => d);
         const dbName = directoryNames.pop();
 
         // Get the OPFS directory handle.
-        let dirHandle = await navigator.storage.getDirectory();
+        let dirHandle = await this.options.getRoot();
         const create = !!(flags & VFS.SQLITE_OPEN_CREATE);
         for (const directoryName of directoryNames) {
           dirHandle = await dirHandle.getDirectoryHandle(directoryName, { create });
@@ -966,7 +990,9 @@ export class OPFSWriteAheadVFS extends FacadeVFS {
       });
 
       // Create the write-ahead manager.
-      const writeAhead = new WriteAhead(zName, accessHandle, waHandles);
+      // WriteAhead uses the name only to name its locks and its channel.
+      const writeAhead = new WriteAhead(
+        `${this.options.prefix}${zName}`, accessHandle, waHandles);
       await writeAhead.ready();
 
       file.retryResult = { accessHandle, waHandles, writeAhead };
