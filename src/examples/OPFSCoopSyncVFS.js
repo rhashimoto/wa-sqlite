@@ -568,15 +568,22 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
           // holds itself.
           const deadline = performance.now() + HELD_RETRY_TIMEOUT;
           while (true) {
+            const onError = [];
             const results = await Promise.allSettled(
               DB_RELATED_FILE_SUFFIXES.map(async suffix => {
                 const persistentFile = this.persistentFiles.get(file.path + suffix);
                 if (persistentFile) {
                   persistentFile.accessHandle =
                     await persistentFile.fileHandle.createSyncAccessHandle();
+                  onError.push(() => {
+                    persistentFile.accessHandle.close();
+                    persistentFile.accessHandle = null;
+                  });
                 }
               }));
-            const failure = results.find(result => result.status === 'rejected');
+            const failure = results.find(
+              /** @type {(result: PromiseSettledResult<void>) => result is PromiseRejectedResult} */
+              (result => result.status === 'rejected'));
             if (!failure) break;
             if (!HELD_ERRORS.has(failure.reason?.name) || performance.now() >= deadline) {
               throw failure.reason;
@@ -585,11 +592,7 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
             // Still held by a connection that let go of the lock. Close what
             // this attempt did get, keep the lock, and try again.
             this.log?.(`access handles held for ${file.path}, retrying`);
-            for (const suffix of DB_RELATED_FILE_SUFFIXES) {
-              const persistentFile = this.persistentFiles.get(file.path + suffix);
-              persistentFile?.accessHandle?.close();
-              if (persistentFile) persistentFile.accessHandle = null;
-            }
+            for (const f of onError) f();
             await new Promise(resolve => setTimeout(resolve, HELD_RETRY_INTERVAL));
           }
         } catch (e) {
