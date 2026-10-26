@@ -273,3 +273,8 @@ export const SQLITE_LIMIT_WORKER_THREADS      = 11;
 export const SQLITE_PREPARE_PERSISTENT = 0x01;
 export const SQLITE_PREPARE_NORMALIZED = 0x02;
 export const SQLITE_PREPARE_NO_VTAB = 0x04;
+
+export const SQLITE_TRACE_STMT = 0x01;
+export const SQLITE_TRACE_PROFILE = 0x02;
+export const SQLITE_TRACE_ROW = 0x04;
+export const SQLITE_TRACE_CLOSE = 0x08;

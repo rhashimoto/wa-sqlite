@@ -22,6 +22,7 @@ DECLARE(void, vppp, P, P, P);
 DECLARE(I, ipppj, P, P, P, J);
 DECLARE(I, ipppi, P, P, P, I);
 DECLARE(I, ipppp, P, P, P, P);
+DECLARE(I, ippipp, P, P, I, P, P);
 DECLARE(I, ipppip, P, P, P, I, P);
 DECLARE(void, vpppip, P, P, P, I, P);
 DECLARE(I, ippppi, P, P, P, P, I);
