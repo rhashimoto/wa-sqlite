@@ -38,6 +38,17 @@ const adapters = {
       null;
     Module['handleAsync'] = handleAsync;
 
+    // Expose which asynchronous build this is, if any. A JSPI export
+    // already returns a Promise when it suspends, so library code can call
+    // it directly, where Asyncify needs ccall.
+#if ASYNCIFY == 2
+    Module['asyncMode'] = 'jspi';
+#elif ASYNCIFY
+    Module['asyncMode'] = 'asyncify';
+#else
+    Module['asyncMode'] = null;
+#endif
+
     // This map contains the objects to which calls will be relayed, e.g.
     // a VFS. The key is typically the corresponding WebAssembly pointer.
     const targets = new Map();

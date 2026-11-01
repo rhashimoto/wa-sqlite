@@ -764,6 +764,31 @@ declare interface SQLiteAPI {
    */
   step(stmt: number): Promise<number>;
 
+  /**
+   * Evaluate an SQL statement, As Synchronous As Possible
+   *
+   * Like {@link step}, but returns the result directly when the call
+   * completed synchronously, and a Promise only when it did not (e.g.
+   * the build supports JSPI, or a retry or pending operation had to
+   * be awaited). Which one comes back is decided on each call. This
+   * spares a Promise per row where no operation suspends.
+   *
+   * Using `step_asap()` to await only when necessary might look like this:
+   * ```javascript
+   * while (true) {
+   *   let rc = sqlite3.step_asap(stmt);
+   *   if (typeof rc !== 'number') rc = await rc;
+   *   if (rc !== SQLite.SQLITE_ROW) break;
+   *   // Collect row data here.
+   * }
+   * ```
+   * @see https://www.sqlite.org/c3ref/step.html
+   * @param stmt prepared statement pointer
+   * @returns `SQLITE_ROW` or `SQLITE_DONE` either directly or
+   * by Promise (throws or rejects on error)
+   */
+  step_asap(stmt: number): number | Promise<number>;
+
    /**
    * Register an update hook
    *
