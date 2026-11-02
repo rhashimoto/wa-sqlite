@@ -142,7 +142,11 @@ maybeReset().then(async () => {
       const results = [];
       for await (const stmt of sqlite3.statements(db, query)) {
         const rows = [];
-        while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+        while (true) {
+          let rc = sqlite3.step_asap(stmt);
+          if (typeof rc !== 'number') rc = await rc;
+          if (rc !== SQLite.SQLITE_ROW) break;
+
           const row = sqlite3.row(stmt);
           rows.push(row);
         }
