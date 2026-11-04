@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import * as SQLite from '../src/sqlite-api.js';
+import { createHolder } from './vfs_handle_recovery.js';
 
 const ITERATIONS = 100;
 const ATTEMPTS = 10;
@@ -158,6 +159,37 @@ export function vfs_handover(context, { build, config }) {
       }
 
       expect(failures).toEqual([]);
+    });
+
+    it('should tolerate temporary directories whose files are still open', async function() {
+      // A worker that goes away without closing its access handles - one
+      // whose page the back/forward cache evicts, for instance - can have
+      // its lock released before its handles are closed. Its directory then
+      // looks unused, and deleting it fails while the handles stay open.
+      const root = await navigator.storage.getDirectory();
+      const directory = `.ahp-held-${Math.random().toString(36).slice(2)}`;
+      cleanup.push(() => root.removeEntry(directory, { recursive: true }).catch(() => {}));
+
+      const holder = createHolder();
+      cleanup.push(() => holder.dispose());
+      const taken = await holder.take('0.tmp', directory);
+      if (!taken.ok) {
+        pending(`cannot hold an exclusive handle: ${taken.error}`);
+        return;
+      }
+
+      const started = await startInstance(build, config).then(
+        ({ worker }) => {
+          worker.terminate();
+          return 'started';
+        },
+        e => `${e.name}: ${e.message}`);
+      expect(started).toBe('started');
+
+      // Once its files are closed, the next instance deletes the directory.
+      await holder.release();
+      (await startInstance(build, config)).worker.terminate();
+      await expectAsync(root.getDirectoryHandle(directory)).toBeRejected();
     });
   });
 }
