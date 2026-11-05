@@ -571,11 +571,6 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
     persistentFile.handleRequestChannel =
       new BroadcastChannel(`ahp:${this.options.prefix}${path}`);
     this.persistentFiles.set(path, persistentFile);
-
-    const f = await fileHandle.getFile();
-    if (f.size) {
-      this.accessiblePaths.add(path);
-    }
     return persistentFile;
   }
 
@@ -627,6 +622,20 @@ export class OPFSCoopSyncVFS extends FacadeVFS {
             this.log?.(`access handles held for ${file.path}, retrying`);
             for (const f of onError) f();
             await new Promise(resolve => setTimeout(resolve, HELD_RETRY_INTERVAL));
+          }
+
+          // Record which of the files have content. This is how the first
+          // open learns which files exist, and it is repeated each time the
+          // handles are taken, because whoever held the files in between may
+          // have left one that was empty before: a connection terminated in
+          // a transaction leaves its rollback journal. Without this, xAccess
+          // goes on reporting no journal, and SQLite reads the unfinished
+          // transaction instead of rolling it back.
+          for (const suffix of DB_RELATED_FILE_SUFFIXES) {
+            const path = file.path + suffix;
+            if (this.persistentFiles.get(path)?.accessHandle.getSize()) {
+              this.accessiblePaths.add(path);
+            }
           }
         } catch (e) {
           this.log?.(`failed to create access handles for ${file.path}`, e);
