@@ -8,6 +8,7 @@ import { vfs_xWrite } from "./vfs_xWrite.js";
 import { vfs_open_last_error } from "./vfs_open_last_error.js";
 import { vfs_handle_recovery } from "./vfs_handle_recovery.js";
 import { vfs_handover } from "./vfs_handover.js";
+import { vfs_hot_journal } from "./vfs_hot_journal.js";
 
 const CONFIG = 'OPFSCoopSyncVFS';
 const BUILDS = ['default', 'asyncify', 'jspi'];
@@ -29,6 +30,7 @@ describe(CONFIG, function() {
       vfs_open_last_error(context);
       vfs_handle_recovery(context);
       vfs_handover(context, { build, config: CONFIG });
+      vfs_hot_journal({ build, config: CONFIG });
     });
   }
 });
