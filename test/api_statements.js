@@ -172,6 +172,46 @@ export function api_statements(context) {
       }
     });
 
+    it('should throw on out of range int and int64', async function() {
+      const sql = 'SELECT ?';
+
+      for await (const stmt of i(sqlite3.statements(db, sql))) {
+        // Limits are still accepted.
+        expect(await sqlite3.bind_int(stmt, 1, 0x7fffffff)).toEqual(SQLite.SQLITE_OK);
+        expect(await sqlite3.bind_int(stmt, 1, -0x80000000)).toEqual(SQLite.SQLITE_OK);
+        expect(await sqlite3.bind_int64(stmt, 1, 2n ** 63n - 1n)).toEqual(SQLite.SQLITE_OK);
+        expect(await sqlite3.bind_int64(stmt, 1, -(2n ** 63n))).toEqual(SQLite.SQLITE_OK);
+
+        expect(await rejection(sqlite3.bind_int(stmt, 1, 2 ** 31))).toMatch(/value out of range/);
+        expect(await rejection(sqlite3.bind_int(stmt, 1, -(2 ** 31) - 1))).toMatch(/value out of range/);
+        expect(await rejection(sqlite3.bind_int64(stmt, 1, 2n ** 63n))).toMatch(/value out of range/);
+        expect(await rejection(sqlite3.bind_int64(stmt, 1, -(2n ** 63n) - 1n))).toMatch(/value out of range/);
+
+        // Comlink intercepts the 'bind' property so use an alias.
+        expect(await rejection(sqlite3.bind$(stmt, 1, 2n ** 63n))).toMatch(/value out of range/);
+      }
+    });
+
+    it('should not keep a previous binding when a value is out of range', async function() {
+      await sqlite3.exec(db, 'CREATE TABLE t(k, v)');
+
+      for await (const stmt of i(sqlite3.statements(db, 'INSERT INTO t VALUES (?, ?)'))) {
+        expect(await sqlite3.bind_collection(stmt, [1, 5n])).toEqual(SQLite.SQLITE_OK);
+        expect(await sqlite3.step(stmt)).toEqual(SQLite.SQLITE_DONE);
+        await sqlite3.reset(stmt);
+
+        expect(await rejection(sqlite3.bind_collection(stmt, [2, 2n ** 63n]))).toMatch(/value out of range/);
+      }
+
+      const rows = [];
+      for await (const stmt of i(sqlite3.statements(db, 'SELECT k, v FROM t'))) {
+        while (await sqlite3.step(stmt) === SQLite.SQLITE_ROW) {
+          rows.push(await sqlite3.row(stmt));
+        }
+      }
+      expect(rows).toEqual([[1, 5]]);
+    });
+
     it('should bind null', async function() {
       let rc;
       const sql = 'SELECT ?';
@@ -483,6 +523,16 @@ export function api_statements(context) {
       }
     });
   });
+}
+
+// Returns the message of the error a Promise rejects with, or null.
+async function rejection(p) {
+  try {
+    await p;
+    return null;
+  } catch (e) {
+    return e.message;
+  }
 }
 
 // sqlite3.statements() returns an async iterator, but its Comlink
