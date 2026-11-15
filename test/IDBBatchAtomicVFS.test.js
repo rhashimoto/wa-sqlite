@@ -6,6 +6,8 @@ import { vfs_xRead } from "./vfs_xRead.js";
 import { vfs_xWrite } from "./vfs_xWrite.js";
 import { vfs_sparse_write } from "./vfs_sparse_write.js";
 import { vfs_commit_survives } from "./vfs_commit_survives.js";
+import { vfs_idb_factory } from "./vfs_idb_factory.js";
+import { supportsStorageBuckets } from "./customFactory.js";
 
 import SQLiteESMFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
@@ -87,6 +89,20 @@ describe(CONFIG, function() {
 
     await idbX(indexedDB.deleteDatabase('test'));
   });
+});
+
+describe(`${CONFIG} with a custom factory`, function() {
+  if (supportsStorageBuckets()) {
+    // One build only: where the database goes does not depend on the build.
+    const context = new TestContext({ build: 'asyncify', config: `${CONFIG}-customFactory` });
+
+    vfs_xAccess(context);
+    vfs_xOpen(context);
+    vfs_xClose(context);
+    vfs_xRead(context);
+    vfs_xWrite(context);
+  }
+  vfs_idb_factory({ config: CONFIG });
 });
 
 /**

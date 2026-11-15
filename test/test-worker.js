@@ -3,6 +3,7 @@
 import * as Comlink from 'comlink';
 import * as SQLite from '../src/sqlite-api.js';
 import { customRootOptions, TEST_ROOT_DIRECTORY } from "./customRoot.js";
+import { customFactoryOptions, TEST_BUCKET } from "./customFactory.js";
 
 const BUILDS = new Map([
   ['default', '../dist/wa-sqlite.mjs'],
@@ -15,6 +16,10 @@ const MODULE = Symbol('module');
 // The "-customRoot" configurations keep their files in a directory of the
 // origin private file system instead of its root.
 const CUSTOM_ROOT_OPTIONS = Symbol('custom root options');
+
+// The "-customFactory" configurations keep their IndexedDB databases in a
+// Storage Bucket instead of the default one.
+const CUSTOM_FACTORY_OPTIONS = Symbol('custom factory options');
 const VFS_CONFIGS = new Map([
   {
     name: 'default',
@@ -65,6 +70,11 @@ const VFS_CONFIGS = new Map([
     vfsModule: `../src/examples/${className}.js`,
     vfsArgs: ['demo', MODULE, CUSTOM_ROOT_OPTIONS],
   })),
+  ...['IDBBatchAtomicVFS', 'IDBMirrorVFS'].map(className => ({
+    name: `${className}-customFactory`,
+    vfsModule: `../src/examples/${className}.js`,
+    vfsArgs: ['demo', MODULE, CUSTOM_FACTORY_OPTIONS],
+  })),
 ].map(config => [config.name, config]));
 
 const INDEXEDDB_DBNAMES = ['demo'];
@@ -88,7 +98,8 @@ maybeReset().then(async () => {
       const className = config.vfsClass ?? config.vfsModule.match(/([^/]+)\.js$/)[1];
       const vfsArgs = (config.vfsArgs ?? ['demo', MODULE])
         .map(arg => arg === MODULE ? module : arg)
-        .map(arg => arg === CUSTOM_ROOT_OPTIONS ? customRootOptions(TEST_ROOT_DIRECTORY) : arg);
+        .map(arg => arg === CUSTOM_ROOT_OPTIONS ? customRootOptions(TEST_ROOT_DIRECTORY) : arg)
+        .map(arg => arg === CUSTOM_FACTORY_OPTIONS ? customFactoryOptions(TEST_BUCKET) : arg);
       const vfs = await namespace[className].create(...vfsArgs);
       sqlite3.vfs_register(vfs, true);
       return vfs;
@@ -197,6 +208,10 @@ async function maybeReset() {
       request.onerror = reject;
     });
   }));
+
+  // Clear the Storage Bucket the "-customFactory" configurations use.
+  // @ts-ignore
+  await navigator.storageBuckets?.delete(TEST_BUCKET);
 }
 
 function cvtErrorToCloneable(e) {

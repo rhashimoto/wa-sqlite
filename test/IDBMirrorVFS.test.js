@@ -9,6 +9,9 @@ import { vfs_rollback } from "./vfs_rollback.js";
 import { vfs_commit_abort } from "./vfs_commit_abort.js";
 import { vfs_close_broadcast } from "./vfs_close_broadcast.js";
 import { vfs_close_settles } from "./vfs_close_settles.js";
+import { vfs_tx_retention } from "./vfs_tx_retention.js";
+import { vfs_idb_factory } from "./vfs_idb_factory.js";
+import { supportsStorageBuckets } from "./customFactory.js";
 
 const CONFIG = 'IDBMirrorVFS';
 const BUILDS = ['asyncify', 'jspi'];
@@ -32,6 +35,21 @@ describe(CONFIG, function() {
       vfs_commit_abort({ build });
       vfs_close_broadcast({ build });
       vfs_close_settles({ build });
+      vfs_tx_retention({ build });
     });
   }
+});
+
+describe(`${CONFIG} with a custom factory`, function() {
+  if (supportsStorageBuckets()) {
+    // One build only: where the database goes does not depend on the build.
+    const context = new TestContext({ build: 'asyncify', config: `${CONFIG}-customFactory` });
+
+    vfs_xAccess(context);
+    vfs_xOpen(context);
+    vfs_xClose(context);
+    vfs_xRead(context);
+    vfs_xWrite(context);
+  }
+  vfs_idb_factory({ config: CONFIG });
 });
