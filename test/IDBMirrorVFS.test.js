@@ -9,6 +9,7 @@ import { vfs_rollback } from "./vfs_rollback.js";
 import { vfs_commit_abort } from "./vfs_commit_abort.js";
 import { vfs_close_broadcast } from "./vfs_close_broadcast.js";
 import { vfs_close_settles } from "./vfs_close_settles.js";
+import { vfs_tx_retention } from "./vfs_tx_retention.js";
 import { vfs_idb_factory } from "./vfs_idb_factory.js";
 import { supportsStorageBuckets } from "./customFactory.js";
 
@@ -34,6 +35,7 @@ describe(CONFIG, function() {
       vfs_commit_abort({ build });
       vfs_close_broadcast({ build });
       vfs_close_settles({ build });
+      vfs_tx_retention({ build });
     });
   }
 });
