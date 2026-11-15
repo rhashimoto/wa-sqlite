@@ -146,6 +146,8 @@ export class OPFSAnyContextVFS extends WebLocksMixin(FacadeVFS) {
       return VFS.SQLITE_OK;
     } catch (e) {
       return VFS.SQLITE_IOERR_DELETE;
+    } finally {
+      super.jClose(fileId);
     }
   }
 
