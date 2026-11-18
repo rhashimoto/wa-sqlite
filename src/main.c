@@ -11,7 +11,14 @@ void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
   return sqlite3_free;
 }
 
+#ifdef SQLITE_WASM_EXTRA_INIT
+int SQLITE_WASM_EXTRA_INIT(void);
+#endif
+
 int main() {
-  sqlite3_initialize();
-  return 0;
+  int rc = sqlite3_initialize();
+#ifdef SQLITE_WASM_EXTRA_INIT
+  if (rc == SQLITE_OK) rc = SQLITE_WASM_EXTRA_INIT();
+#endif
+  return rc;
 }

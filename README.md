@@ -76,3 +76,34 @@ For convenience, if any text region is selected in the editor, only that region 
 MIT License as of February 10, 2023, changed by generous sponsors
 [Fleet Device Management](https://fleetdm.com/) and [Reflect](https://reflect.app/).
 Existing licensees may continue under the GPLv3 or switch to the new license.
+
+### Statically linked extension initialization
+
+Custom builds can set `SQLITE_WASM_EXTRA_INIT` to a C function returning a SQLite
+result code. The function runs after successful `sqlite3_initialize()` and before
+JavaScript opens a database. Return `SQLITE_OK` on success. The default build has no
+extra hook. Register extensions with `sqlite3_auto_extension()` here so subsequent
+connections receive them; do not replace the JavaScript adapter or use `dlopen`.
+
+For example, place SQLite's public-domain `ext/misc/decimal.c` in `src/decimal.c`
+and the following in `src/decimal-init.c`:
+
+```c
+#include <sqlite3.h>
+int sqlite3_decimal_init(sqlite3 *, char **, const sqlite3_api_routines *);
+int sqlite3_decimal_auto_init(void) {
+  return sqlite3_auto_extension((void (*)(void))sqlite3_decimal_init);
+}
+```
+
+```sh
+make clean
+make CFILES_EXTRA='decimal.c decimal-init.c' \
+  WASQLITE_EXTRA_DEFINES='-DSQLITE_CORE -DSQLITE_WASM_EXTRA_INIT=sqlite3_decimal_auto_init'
+```
+
+Pin the SQLite source and Emscripten versions and distribute the resulting `.mjs`
+and `.wasm` files together. A new module is not necessarily ABI-compatible with an
+older generated JavaScript wrapper. Probe the functions on the application's real
+connection, for example `SELECT decimal_sub('1000.00', '0.01')`, before selecting
+extension-dependent queries. See also SQLite's [custom WASM initialization pattern](https://sqlite.org/wasm/doc/trunk/building.md#client-custom-init-code).
