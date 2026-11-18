@@ -59,6 +59,14 @@ class File {
   // This needs to be handled as a special case.
   /** @type {function} */ openLockReleaser = null;
 
+  // On a database file, its journal's access handle, kept between
+  // transactions and released with the database's own: creating and
+  // removing the journal at each transaction is expensive.
+  /** @type {FileSystemSyncAccessHandle} */ journalAccessHandle = null;
+
+  // On a journal file, the database file that owns its access handle.
+  /** @type {File} */ database = null;
+
   constructor(pathname, flags) {
     this.pathname = pathname;
     this.flags = flags;
@@ -87,6 +95,44 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
   }
 
   /**
+   * Returns the database file of a journal when this connection holds the
+   * database's access handle, and so owns the journal's.
+   * @param {string} pathname
+   * @returns {File?}
+   */
+  #getJournalOwner(pathname) {
+    if (hasUnsafeAccessHandle || !pathname.endsWith('-journal')) return null;
+    const dbPathname = pathname.slice(0, -'-journal'.length);
+    for (const file of this.mapIdToFile.values()) {
+      if ((file.flags & VFS.SQLITE_OPEN_MAIN_DB) &&
+          file.pathname === dbPathname &&
+          file.handleLockReleaser) {
+        return file;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * @param {string} pathname
+   * @returns {FileSystemSyncAccessHandle?} the access handle kept for a
+   * journal, if any
+   */
+  #getKeptJournal(pathname) {
+    return this.#getJournalOwner(pathname)?.journalAccessHandle ?? null;
+  }
+
+  /**
+   * Closes the journal's access handle a database file keeps. Call it
+   * before the database's own handle is released.
+   * @param {File} file
+   */
+  #releaseJournal(file) {
+    file.journalAccessHandle?.close();
+    file.journalAccessHandle = null;
+  }
+
+  /**
    * @param {string?} zName 
    * @param {number} fileId 
    * @param {number} flags 
@@ -100,6 +146,17 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
 
       const file = new File(pathname, flags);
       this.mapIdToFile.set(fileId, file);
+
+      if ((flags & VFS.SQLITE_OPEN_MAIN_JOURNAL) && !hasUnsafeAccessHandle) {
+        // The journal is used only under its database's lock, so the
+        // connection holding the database's handle owns the journal's.
+        file.database = this.#getJournalOwner(pathname);
+        if (file.database?.journalAccessHandle) {
+          file.accessHandle = file.database.journalAccessHandle;
+          pOutFlags.setInt32(0, flags, true);
+          return VFS.SQLITE_OK;
+        }
+      }
 
       const create = !!(flags & VFS.SQLITE_OPEN_CREATE);
       const [directoryHandle, filename] = await getPathComponents(pathname, create);
@@ -132,7 +189,11 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       file.accessHandle = await file.fileHandle.createSyncAccessHandle({
         mode: 'readwrite-unsafe'
       });
-  
+      if (file.database) {
+        // Kept by the database from now on.
+        file.database.journalAccessHandle = file.accessHandle;
+      }
+
       pOutFlags.setInt32(0, flags, true);
       return VFS.SQLITE_OK;
     } catch (e) {
@@ -157,7 +218,17 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     try {
       const url = new URL(zName, 'file://');
       const pathname = url.pathname;
-   
+
+      // A kept journal is truncated rather than removed.
+      const keptJournal = this.#getKeptJournal(pathname);
+      if (keptJournal) {
+        keptJournal.truncate(0);
+        if (syncDir) {
+          keptJournal.flush();
+        }
+        return VFS.SQLITE_OK;
+      }
+
       const [directoryHandle, name] = await getPathComponents(pathname, false);
       const result = directoryHandle.removeEntry(name, { recursive: false });
       if (syncDir) {
@@ -179,6 +250,14 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     try {
       const url = new URL(zName, 'file://');
       const pathname = url.pathname;
+
+      // A kept journal is never removed: for SQLite, it exists while it
+      // has content.
+      const keptJournal = this.#getKeptJournal(pathname);
+      if (keptJournal) {
+        pResOut.setInt32(0, keptJournal.getSize() ? 1 : 0, true);
+        return VFS.SQLITE_OK;
+      }
 
       const [directoryHandle, dbName] = await getPathComponents(pathname, false);
       const fileHandle = await directoryHandle.getFileHandle(dbName, { create: false });
@@ -202,7 +281,13 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
     try {
       const file = this.mapIdToFile.get(fileId);
       this.mapIdToFile.delete(fileId);
-      await file?.accessHandle?.close();
+      // A journal's access handle belongs to its database.
+      if (!file?.database) {
+        await file?.accessHandle?.close();
+      }
+      if (file?.flags & VFS.SQLITE_OPEN_MAIN_DB) {
+        this.#releaseJournal(file);
+      }
 
       // Release what the open and the last transaction may still hold.
       file?.openLockReleaser?.();
@@ -340,6 +425,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
           if(!file.isFileLocked) {
             // We have the access handle but the file is not locked.
             // Release the access handle for the requester.
+            this.#releaseJournal(file);
             file.accessHandle.close();
             file.accessHandle = null;
             file.handleLockReleaser();
@@ -416,6 +502,7 @@ export class OPFSAdaptiveVFS extends WebLocksMixin(FacadeVFS) {
       if (file.isHandleRequested) {
         if (file.handleLockReleaser) {
           // Another connection wants the access handle.
+          this.#releaseJournal(file);
           file.accessHandle.close();
           file.accessHandle = null;
           file.handleLockReleaser();
