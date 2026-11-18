@@ -197,7 +197,9 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      if (value > 0x7fffffff || value < -0x80000000) return SQLite.SQLITE_RANGE;
+      if (value > 0x7fffffff || value < -0x80000000) {
+        throw new SQLiteError(`${fname}: value out of range`, SQLite.SQLITE_RANGE);
+      }
 
       const result = f(stmt, i, value);
       return check(fname, result, mapStmtToDB.get(stmt));
@@ -209,7 +211,9 @@ export function Factory(Module) {
     const f = Module.cwrap(fname, ...decl('nnnn:n'));
     return function(stmt, i, value) {
       verifyStatement(stmt);
-      if (value > MAX_INT64 || value < MIN_INT64) return SQLite.SQLITE_RANGE;
+      if (value > MAX_INT64 || value < MIN_INT64) {
+        throw new SQLiteError(`${fname}: value out of range`, SQLite.SQLITE_RANGE);
+      }
 
       const lo32 = value & 0xffffffffn;
       const hi32 = value >> 32n;
