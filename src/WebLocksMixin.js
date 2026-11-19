@@ -67,6 +67,19 @@ export const WebLocksMixin = superclass => class extends superclass {
     }
   }
   
+  /** Release a closed file's locks and identity before SQLite reuses its fileId. */
+  jClose(fileId) {
+    const lockState = this.#mapIdToState.get(fileId);
+    if (lockState) {
+      lockState.hint?.();
+      lockState.reserved?.();
+      lockState.access?.();
+      lockState.gate?.();
+      this.#mapIdToState.delete(fileId);
+    }
+    return VFS.SQLITE_OK;
+  }
+  
   /**
    * @param {number} fileId 
    * @param {number} lockType 
